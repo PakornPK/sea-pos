@@ -2,28 +2,34 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  Package,
-  ShoppingCart,
-  Truck,
-  Users,
-  BarChart2,
-  LogOut,
-} from 'lucide-react'
+import { Package, ShoppingCart, Truck, Users, BarChart2, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
+import type { UserRole } from '@/types/database'
 
-const navItems = [
-  { href: '/inventory', label: 'คลังสินค้า', icon: Package },
-  { href: '/pos', label: 'ขายสินค้า', icon: ShoppingCart },
-  { href: '/purchasing', label: 'จัดซื้อ', icon: Truck },
-  { href: '/customers', label: 'ลูกค้า', icon: Users },
-  { href: '/reports', label: 'รายงาน', icon: BarChart2 },
+type NavItem = {
+  href: string
+  label: string
+  icon: React.ElementType
+  roles: UserRole[]
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/inventory',  label: 'คลังสินค้า', icon: Package,      roles: ['admin', 'manager', 'purchasing'] },
+  { href: '/pos',        label: 'ขายสินค้า',  icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
+  { href: '/purchasing', label: 'จัดซื้อ',    icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
+  { href: '/customers',  label: 'ลูกค้า',     icon: Users,        roles: ['admin', 'manager', 'cashier'] },
+  { href: '/reports',    label: 'รายงาน',     icon: BarChart2,    roles: ['admin', 'manager'] },
 ]
 
-export function Sidebar() {
+type SidebarProps = {
+  role: UserRole
+}
+
+export function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname()
+  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role))
 
   return (
     <aside className="flex h-full w-60 flex-col border-r bg-background">
@@ -32,7 +38,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-3">
-        {navItems.map(({ href, label, icon: Icon }) => (
+        {visibleItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
