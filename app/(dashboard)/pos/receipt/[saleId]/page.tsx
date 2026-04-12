@@ -4,12 +4,19 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PrintButton } from '@/components/pos/PrintButton'
+import { VoidSaleForm } from '@/components/pos/VoidSaleForm'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = {
   title: 'ใบเสร็จ | SEA-POS',
+}
+
+function formatReceiptNo(no: number | null): string {
+  if (!no) return '—'
+  return `REC-${String(no).padStart(5, '0')}`
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -26,62 +33,88 @@ export default async function ReceiptPage({
   const { saleId } = await params
   const supabase = await createClient()
 
-  const { data: sale } = await supabase
-    .from('sales')
-    .select('*, customer:customers(name, phone)')
-    .eq('id', saleId)
-    .single()
+  // Fetch sale, current user role, and line items in parallel
+  const [{ data: sale }, { data: { user } }, { data: rawItems }] = await Promise.all([
+    supabase
+      .from('sales')
+      .select('*, customer:customers(name, phone)')
+      .eq('id', saleId)
+      .single(),
+    supabase.auth.getUser(),
+    supabase
+      .from('sale_items')
+      .select('*, product:products(name, sku)')
+      .eq('sale_id', saleId)
+      .order('id'),
+  ])
 
   if (!sale) notFound()
 
-  const { data: rawItems } = await supabase
-    .from('sale_items')
-    .select('*, product:products(name, sku)')
-    .eq('sale_id', saleId)
-    .order('id')
+  // Get role for showing void form
+  let userRole = ''
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    userRole = profile?.role ?? ''
+  }
 
   const items = rawItems ?? []
+  const isVoided = sale.status === 'voided'
+  const canVoid = !isVoided && ['admin', 'manager'].includes(userRole)
 
   const createdAt = new Date(sale.created_at).toLocaleString('th-TH', {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
 
-  // customer is either an object or null (Supabase returns {} for unmatched FK)
-  const customer = sale.customer && typeof sale.customer === 'object' && 'name' in sale.customer
-    ? sale.customer as { name: string; phone: string | null }
-    : null
+  const customer =
+    sale.customer && typeof sale.customer === 'object' && 'name' in sale.customer
+      ? (sale.customer as { name: string; phone: string | null })
+      : null
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 max-w-sm mx-auto">
       {/* ── Toolbar (hidden on print) ── */}
       <div className="flex items-center gap-3 print:hidden">
-        <Link
-          href="/pos"
-          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
-        >
+        <Link href="/pos" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
           <ChevronLeft className="h-4 w-4" />
           กลับ
         </Link>
         <h1 className="text-2xl font-semibold">ใบเสร็จรับเงิน</h1>
-        <PrintButton className="ml-auto" />
+        {isVoided ? (
+          <Badge variant="destructive" className="ml-auto">ยกเลิกแล้ว</Badge>
+        ) : (
+          <PrintButton className="ml-auto" />
+        )}
       </div>
 
       {/* ── Receipt body ── */}
-      <div className="max-w-sm mx-auto w-full border rounded-xl p-6 space-y-4 print:border-0 print:shadow-none print:p-0 print:max-w-none">
-        {/* Shop name */}
+      <div
+        className={cn(
+          'border rounded-xl p-6 space-y-4',
+          'print:border-0 print:shadow-none print:p-0',
+          isVoided && 'opacity-60'
+        )}
+      >
+        {/* Shop header */}
         <div className="text-center space-y-0.5">
           <p className="text-2xl font-bold tracking-tight">SEA-POS</p>
           <p className="text-sm text-muted-foreground">ใบเสร็จรับเงิน / Receipt</p>
+          {isVoided && (
+            <p className="text-destructive font-semibold text-sm mt-1">*** ยกเลิกออเดอร์แล้ว ***</p>
+          )}
         </div>
 
         <Separator />
 
         {/* Sale meta */}
         <div className="space-y-1 text-sm">
-          <Row label="เลขที่" value={`#${sale.id.slice(0, 8).toUpperCase()}`} mono />
-          <Row label="วันที่" value={createdAt} />
-          <Row label="ชำระด้วย" value={PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method} />
+          <Row label="เลขที่ใบเสร็จ" value={formatReceiptNo(sale.receipt_no)} mono />
+          <Row label="วันที่"         value={createdAt} />
+          <Row label="ชำระด้วย"      value={PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method} />
           {customer && <Row label="ลูกค้า" value={customer.name} />}
         </div>
 
@@ -117,11 +150,21 @@ export default async function ReceiptPage({
           </span>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground pt-2">
-          ขอบคุณที่ใช้บริการ 🙏
-        </p>
+        <p className="text-center text-xs text-muted-foreground pt-1">ขอบคุณที่ใช้บริการ 🙏</p>
       </div>
+
+      {/* ── Void / Cancel section (hidden on print, admin/manager only) ── */}
+      {canVoid && (
+        <div className="border border-destructive/30 rounded-xl p-5 space-y-3 print:hidden">
+          <div>
+            <p className="font-semibold text-sm">ยกเลิกออเดอร์</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              สต๊อกสินค้าทุกรายการจะถูกคืนโดยอัตโนมัติ
+            </p>
+          </div>
+          <VoidSaleForm saleId={saleId} />
+        </div>
+      )}
     </div>
   )
 }

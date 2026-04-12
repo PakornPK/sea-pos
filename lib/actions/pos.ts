@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 export type SaleState = { error: string } | undefined
+export type VoidState = { error?: string } | undefined
 
 type CartItem = {
   productId: string
@@ -81,11 +82,79 @@ export async function createSale(prevState: SaleState, formData: FormData): Prom
     })
 
     if (stockError) {
-      // Best-effort: sale is already committed, just surface the error
       return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockError.message}` }
     }
   }
 
   revalidatePath('/inventory')
   redirect(`/pos/receipt/${sale.id}`)
+}
+
+export async function voidSale(prevState: VoidState, formData: FormData): Promise<VoidState> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'กรุณาเข้าสู่ระบบใหม่' }
+
+  // Only admin / manager may void
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!['admin', 'manager'].includes(profile?.role ?? '')) {
+    return { error: 'ไม่มีสิทธิ์ยกเลิกออเดอร์' }
+  }
+
+  const saleId = formData.get('saleId') as string
+  const reason = (formData.get('reason') as string | null)?.trim() ?? ''
+
+  if (!saleId) return { error: 'ไม่พบรายการขาย' }
+  if (!reason)  return { error: 'กรุณาระบุเหตุผลการยกเลิก' }
+
+  // Fetch items before voiding so we can restore stock
+  const { data: items } = await supabase
+    .from('sale_items')
+    .select('product_id, quantity')
+    .eq('sale_id', saleId)
+
+  // Mark sale as voided (RLS: admin/manager only)
+  const { error: voidError, data: voided } = await supabase
+    .from('sales')
+    .update({ status: 'voided' })
+    .eq('id', saleId)
+    .eq('status', 'completed') // prevent double-void
+    .select('id')
+
+  if (voidError) return { error: voidError.message }
+  if (!voided?.length) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
+
+  // Restore stock for every line item
+  for (const item of items ?? []) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', item.product_id)
+      .single()
+
+    if (!product) continue
+
+    await supabase
+      .from('products')
+      .update({ stock: product.stock + item.quantity })
+      .eq('id', item.product_id)
+
+    await supabase.from('stock_logs').insert({
+      product_id: item.product_id,
+      change: item.quantity,
+      reason: `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`,
+      user_id: user.id,
+    })
+  }
+
+  revalidatePath('/inventory')
+  revalidatePath(`/pos/receipt/${saleId}`)
 }

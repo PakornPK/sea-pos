@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Package, ShoppingCart, Truck, Users, BarChart2, LogOut } from 'lucide-react'
+import { Package, ShoppingCart, ScrollText, Truck, Users, BarChart2, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -16,11 +16,12 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/inventory',  label: 'คลังสินค้า', icon: Package,      roles: ['admin', 'manager', 'purchasing'] },
-  { href: '/pos',        label: 'ขายสินค้า',  icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
-  { href: '/purchasing', label: 'จัดซื้อ',    icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
-  { href: '/customers',  label: 'ลูกค้า',     icon: Users,        roles: ['admin', 'manager', 'cashier'] },
-  { href: '/reports',    label: 'รายงาน',     icon: BarChart2,    roles: ['admin', 'manager'] },
+  { href: '/inventory',  label: 'คลังสินค้า',  icon: Package,      roles: ['admin', 'manager', 'purchasing'] },
+  { href: '/pos',        label: 'ขายสินค้า',   icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
+  { href: '/pos/sales',  label: 'รายการขาย',   icon: ScrollText,   roles: ['admin', 'manager'] },
+  { href: '/purchasing', label: 'จัดซื้อ',     icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
+  { href: '/customers',  label: 'ลูกค้า',      icon: Users,        roles: ['admin', 'manager', 'cashier'] },
+  { href: '/reports',    label: 'รายงาน',      icon: BarChart2,    roles: ['admin', 'manager'] },
 ]
 
 type SidebarProps = {
@@ -44,7 +45,7 @@ export function Sidebar({ role }: SidebarProps) {
             href={href}
             className={cn(
               'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              pathname.startsWith(href)
+              pathname === href || (href !== '/pos' && pathname.startsWith(href))
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}

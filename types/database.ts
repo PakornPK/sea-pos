@@ -50,6 +50,7 @@ export type Supplier = {
 
 export type Sale = {
   id: string
+  receipt_no: number
   customer_id: string | null
   user_id: string
   total_amount: number

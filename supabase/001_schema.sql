@@ -238,7 +238,7 @@ CREATE POLICY "sales_select" ON sales FOR SELECT
 CREATE POLICY "sales_insert" ON sales FOR INSERT
   TO authenticated WITH CHECK (get_user_role() IN ('admin', 'manager', 'cashier'));
 
--- Only admin/manager can void (update status)
+-- Only admin/manager can void sales
 CREATE POLICY "sales_update" ON sales FOR UPDATE
   TO authenticated USING (get_user_role() IN ('admin', 'manager'));
 
