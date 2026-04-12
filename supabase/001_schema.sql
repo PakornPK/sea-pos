@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS stock_logs (
   created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
+-- Add reason if the table already existed without it
+ALTER TABLE stock_logs
+  ADD COLUMN IF NOT EXISTS reason  TEXT,
+  ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
+
 -- ============================================================
 -- CUSTOMERS
 -- ============================================================

@@ -128,3 +128,20 @@
     @apply font-sans;
   }
 }
+/* ── Print styles (receipt page) ── */
+@media print {
+  aside,
+  header,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+}

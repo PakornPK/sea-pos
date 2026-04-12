@@ -1,18 +1,26 @@
 import type { Metadata } from 'next'
-import { ShoppingCart } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import { POSTerminal } from '@/components/pos/POSTerminal'
+import type { Product } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'ขายสินค้า | SEA-POS',
 }
 
-export default function POSPage() {
+export default async function POSPage() {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('products')
+    .select('*')
+    .gt('stock', 0)
+    .order('name')
+
+  const products = (data ?? []) as Product[]
+
   return (
-    <div className="flex flex-col gap-2">
-      <h1 className="text-2xl font-semibold">ขายสินค้า (POS)</h1>
-      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-        <ShoppingCart className="h-10 w-10 opacity-40" />
-        <p>โมดูลนี้กำลังพัฒนา</p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold shrink-0">ขายสินค้า</h1>
+      <POSTerminal products={products} />
     </div>
   )
 }
