@@ -50,6 +50,9 @@ export async function addProduct(prevState: unknown, formData: FormData) {
   const name = (formData.get('name') as string).trim()
   const sku = (formData.get('sku') as string | null)?.trim() ?? ''
   const minStock = parseInt(formData.get('min_stock') as string) || 0
+  const price = parseFloat(formData.get('price') as string) || 0
+  const cost = parseFloat(formData.get('cost') as string) || 0
+  const categoryId = (formData.get('category_id') as string) || null
 
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
@@ -57,6 +60,9 @@ export async function addProduct(prevState: unknown, formData: FormData) {
     name,
     sku,
     min_stock: minStock,
+    price,
+    cost,
+    category_id: categoryId,
     stock: 0,
   })
 

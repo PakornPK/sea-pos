@@ -9,6 +9,16 @@ export type Profile = {
   created_at: string
 }
 
+export type Category = {
+  id: string
+  name: string
+  created_at: string
+}
+
+export type CategoryInsert = {
+  name: string
+}
+
 export type Product = {
   id: string
   sku: string
@@ -17,8 +27,13 @@ export type Product = {
   cost: number
   stock: number
   min_stock: number
+  category_id: string | null
   image_url: string | null
   created_at: string
+}
+
+export type ProductWithCategory = Product & {
+  category: Pick<Category, 'id' | 'name'> | null
 }
 
 export type StockLog = {
@@ -103,6 +118,7 @@ export type ProductInsert = {
   cost?: number
   stock?: number
   min_stock?: number
+  category_id?: string | null
   image_url?: string | null
 }
 

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { createSale } from '@/lib/actions/pos'
-import type { Product } from '@/types/database'
+import type { Category, Product } from '@/types/database'
 
 type CartItem = {
   productId: string
@@ -19,6 +19,7 @@ type CartItem = {
 
 type POSTerminalProps = {
   products: Product[]
+  categories: Category[]
 }
 
 const PAYMENT_METHODS = [
@@ -27,15 +28,17 @@ const PAYMENT_METHODS = [
   { value: 'transfer', label: 'โอนเงิน' },
 ]
 
-export function POSTerminal({ products }: POSTerminalProps) {
+export function POSTerminal({ products, categories }: POSTerminalProps) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [search, setSearch] = useState('')
   const [payment, setPayment] = useState('cash')
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [state, formAction, isPending] = useActionState(createSale, undefined)
 
   const filtered = products.filter(
     (p) =>
       p.stock > 0 &&
+      (selectedCategory === null || p.category_id === selectedCategory) &&
       (p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
   )
@@ -86,6 +89,37 @@ export function POSTerminal({ products }: POSTerminalProps) {
             className="pl-9"
           />
         </div>
+
+        {/* Category tabs */}
+        {categories.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap shrink-0">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap',
+                selectedCategory === null
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'hover:bg-accent'
+              )}
+            >
+              ทั้งหมด
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap',
+                  selectedCategory === cat.id
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'hover:bg-accent'
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 content-start">
           {filtered.map((product) => {
