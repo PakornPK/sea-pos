@@ -1,0 +1,24 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
+import { AddProductForm } from '@/components/inventory/AddProductForm'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+export const metadata: Metadata = {
+  title: 'เพิ่มสินค้า | SEA-POS',
+}
+
+export default function AddProductPage() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3">
+        <Link href="/inventory" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
+          <ChevronLeft className="h-4 w-4" />
+        </Link>
+        <h1 className="text-2xl font-semibold">เพิ่มสินค้า</h1>
+      </div>
+      <AddProductForm />
+    </div>
+  )
+}
