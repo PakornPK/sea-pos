@@ -1,11 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Plus, Trash2, PackagePlus, X } from 'lucide-react'
+import { useRef, useState, useTransition } from 'react'
+import Image from 'next/image'
+import { ImagePlus, Plus, Trash2, PackagePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import { quickCreateProduct } from '@/lib/actions/inventory'
+import { uploadProductImage } from '@/lib/actions/storage'
 import { formatBaht } from '@/lib/format'
 import type { Category, Product } from '@/types/database'
 
@@ -38,8 +41,23 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
   const [newMin, setNewMin]     = useState(0)
   const [newQty, setNewQty]     = useState(1)
   const [newCategoryId, setNewCategoryId] = useState('')
+  const [newImage, setNewImage] = useState<File | null>(null)
+  const [newImagePreview, setNewImagePreview] = useState<string | null>(null)
+  const imageRef = useRef<HTMLInputElement>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [pendingCreate, startCreate] = useTransition()
+
+  function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    setNewImage(file)
+    setNewImagePreview(file ? URL.createObjectURL(file) : null)
+  }
+
+  function clearImage() {
+    if (imageRef.current) imageRef.current.value = ''
+    setNewImage(null)
+    setNewImagePreview(null)
+  }
 
   const productMap = new Map(localProducts.map((p) => [p.id, p]))
 
@@ -80,6 +98,19 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
         setCreateError(res.error)
         return
       }
+
+      let imageUrl: string | null = null
+      if (newImage) {
+        const fd = new FormData()
+        fd.append('file', newImage)
+        const up = await uploadProductImage(res.id, undefined, fd)
+        if (up?.error) {
+          setCreateError(up.error)
+          return
+        }
+        imageUrl = up?.url ?? null
+      }
+
       const prod: Product = {
         id:          res.id,
         sku:         res.sku ?? '',
@@ -89,7 +120,7 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
         stock:       res.stock,
         min_stock:   res.min_stock,
         category_id: res.category_id,
-        image_url:   null,
+        image_url:   imageUrl,
         created_at:  new Date().toISOString(),
       }
       setLocalProducts((prev) => [...prev, prod].sort((a, b) => a.name.localeCompare(b.name)))
@@ -100,6 +131,7 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
       // reset mini-form
       setCreatingNew(false)
       setNewName(''); setNewSku(''); setNewPrice(0); setNewCost(0); setNewMin(0); setNewQty(1); setNewCategoryId('')
+      clearImage()
     })
   }
 
@@ -177,6 +209,50 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => imageRef.current?.click()}
+              disabled={pendingCreate}
+              className={cn(
+                'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted',
+                'grid place-items-center transition-colors hover:border-primary hover:bg-accent',
+                pendingCreate && 'opacity-60 cursor-not-allowed'
+              )}
+            >
+              {newImagePreview ? (
+                <Image src={newImagePreview} alt="preview" fill className="object-cover" sizes="80px" unoptimized />
+              ) : (
+                <ImagePlus className="h-5 w-5 text-muted-foreground" />
+              )}
+            </button>
+            <div className="flex flex-col gap-1 text-xs">
+              <Label className="text-xs">รูปสินค้า (ไม่บังคับ)</Label>
+              <div className="flex gap-1.5">
+                <Button type="button" size="sm" variant="outline"
+                  onClick={() => imageRef.current?.click()} disabled={pendingCreate}>
+                  {newImagePreview ? 'เปลี่ยนรูป' : 'เลือกรูป'}
+                </Button>
+                {newImagePreview && (
+                  <Button type="button" size="sm" variant="ghost" onClick={clearImage}
+                    disabled={pendingCreate}
+                    className="text-muted-foreground hover:text-destructive h-7 px-2">
+                    <X className="h-3 w-3" /> ลบ
+                  </Button>
+                )}
+              </div>
+              <p className="text-muted-foreground">JPG / PNG / WebP · สูงสุด 5MB</p>
+            </div>
+            <input
+              ref={imageRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={onPickImage}
+              disabled={pendingCreate}
+              className="hidden"
+            />
           </div>
 
           <div className="grid grid-cols-12 gap-2">
