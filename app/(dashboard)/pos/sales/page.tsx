@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
@@ -8,24 +9,53 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { buttonVariants } from '@/components/ui/button'
+import { TableSkeleton } from '@/components/loading/TableSkeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { formatReceiptNo, formatDateTime, formatBaht } from '@/lib/format'
 import { PAYMENT_LABEL, SALE_STATUS_LABEL, type PaymentMethod, type SaleStatus } from '@/lib/labels'
+import type { UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'รายการขาย | SEA-POS',
 }
 
-export default async function SalesListPage() {
-  const { supabase } = await requirePageRole(['admin', 'manager'])
+const ALLOWED: UserRole[] = ['admin', 'manager']
 
+export default async function SalesListPage() {
+  await requirePageRole(ALLOWED)
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Suspense fallback={<HeaderSkeleton />}>
+        <SalesContent />
+      </Suspense>
+    </div>
+  )
+}
+
+function HeaderSkeleton() {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-5 w-56" />
+      </div>
+      <TableSkeleton columns={7} rows={10} />
+    </>
+  )
+}
+
+async function SalesContent() {
+  const { supabase } = await requirePageRole(ALLOWED)
   const sales = await saleRepo.listRecent(supabase)
+
   const totalCompleted = sales
     .filter((s) => s.status === 'completed')
     .reduce((sum, s) => sum + Number(s.total_amount), 0)
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">รายการขาย</h1>
         <div className="text-sm text-muted-foreground">
@@ -87,6 +117,6 @@ export default async function SalesListPage() {
           </TableBody>
         </Table>
       )}
-    </div>
+    </>
   )
 }

@@ -1,24 +1,24 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, Tag } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
 import { productRepo, categoryRepo } from '@/lib/repositories'
 import { ProductTable } from '@/components/inventory/ProductTable'
+import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'คลังสินค้า | SEA-POS',
 }
 
+const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
+
 export default async function InventoryPage() {
-  const { supabase, me } = await requirePageRole(['admin', 'manager', 'purchasing'])
-
-  const [products, categories] = await Promise.all([
-    productRepo.listWithCategory(supabase),
-    categoryRepo.list(supabase),
-  ])
-
+  // Role check renders instantly thanks to cached loadUser.
+  const { me } = await requirePageRole(ALLOWED)
   const canManage = me.role === 'admin' || me.role === 'manager'
 
   return (
@@ -43,7 +43,21 @@ export default async function InventoryPage() {
           )}
         </div>
       </div>
-      <ProductTable products={products} categories={categories} canAdjust={canManage} />
+
+      <Suspense fallback={<TableSkeleton columns={8} rows={10} withFilters />}>
+        <InventoryTable canAdjust={canManage} />
+      </Suspense>
     </div>
   )
+}
+
+// Streamed server component — the DB fetch happens here, the page shell
+// above renders instantly while this is pending.
+async function InventoryTable({ canAdjust }: { canAdjust: boolean }) {
+  const { supabase } = await requirePageRole(ALLOWED)
+  const [products, categories] = await Promise.all([
+    productRepo.listWithCategory(supabase),
+    categoryRepo.list(supabase),
+  ])
+  return <ProductTable products={products} categories={categories} canAdjust={canAdjust} />
 }
