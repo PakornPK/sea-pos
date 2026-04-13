@@ -88,6 +88,13 @@ export const supabaseProductRepo: ProductRepository = {
     return error?.message ?? null
   },
 
+  async updateImageUrl(id: string, url: string | null): Promise<string | null> {
+    const db = await getDb()
+    const { error } = await db
+      .from('products').update({ image_url: url }).eq('id', id)
+    return error?.message ?? null
+  },
+
   async delete(id: string): Promise<string | null> {
     const db = await getDb()
     const { error } = await db.from('products').delete().eq('id', id)

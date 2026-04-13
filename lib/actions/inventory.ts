@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, stockLogRepo } from '@/lib/repositories'
+import { productRepo, stockLogRepo, storageRepo } from '@/lib/repositories'
 import { checkProductLimit, formatLimitError } from '@/lib/limits'
+import { validateImageUpload, uniqueAssetName } from '@/lib/storage-validation'
 
 const ADJUST_ROLES = ['admin', 'manager'] as const
 const CREATE_ROLES = ['admin', 'manager', 'purchasing'] as const
@@ -36,7 +37,7 @@ export async function adjustStock(productId: string, delta: number) {
 }
 
 export async function addProduct(_prev: unknown, formData: FormData) {
-  await requireActionRole([...ADJUST_ROLES])
+  const { me } = await requireActionRole([...ADJUST_ROLES])
 
   const name = (formData.get('name') as string).trim()
   let sku = (formData.get('sku') as string | null)?.trim() ?? ''
@@ -44,17 +45,32 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const price = parseFloat(formData.get('price') as string) || 0
   const cost = parseFloat(formData.get('cost') as string) || 0
   const categoryId = (formData.get('category_id') as string) || null
+  const rawImage = formData.get('image') as File | null
+  const hasImage = !!rawImage && rawImage.size > 0
 
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
+
+  let imageFile: File | null = null
+  let imageExt: string | null = null
+  if (hasImage) {
+    const v = validateImageUpload(rawImage, 'product')
+    if (!v.ok) return { error: v.error }
+    imageFile = v.file
+    imageExt = v.ext
+  }
+
+  const currentCount = await productRepo.countAll()
+  const usage = await checkProductLimit(currentCount)
+  if (usage?.reached) return { error: formatLimitError('product', usage) }
 
   if (!sku && categoryId) {
     const generated = await productRepo.nextSkuForCategory(categoryId)
     if (generated) sku = generated
   }
 
-  const res = await productRepo.create({
+  const res = await productRepo.createReturning({
     name,
-    sku: sku || undefined,
+    sku: sku || null,
     min_stock: minStock,
     price,
     cost,
@@ -62,6 +78,20 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     stock: 0,
   })
   if ('error' in res) return { error: res.error }
+
+  if (imageFile && imageExt && me.companyId) {
+    const relativePath = `${res.id}/${uniqueAssetName(imageExt)}`
+    const upload = await storageRepo.upload(
+      'products',
+      me.companyId,
+      relativePath,
+      imageFile,
+      { contentType: imageFile.type }
+    )
+    if (!('error' in upload) && upload.publicUrl) {
+      await productRepo.updateImageUrl(res.id, upload.publicUrl)
+    }
+  }
 
   revalidatePath('/inventory')
   redirect('/inventory')

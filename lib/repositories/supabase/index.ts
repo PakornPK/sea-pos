@@ -12,6 +12,7 @@
 import type { Repositories } from '@/lib/repositories/contracts'
 import { supabaseCompanyRepo }       from './companies'
 import { supabasePlanRepo }          from './plans'
+import { supabaseStorageRepo }       from './storage'
 import { supabaseProductRepo }       from './products'
 import { supabaseCategoryRepo }      from './categories'
 import { supabaseCustomerRepo }      from './customers'
@@ -26,6 +27,7 @@ import { supabaseAnalyticsRepo }     from './analytics'
 export const supabaseRepos: Repositories = {
   company:       supabaseCompanyRepo,
   plan:          supabasePlanRepo,
+  storage:       supabaseStorageRepo,
   product:       supabaseProductRepo,
   category:      supabaseCategoryRepo,
   customer:      supabaseCustomerRepo,

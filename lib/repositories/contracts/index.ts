@@ -14,6 +14,7 @@
 
 export type { CompanyRepository, CompanyListRow } from './company'
 export type { PlanRepository, PlanInput } from './plan'
+export type { StorageRepository, StorageBucket, UploadResult } from './storage'
 export type { ProductRepository }        from './product'
 export type { CategoryRepository }       from './category'
 export type { CustomerRepository, CustomerInput } from './customer'
@@ -43,6 +44,7 @@ export type {
 
 import type { CompanyRepository }         from './company'
 import type { PlanRepository }            from './plan'
+import type { StorageRepository }         from './storage'
 import type { ProductRepository }         from './product'
 import type { CategoryRepository }        from './category'
 import type { CustomerRepository }        from './customer'
@@ -58,6 +60,7 @@ import type { AnalyticsRepository }       from './analytics'
 export interface Repositories {
   company:       CompanyRepository
   plan:          PlanRepository
+  storage:       StorageRepository
   product:       ProductRepository
   category:      CategoryRepository
   customer:      CustomerRepository

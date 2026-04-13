@@ -6,6 +6,7 @@ import { updateCompanySettings } from '@/lib/actions/company'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { CompanyLogoUpload } from '@/components/settings/CompanyLogoUpload'
 import type { Company } from '@/types/database'
 
 type Props = {
@@ -30,10 +31,36 @@ export function CompanySettingsForm({ company }: Props) {
     tax_id?: string
     phone?: string
     address?: string
+    logo_url?: string
+    letterhead_url?: string
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-6 max-w-xl">
+   <div className="flex flex-col gap-6 max-w-xl">
+    <section className="rounded-lg border bg-card p-5 space-y-4">
+      <div>
+        <h2 className="font-semibold text-sm">โลโก้และหัวจดหมาย</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          ใช้แสดงบนใบเสร็จ ใบสั่งซื้อ และเอกสารต่างๆ
+        </p>
+      </div>
+      <CompanyLogoUpload
+        kind="logo"
+        label="โลโก้บริษัท"
+        hint="แนะนำสี่เหลี่ยมจัตุรัส, PNG/SVG, ไม่เกิน 2MB"
+        currentUrl={settings.logo_url ?? null}
+        aspect="square"
+      />
+      <CompanyLogoUpload
+        kind="letterhead"
+        label="หัวจดหมาย"
+        hint="แนะนำแนวนอน, PNG/JPG, ไม่เกิน 2MB"
+        currentUrl={settings.letterhead_url ?? null}
+        aspect="wide"
+      />
+    </section>
+
+    <form action={formAction} className="flex flex-col gap-6">
       {/* Company identity */}
       <section className="rounded-lg border bg-card p-5 space-y-4">
         <div className="flex items-center gap-2">
@@ -132,5 +159,6 @@ export function CompanySettingsForm({ company }: Props) {
         </Button>
       </div>
     </form>
+   </div>
   )
 }

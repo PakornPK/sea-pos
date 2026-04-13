@@ -21,6 +21,7 @@ const repos: Repositories = supabaseRepos
 
 export const companyRepo       = repos.company
 export const planRepo          = repos.plan
+export const storageRepo       = repos.storage
 export const productRepo       = repos.product
 export const categoryRepo      = repos.category
 export const customerRepo      = repos.customer
@@ -36,6 +37,8 @@ export const analyticsRepo     = repos.analytics
 export type {
   Repositories,
   PlanInput,
+  StorageBucket,
+  UploadResult,
   CustomerInput,
   SupplierInput,
   POLineInput,

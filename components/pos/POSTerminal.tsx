@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useActionState } from 'react'
-import { Search, ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react'
+import Image from 'next/image'
+import { Search, ShoppingCart, Plus, Minus, Trash2, ImageOff, Info } from 'lucide-react'
+import { ProductDetailDialog } from '@/components/pos/ProductDetailDialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +41,10 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
   const [payment, setPayment] = useState('cash')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [customer, setCustomer] = useState<PickerCustomer | null>(null)
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null)
   const [state, formAction, isPending] = useActionState(createSale, undefined)
+
+  const categoryById = new Map(categories.map((c) => [c.id, c]))
 
   const filtered = products.filter(
     (p) =>
@@ -131,30 +136,61 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
           {filtered.map((product) => {
             const inCart = cart.find((i) => i.productId === product.id)
             return (
-              <button
+              <div
                 key={product.id}
-                onClick={() => addToCart(product)}
                 className={cn(
-                  'rounded-lg border bg-card p-3 text-left transition-colors cursor-pointer',
+                  'group relative rounded-lg border bg-card overflow-hidden transition-colors',
                   inCart
                     ? 'border-primary bg-primary/5'
                     : 'hover:border-primary/50 hover:bg-accent'
                 )}
               >
-                <p className="font-medium text-sm leading-tight line-clamp-2 min-h-[2.5rem]">
-                  {product.name}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">{product.sku || '—'}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-sm font-semibold">{formatBaht(product.price)}</span>
-                  <Badge
-                    variant={product.stock <= product.min_stock ? 'destructive' : 'outline'}
-                    className="text-xs"
-                  >
-                    {inCart ? `${inCart.quantity}/${product.stock}` : `เหลือ ${product.stock}`}
-                  </Badge>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setDetailProduct(product) }}
+                  aria-label="ดูรายละเอียดสินค้า"
+                  className="absolute right-1.5 top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full bg-background/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-primary"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addToCart(product)}
+                  className="block w-full text-left cursor-pointer"
+                >
+                <div className="relative aspect-square w-full bg-muted">
+                  {product.image_url ? (
+                    <Image
+                      src={product.image_url}
+                      alt={product.name}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center">
+                      <ImageOff className="h-8 w-8 text-muted-foreground/40" />
+                    </div>
+                  )}
                 </div>
-              </button>
+                <div className="p-3">
+                  <p className="font-medium text-sm leading-tight line-clamp-2 min-h-[2.5rem]">
+                    {product.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{product.sku || '—'}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm font-semibold">{formatBaht(product.price)}</span>
+                    <Badge
+                      variant={product.stock <= product.min_stock ? 'destructive' : 'outline'}
+                      className="text-xs"
+                    >
+                      {inCart ? `${inCart.quantity}/${product.stock}` : `เหลือ ${product.stock}`}
+                    </Badge>
+                  </div>
+                </div>
+                </button>
+              </div>
             )
           })}
 
@@ -284,6 +320,15 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
           </form>
         </div>
       </div>
+
+      <ProductDetailDialog
+        product={detailProduct}
+        category={detailProduct?.category_id ? categoryById.get(detailProduct.category_id) ?? null : null}
+        open={detailProduct !== null}
+        onOpenChange={(open) => { if (!open) setDetailProduct(null) }}
+        onAddToCart={addToCart}
+        inCartQty={detailProduct ? cart.find((i) => i.productId === detailProduct.id)?.quantity ?? 0 : 0}
+      />
     </div>
   )
 }

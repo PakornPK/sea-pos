@@ -14,6 +14,7 @@ export interface ProductRepository {
   create(input: ProductInsert): Promise<{ id: string } | { error: string }>
   createReturning(input: ProductInsert): Promise<Product | { error: string }>
   updateStock(id: string, newStock: number): Promise<string | null>
+  updateImageUrl(id: string, url: string | null): Promise<string | null>
   delete(id: string): Promise<string | null>
   nextSkuForCategory(categoryId: string): Promise<string | null>
   decrementStock(input: {

@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ChevronLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { saleRepo } from '@/lib/repositories'
+import { saleRepo, companyRepo } from '@/lib/repositories'
 import { PrintButton } from '@/components/pos/PrintButton'
 import { VoidSaleForm } from '@/components/pos/VoidSaleForm'
 import { Separator } from '@/components/ui/separator'
@@ -25,12 +26,22 @@ export default async function ReceiptPage({
   const { saleId } = await params
   const { me } = await requirePageRole(['admin', 'manager', 'cashier'])
 
-  const [sale, items] = await Promise.all([
+  const [sale, items, company] = await Promise.all([
     saleRepo.getById(saleId),
     saleRepo.listItemsWithProduct(saleId),
+    companyRepo.getCurrent(),
   ])
 
   if (!sale) notFound()
+
+  const companySettings = (company?.settings ?? {}) as {
+    receipt_header?: string
+    receipt_footer?: string
+    tax_id?: string
+    phone?: string
+    address?: string
+    logo_url?: string
+  }
   const isVoided = sale.status === 'voided'
   const canVoid = !isVoided && (me.role === 'admin' || me.role === 'manager')
 
@@ -69,9 +80,34 @@ export default async function ReceiptPage({
         )}
       >
         {/* Shop header */}
-        <div className="text-center space-y-0.5">
-          <p className="text-2xl font-bold tracking-tight">SEA-POS</p>
-          <p className="text-sm text-muted-foreground">ใบเสร็จรับเงิน / Receipt</p>
+        <div className="text-center space-y-1">
+          {companySettings.logo_url && (
+            <div className="relative mx-auto h-16 w-16">
+              <Image
+                src={companySettings.logo_url}
+                alt={company?.name ?? ''}
+                fill
+                className="object-contain"
+                sizes="64px"
+                unoptimized
+              />
+            </div>
+          )}
+          <p className="text-2xl font-bold tracking-tight">{company?.name ?? 'SEA-POS'}</p>
+          {companySettings.address && (
+            <p className="text-xs text-muted-foreground">{companySettings.address}</p>
+          )}
+          {(companySettings.phone || companySettings.tax_id) && (
+            <p className="text-xs text-muted-foreground">
+              {companySettings.phone && `โทร ${companySettings.phone}`}
+              {companySettings.phone && companySettings.tax_id && ' · '}
+              {companySettings.tax_id && `เลขผู้เสียภาษี ${companySettings.tax_id}`}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground pt-1">ใบเสร็จรับเงิน / Receipt</p>
+          {companySettings.receipt_header && (
+            <p className="text-xs text-foreground/80 pt-1">{companySettings.receipt_header}</p>
+          )}
           {isVoided && (
             <p className="text-destructive font-semibold text-sm mt-1">*** ยกเลิกออเดอร์แล้ว ***</p>
           )}
@@ -119,7 +155,9 @@ export default async function ReceiptPage({
           </span>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground pt-1">ขอบคุณที่ใช้บริการ 🙏</p>
+        <p className="text-center text-xs text-muted-foreground pt-1">
+          {companySettings.receipt_footer ?? 'ขอบคุณที่ใช้บริการ 🙏'}
+        </p>
       </div>
 
       {/* ── Void / Cancel section (hidden on print, admin/manager only) ── */}

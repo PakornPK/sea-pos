@@ -28,6 +28,20 @@ they belong to; ticks move up as they ship.
 - [x] **Status gate** — users of pending/suspended/closed companies land on `/blocked` instead of the app
 - [x] **Sidebar platform section** — "แพลตฟอร์ม → บริษัทลูกค้า / แพ็กเกจ" visible only to platform admins
 
+### Shipped: Storage (Supabase Storage as S3)
+- [x] **Migration 013** — 5 buckets created with RLS + tenant-scoped paths (`{companyId}/...`):
+  - `products` (public, 5MB, image/*) — product photos
+  - `company-assets` (public, 2MB, image/*) — logo + letterhead
+  - `receipts` (private, 10MB, image/pdf) — attached receipts/invoices
+  - `imports` (private, 20MB, csv/xlsx) — CSV import staging
+  - `exports` (private, 50MB) — generated reports + backups
+- [x] **`StorageRepository` contract + adapter** — `upload`, `remove`, `getPublicUrl`, `createSignedUrl`, `listByCompany`. UI never touches Supabase storage directly.
+- [x] **Product images** — `ProductImageUpload` (form), `ProductThumb` (inline grid editor); thumbnails on POS grid + ProductTable; `next.config.ts` whitelists Supabase host
+- [x] **Company logo + letterhead** — `CompanyLogoUpload` on `/settings/company`; logo + meta render on receipt page
+- [ ] **Receipt attachments** — bucket + RLS ready; UI to attach scanned receipts to sales/POs is pending
+- [ ] **CSV import wizard** — bucket ready; need import UI for products/customers/suppliers
+- [ ] **Backup exports** — bucket ready; need scheduled export job + admin download list
+
 ### Shipped: Plan management + limits enforcement
 - [x] **`plans` config table** — replaces hardcoded enum. 4 seeded tiers: `free` / `lite_pro` / `standard_pro` / `enterprise`
 - [x] **`companies.plan` → FK(plans.code)** — renaming/adding plans no longer requires code deploy

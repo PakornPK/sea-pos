@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { StockAdjustButton } from '@/components/inventory/StockAdjustButton'
+import { ProductThumb } from '@/components/inventory/ProductThumb'
 import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -83,6 +84,7 @@ export function ProductTable({ products, categories, canAdjust = false }: Produc
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-14">รูป</TableHead>
             <TableHead>ชื่อสินค้า</TableHead>
             <TableHead>หมวดหมู่</TableHead>
             <TableHead>SKU</TableHead>
@@ -101,6 +103,15 @@ export function ProductTable({ products, categories, canAdjust = false }: Produc
               : null
             return (
               <TableRow key={product.id}>
+                <TableCell>
+                  <ProductThumb
+                    productId={product.id}
+                    imageUrl={product.image_url}
+                    productName={product.name}
+                    canEdit={canAdjust}
+                    size={40}
+                  />
+                </TableCell>
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell>
                   {cat ? (

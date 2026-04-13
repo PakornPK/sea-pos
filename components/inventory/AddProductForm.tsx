@@ -1,10 +1,13 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useRef, useState } from 'react'
+import Image from 'next/image'
+import { ImagePlus, X } from 'lucide-react'
 import { addProduct } from '@/lib/actions/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import type { Category } from '@/types/database'
 
 type ActionState = { error: string } | undefined
@@ -18,9 +21,67 @@ export function AddProductForm({ categories }: AddProductFormProps) {
     addProduct,
     undefined
   )
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) { setPreview(null); return }
+    setPreview(URL.createObjectURL(file))
+  }
+
+  function clearFile() {
+    if (fileRef.current) fileRef.current.value = ''
+    setPreview(null)
+  }
 
   return (
     <form action={formAction} className="flex max-w-md flex-col gap-4">
+      {/* Image */}
+      <div className="flex flex-col gap-1.5">
+        <Label>รูปสินค้า</Label>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={pending}
+            className={cn(
+              'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted',
+              'grid place-items-center transition-colors',
+              'hover:border-primary hover:bg-accent',
+              pending && 'opacity-60 cursor-not-allowed'
+            )}
+          >
+            {preview ? (
+              <Image src={preview} alt="preview" fill className="object-cover" sizes="80px" unoptimized />
+            ) : (
+              <ImagePlus className="h-6 w-6 text-muted-foreground" />
+            )}
+          </button>
+          <div className="flex flex-col gap-1 text-xs">
+            <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={pending}>
+              {preview ? 'เปลี่ยนรูป' : 'เลือกรูป'}
+            </Button>
+            {preview && (
+              <Button type="button" size="sm" variant="ghost" onClick={clearFile} disabled={pending}
+                className="text-muted-foreground hover:text-destructive h-7 px-2">
+                <X className="mr-1 h-3 w-3" /> ลบรูป
+              </Button>
+            )}
+            <p className="text-muted-foreground">JPG / PNG / WebP · สูงสุด 5MB</p>
+          </div>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          name="image"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={onPickFile}
+          disabled={pending}
+          className="hidden"
+        />
+      </div>
+
       {/* Name */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="name">ชื่อสินค้า *</Label>
