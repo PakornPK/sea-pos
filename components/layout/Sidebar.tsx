@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Package, ShoppingCart, ScrollText, Truck, Users, BarChart2, LogOut } from 'lucide-react'
+import { Package, ShoppingCart, ScrollText, Truck, Users, BarChart2, LogOut, UserCog } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/purchasing', label: 'จัดซื้อ',     icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
   { href: '/customers',  label: 'ลูกค้า',      icon: Users,        roles: ['admin', 'manager', 'cashier'] },
   { href: '/reports',    label: 'รายงาน',      icon: BarChart2,    roles: ['admin', 'manager'] },
+  { href: '/users',      label: 'ผู้ใช้งาน',    icon: UserCog,      roles: ['admin'] },
 ]
 
 type SidebarProps = {

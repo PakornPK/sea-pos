@@ -295,3 +295,20 @@ Roles are set in `raw_user_meta_data` at signup and synced to `profiles` via a D
 
 - **Routes/Files:** `/reports` → [app/(dashboard)/reports/page.tsx](app/(dashboard)/reports/page.tsx)
 - **Planned:** Sales summaries, stock movement history (from stock_logs), low-stock report
+
+### User Management *(admin only)*
+
+- **Purpose:** Allow admins to create, edit, delete, and reset passwords for application users.
+- **Routes/Files:**
+  - `/users` → [app/(dashboard)/users/page.tsx](app/(dashboard)/users/page.tsx)
+  - [components/users/AddUserForm.tsx](components/users/AddUserForm.tsx), [components/users/UserTable.tsx](components/users/UserTable.tsx)
+  - [lib/actions/users.ts](lib/actions/users.ts), [lib/supabase/admin.ts](lib/supabase/admin.ts)
+- **Behavior:**
+  - Page redirects non-admin users to `/`
+  - Lists all users (email, full_name, role) via `supabase.auth.admin.listUsers()` merged with `profiles`
+  - **Add user:** inline form creates an auth user with `email_confirm: true` and upserts their profile
+  - **Edit user:** inline row editor updates `profiles.full_name` and `profiles.role`
+  - **Reset password:** inline row form sets a new password (min 8 chars)
+  - **Delete user:** confirmation prompt then `auth.admin.deleteUser()`; cannot delete own account
+  - All mutations run on the server with a service-role client that bypasses RLS — the client is never exposed to the browser
+- **Constraints:** Requires `SUPABASE_SERVICE_ROLE_KEY` in `.env`. Role is always validated against the `UserRole` union.
