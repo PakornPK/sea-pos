@@ -65,7 +65,7 @@ export default async function InventoryPage({
 
 async function InventoryTable({ sp, canAdjust }: { sp: Search; canAdjust: boolean }) {
   await requirePageRole(ALLOWED)
-  const pageParams = parsePageParams(sp)
+  const pageParams = parsePageParams(sp, { pageSize: 10 })
 
   const [result, categories] = await Promise.all([
     productRepo.listWithCategoryPaginated(pageParams, {

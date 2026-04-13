@@ -29,7 +29,7 @@ export type Paginated<T> = {
 }
 
 const DEFAULT_PAGE_SIZE = 20
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100]
 
 function toPositiveInt(raw: string | undefined, fallback: number): number {
   const n = Number(raw)

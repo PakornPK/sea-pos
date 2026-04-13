@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
+import { PageSizePicker } from '@/components/ui/page-size-picker'
 
 type Props = {
   /** The path segment + any pre-existing search params (no trailing ?). */
@@ -29,7 +30,12 @@ function buildHref(
   return `${basePath}?${params.toString()}`
 }
 
-/** Returns page numbers to show, with -1 meaning ellipsis. */
+/**
+ * Returns pages to show, with -1 meaning ellipsis. The window around the
+ * current page is tighter on narrow viewports (first/last + 1 neighbour)
+ * and wider on larger ones. We expose just one list; Tailwind classes
+ * hide/show copies at breakpoints instead of building two lists.
+ */
 function getVisiblePages(current: number, total: number): number[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
 
@@ -55,20 +61,26 @@ export function Pagination({
   const pages    = getVisiblePages(page, totalPages)
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-      <p className="text-muted-foreground">
-        แสดง <span className="font-medium text-foreground">{firstRow.toLocaleString('th-TH')}</span>
+    <div className="flex flex-col items-center gap-3 text-sm sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-4">
+      {/* Left — row counter */}
+      <p className="text-muted-foreground text-xs sm:text-sm order-2 sm:order-1 sm:justify-self-start">
+        <span className="hidden sm:inline">แสดง </span>
+        <span className="font-medium text-foreground">{firstRow.toLocaleString('th-TH')}</span>
         {firstRow !== lastRow && (
           <>
             {' – '}
             <span className="font-medium text-foreground">{lastRow.toLocaleString('th-TH')}</span>
           </>
-        )}{' '}จาก{' '}
-        <span className="font-medium text-foreground">{totalCount.toLocaleString('th-TH')}</span>{' '}รายการ
+        )}{' '}
+        <span className="hidden sm:inline">จาก </span>
+        <span className="sm:hidden">/ </span>
+        <span className="font-medium text-foreground">{totalCount.toLocaleString('th-TH')}</span>{' '}
+        <span className="hidden sm:inline">รายการ</span>
       </p>
 
-      {totalPages > 1 && (
-        <div className="flex items-center gap-1">
+      {/* Center — page controls */}
+      {totalPages > 1 ? (
+        <div className="flex items-center gap-1 order-1 sm:order-2 sm:justify-self-center">
           <PageLink
             href={page > 1 ? buildHref(basePath, searchParams, page - 1) : null}
             aria-label="ก่อนหน้า"
@@ -76,19 +88,28 @@ export function Pagination({
             <ChevronLeft className="h-4 w-4" />
           </PageLink>
 
-          {pages.map((n, i) =>
-            n === -1 ? (
-              <span key={`ell-${i}`} className="px-1 text-muted-foreground">…</span>
-            ) : (
-              <PageLink
-                key={n}
-                href={buildHref(basePath, searchParams, n)}
-                active={n === page}
-              >
-                {n}
-              </PageLink>
-            )
-          )}
+          {/* Full list on md+ */}
+          <div className="hidden md:flex items-center gap-1">
+            {pages.map((n, i) =>
+              n === -1 ? (
+                <span key={`ell-${i}`} className="px-1 text-muted-foreground">…</span>
+              ) : (
+                <PageLink
+                  key={n}
+                  href={buildHref(basePath, searchParams, n)}
+                  active={n === page}
+                >
+                  {n}
+                </PageLink>
+              )
+            )}
+          </div>
+
+          {/* Compact "Page X / Y" on mobile & small tablets */}
+          <div className="md:hidden px-2 text-xs tabular-nums">
+            <span className="font-medium text-foreground">{page}</span>
+            <span className="text-muted-foreground"> / {totalPages}</span>
+          </div>
 
           <PageLink
             href={page < totalPages ? buildHref(basePath, searchParams, page + 1) : null}
@@ -97,7 +118,14 @@ export function Pagination({
             <ChevronRight className="h-4 w-4" />
           </PageLink>
         </div>
+      ) : (
+        <div className="order-1 sm:order-2" />
       )}
+
+      {/* Right — page size picker */}
+      <div className="order-3 sm:justify-self-end">
+        <PageSizePicker currentSize={pageSize} />
+      </div>
     </div>
   )
 }
