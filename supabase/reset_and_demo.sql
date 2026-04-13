@@ -22,15 +22,43 @@ CASCADE;
 -- Reset receipt number to 1
 ALTER SEQUENCE IF EXISTS receipt_number_seq RESTART WITH 1;
 
+-- ── 1b. Demo company (multi-tenancy root) ────────────────────
+-- All seeded rows belong to this company. Test accounts are linked to it.
+DELETE FROM companies WHERE slug = 'sea-pos-demo';
+INSERT INTO companies (id, name, slug, plan)
+VALUES ('99999999-0000-0000-0000-000000000001', 'SEA-POS Demo Store', 'sea-pos-demo', 'pro');
+
+-- ── 1c. Override company_id default for the seeding transaction ──
+-- Normally company_id defaults to get_current_company_id() (the logged-in
+-- user's company), but the SQL Editor runs as superuser with no auth.uid(),
+-- so that returns NULL and the NOT NULL constraint would fail.
+-- We swap the default to a static value for the seed, then restore at the end.
+ALTER TABLE categories       ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+ALTER TABLE products         ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+ALTER TABLE customers        ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+ALTER TABLE suppliers        ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+ALTER TABLE sales            ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+ALTER TABLE purchase_orders  ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+ALTER TABLE stock_logs       ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
+
 -- ── 2. Categories ─────────────────────────────────────────────
-INSERT INTO categories (id, name) VALUES
-  ('11111111-0000-0000-0000-000000000001', 'เครื่องดื่ม'),
-  ('11111111-0000-0000-0000-000000000002', 'อาหาร'),
-  ('11111111-0000-0000-0000-000000000003', 'ของสด'),
-  ('11111111-0000-0000-0000-000000000004', 'ของใช้'),
-  ('11111111-0000-0000-0000-000000000005', 'ขนม');
+INSERT INTO categories (id, name, company_id) VALUES
+  ('11111111-0000-0000-0000-000000000001', 'เครื่องดื่ม', '99999999-0000-0000-0000-000000000001'),
+  ('11111111-0000-0000-0000-000000000002', 'อาหาร',      '99999999-0000-0000-0000-000000000001'),
+  ('11111111-0000-0000-0000-000000000003', 'ของสด',      '99999999-0000-0000-0000-000000000001'),
+  ('11111111-0000-0000-0000-000000000004', 'ของใช้',     '99999999-0000-0000-0000-000000000001'),
+  ('11111111-0000-0000-0000-000000000005', 'ขนม',        '99999999-0000-0000-0000-000000000001');
+
+-- Seed SKU prefixes (idempotent — 008_sku_prefix.sql also does this)
+UPDATE categories SET sku_prefix = 'DRK' WHERE id = '11111111-0000-0000-0000-000000000001';
+UPDATE categories SET sku_prefix = 'FOD' WHERE id = '11111111-0000-0000-0000-000000000002';
+UPDATE categories SET sku_prefix = 'FRS' WHERE id = '11111111-0000-0000-0000-000000000003';
+UPDATE categories SET sku_prefix = 'HSH' WHERE id = '11111111-0000-0000-0000-000000000004';
+UPDATE categories SET sku_prefix = 'SNK' WHERE id = '11111111-0000-0000-0000-000000000005';
 
 -- ── 3. Products ───────────────────────────────────────────────
+-- company_id is the demo company on every row
+-- (company_id is filled in via the UPDATE below — keeps row literals short)
 INSERT INTO products (id, sku, name, category_id, price, cost, stock, min_stock) VALUES
   -- เครื่องดื่ม
   ('22222222-0000-0000-0000-000000000001', 'WAT-600',  'น้ำดื่มตราช้าง 600ml',      '11111111-0000-0000-0000-000000000001',  7.00,  4.50, 120, 20),
@@ -56,17 +84,22 @@ INSERT INTO products (id, sku, name, category_id, price, cost, stock, min_stock)
   ('22222222-0000-0000-0000-000000000017', 'LAY-001',  'เลย์ Original 26g',         '11111111-0000-0000-0000-000000000005', 20.00, 13.00,  60, 10),
   ('22222222-0000-0000-0000-000000000018', 'ORE-001',  'โอรีโอ 1 แพ็ค',             '11111111-0000-0000-0000-000000000005', 30.00, 22.00,  40,  8);
 
+-- Attach products to demo company
+UPDATE products SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
+
 -- ── 4. Customers ──────────────────────────────────────────────
 INSERT INTO customers (id, name, phone, email) VALUES
   ('33333333-0000-0000-0000-000000000001', 'สมชาย ใจดี',        '0812345678', 'somchai@example.com'),
   ('33333333-0000-0000-0000-000000000002', 'สมหญิง รักดี',      '0898765432', NULL),
   ('33333333-0000-0000-0000-000000000003', 'บริษัท ABC จำกัด',  '025551234',  'info@abc.co.th');
+UPDATE customers SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
 
 -- ── 5. Suppliers ──────────────────────────────────────────────
 INSERT INTO suppliers (name, contact_name, phone, email) VALUES
   ('บริษัท สยามฟู้ด จำกัด',       'คุณวิชัย', '0812222333', 'wichai@siamfood.co.th'),
   ('ห้างส่งสินค้าอุดม',            'คุณอุดม',  '025551111',  NULL),
   ('บริษัท เครื่องดื่มไทย จำกัด',  'คุณนภา',   '0899991234', 'napa@thaidrink.co.th');
+UPDATE suppliers SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
 
 -- ── 6. Test accounts (recreate if missing) ────────────────────
 -- Password for all accounts: Test1234!
@@ -83,7 +116,7 @@ BEGIN
       'authenticated', 'authenticated', 'admin@sea-pos.test',
       crypt('Test1234!', gen_salt('bf')), NOW(),
       '{"provider":"email","providers":["email"]}',
-      '{"role":"admin","full_name":"ผู้ดูแลระบบ"}',
+      '{"role":"admin","full_name":"ผู้ดูแลระบบ","company_id":"99999999-0000-0000-0000-000000000001"}',
       NOW(), NOW(), '', '', '', ''
     );
   END IF;
@@ -99,7 +132,7 @@ BEGIN
       'authenticated', 'authenticated', 'manager@sea-pos.test',
       crypt('Test1234!', gen_salt('bf')), NOW(),
       '{"provider":"email","providers":["email"]}',
-      '{"role":"manager","full_name":"ผู้จัดการร้าน"}',
+      '{"role":"manager","full_name":"ผู้จัดการร้าน","company_id":"99999999-0000-0000-0000-000000000001"}',
       NOW(), NOW(), '', '', '', ''
     );
   END IF;
@@ -115,7 +148,7 @@ BEGIN
       'authenticated', 'authenticated', 'cashier@sea-pos.test',
       crypt('Test1234!', gen_salt('bf')), NOW(),
       '{"provider":"email","providers":["email"]}',
-      '{"role":"cashier","full_name":"พนักงานเก็บเงิน"}',
+      '{"role":"cashier","full_name":"พนักงานเก็บเงิน","company_id":"99999999-0000-0000-0000-000000000001"}',
       NOW(), NOW(), '', '', '', ''
     );
   END IF;
@@ -131,10 +164,34 @@ BEGIN
       'authenticated', 'authenticated', 'purchasing@sea-pos.test',
       crypt('Test1234!', gen_salt('bf')), NOW(),
       '{"provider":"email","providers":["email"]}',
-      '{"role":"purchasing","full_name":"เจ้าหน้าที่จัดซื้อ"}',
+      '{"role":"purchasing","full_name":"เจ้าหน้าที่จัดซื้อ","company_id":"99999999-0000-0000-0000-000000000001"}',
       NOW(), NOW(), '', '', '', ''
     );
   END IF;
+
+  -- Idempotent: force each test profile into the demo company with the
+  -- CORRECT role. We map email → role explicitly (no reliance on the
+  -- user's raw_user_meta_data, which may have been set by an older
+  -- version of this seed without the company_id key).
+  UPDATE public.profiles p
+     SET company_id = '99999999-0000-0000-0000-000000000001',
+         role = CASE u.email
+                  WHEN 'admin@sea-pos.test'      THEN 'admin'
+                  WHEN 'manager@sea-pos.test'    THEN 'manager'
+                  WHEN 'cashier@sea-pos.test'    THEN 'cashier'
+                  WHEN 'purchasing@sea-pos.test' THEN 'purchasing'
+                  ELSE p.role
+                END,
+         full_name = CASE u.email
+                       WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแลระบบ'
+                       WHEN 'manager@sea-pos.test'    THEN 'ผู้จัดการร้าน'
+                       WHEN 'cashier@sea-pos.test'    THEN 'พนักงานเก็บเงิน'
+                       WHEN 'purchasing@sea-pos.test' THEN 'เจ้าหน้าที่จัดซื้อ'
+                       ELSE p.full_name
+                     END
+    FROM auth.users u
+   WHERE p.id = u.id
+     AND u.email LIKE '%@sea-pos.test';
 END $$;
 
 -- ── 7. Demo sales history ─────────────────────────────────────
@@ -254,6 +311,9 @@ BEGIN
 
 END $$;
 
+-- ── 7b. Tenant backfill for sales ─────────────────────────────
+UPDATE sales SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
+
 -- ── 8. Fix sale totals to match line items exactly ────────────
 UPDATE sales s
 SET total_amount = (
@@ -286,6 +346,18 @@ BEGIN
     VALUES (r.product_id, -r.qty_sold, 'ยอดขาย (demo seed)', v_cashier);
   END LOOP;
 END $$;
+
+-- Tenant backfill for stock_logs (same as sales/products above)
+UPDATE stock_logs SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
+
+-- Restore the normal company_id default (resolved at runtime from the caller).
+ALTER TABLE categories       ALTER COLUMN company_id SET DEFAULT get_current_company_id();
+ALTER TABLE products         ALTER COLUMN company_id SET DEFAULT get_current_company_id();
+ALTER TABLE customers        ALTER COLUMN company_id SET DEFAULT get_current_company_id();
+ALTER TABLE suppliers        ALTER COLUMN company_id SET DEFAULT get_current_company_id();
+ALTER TABLE sales            ALTER COLUMN company_id SET DEFAULT get_current_company_id();
+ALTER TABLE purchase_orders  ALTER COLUMN company_id SET DEFAULT get_current_company_id();
+ALTER TABLE stock_logs       ALTER COLUMN company_id SET DEFAULT get_current_company_id();
 
 COMMIT;
 

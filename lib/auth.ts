@@ -9,6 +9,7 @@ export type AuthedUser = {
   email: string | null
   role: UserRole
   fullName: string | null
+  companyId: string | null
 }
 
 /**
@@ -45,13 +46,14 @@ const loadUser = cache(async (): Promise<AuthedUser | null> => {
 
   const supabase = await createClient()
   const { data: profile } = await supabase
-    .from('profiles').select('role, full_name').eq('id', userId).single()
+    .from('profiles').select('role, full_name, company_id').eq('id', userId).single()
 
   return {
     id: userId,
     email: hdrs.get('x-sea-user-email'),
     role: (profile?.role ?? 'cashier') as UserRole,
     fullName: (profile?.full_name as string | null) ?? null,
+    companyId: (profile?.company_id as string | null) ?? null,
   }
 })
 

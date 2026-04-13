@@ -19,6 +19,7 @@ import { supabaseRepos } from './supabase'
 // Single wiring point — change THIS LINE to swap the entire backend.
 const repos: Repositories = supabaseRepos
 
+export const companyRepo       = repos.company
 export const productRepo       = repos.product
 export const categoryRepo      = repos.category
 export const customerRepo      = repos.customer

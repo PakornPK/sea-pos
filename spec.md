@@ -137,7 +137,159 @@ Roles are set in `raw_user_meta_data` at signup and synced to `profiles` via a D
 
 ## Database Schema
 
-> All tables are defined in `supabase/001_schema.sql`. Seed data (test accounts + sample products) is in `supabase/002_seed.sql`.
+> All tables are defined across `supabase/001_schema.sql` through `supabase/009_multitenancy.sql`. Seed data (test accounts + sample products) is in `supabase/reset_and_demo.sql`.
+
+### Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+  auth_users ||--o| profiles            : "1:1 account"
+  companies  ||--o{ profiles            : "tenant has many users"
+  companies  ||--o{ categories          : owns
+  companies  ||--o{ products            : owns
+  companies  ||--o{ customers           : owns
+  companies  ||--o{ suppliers           : owns
+  companies  ||--o{ sales               : owns
+  companies  ||--o{ purchase_orders     : owns
+  companies  ||--o{ stock_logs          : owns
+
+  categories ||--o{ products            : categorizes
+  products   ||--o{ sale_items          : "sold as"
+  products   ||--o{ purchase_order_items : "ordered as"
+  products   ||--o{ stock_logs          : "audits"
+
+  customers  ||--o{ sales               : "buyer of"
+  suppliers  ||--o{ purchase_orders     : "vendor of"
+
+  sales             ||--o{ sale_items             : contains
+  purchase_orders   ||--o{ purchase_order_items   : contains
+
+  auth_users ||--o{ sales               : "cashier_id"
+  auth_users ||--o{ purchase_orders     : "created_by"
+  auth_users ||--o{ stock_logs          : "actor"
+  auth_users ||--o| companies           : "owner_id"
+
+  companies {
+    uuid    id PK
+    text    name
+    text    slug UK
+    uuid    owner_id FK
+    text    plan "free | pro | enterprise"
+    jsonb   settings
+    timestamptz created_at
+  }
+
+  profiles {
+    uuid id PK_FK
+    uuid company_id FK
+    text role "admin | manager | cashier | purchasing"
+    text full_name
+    timestamptz created_at
+  }
+
+  categories {
+    uuid id PK
+    uuid company_id FK
+    text name
+    text sku_prefix
+    timestamptz created_at
+  }
+
+  products {
+    uuid    id PK
+    uuid    company_id FK
+    uuid    category_id FK
+    text    sku
+    text    name
+    numeric price
+    numeric cost
+    int     stock
+    int     min_stock
+    text    image_url
+    timestamptz created_at
+  }
+
+  stock_logs {
+    uuid id PK
+    uuid company_id FK
+    uuid product_id FK
+    uuid user_id FK
+    int  change
+    text reason
+    timestamptz created_at
+  }
+
+  customers {
+    uuid id PK
+    uuid company_id FK
+    text name
+    text phone
+    text email
+    text address
+    timestamptz created_at
+  }
+
+  suppliers {
+    uuid id PK
+    uuid company_id FK
+    text name
+    text contact_name
+    text phone
+    text email
+    timestamptz created_at
+  }
+
+  sales {
+    uuid    id PK
+    int     receipt_no UK
+    uuid    company_id FK
+    uuid    customer_id FK
+    uuid    user_id FK
+    numeric total_amount
+    text    payment_method "cash | card | transfer"
+    text    status "completed | voided"
+    timestamptz created_at
+  }
+
+  sale_items {
+    uuid    id PK
+    uuid    sale_id FK
+    uuid    product_id FK
+    int     quantity
+    numeric unit_price
+    numeric subtotal
+  }
+
+  purchase_orders {
+    uuid    id PK
+    int     po_no UK
+    uuid    company_id FK
+    uuid    supplier_id FK
+    uuid    user_id FK
+    text    status "draft | ordered | received | cancelled"
+    numeric total_amount
+    text    notes
+    timestamptz ordered_at
+    timestamptz received_at
+    timestamptz created_at
+  }
+
+  purchase_order_items {
+    uuid    id PK
+    uuid    po_id FK
+    uuid    product_id FK
+    int     quantity_ordered
+    int     quantity_received
+    numeric unit_cost
+  }
+```
+
+**Conventions:**
+- Every row has a `company_id` except `sale_items` and `purchase_order_items`, which inherit tenancy through their parent's `company_id` (cheaper than duplicating + enforced by RLS EXISTS joins).
+- `auth_users` in the diagram is Supabase's built-in `auth.users` table (outside our `public` schema).
+- Soft-foreign-keys like `stock_logs.reason` (freeform text that may reference `PO-00042` or `sale_id[:8]`) are not shown.
+- Receipt numbers (`receipt_no`) come from a single sequence; PO numbers (`po_no`) from another. Both are currently company-wide; per-branch numbering is [planned for Release 2](TODO.md).
+
 
 ### `profiles`
 
@@ -243,6 +395,46 @@ Roles are set in `raw_user_meta_data` at signup and synced to `profiles` via a D
 | unit_cost | numeric(12,2) | |
 
 **RLS:** Fine-grained per-role policies are defined in `supabase/001_schema.sql`. See the User Roles section above for the permission matrix.
+
+---
+
+## Multi-tenancy (Release 1)
+
+SEA-POS is a **B2B SaaS** — every customer is a company (tenant) with its own isolated dataset. Multiple users per company, full data separation.
+
+### Model
+
+| Table | Role |
+|---|---|
+| `companies` | One row per customer organization. Owner, plan, slug, settings jsonb. |
+| `profiles.company_id` | Every user belongs to exactly one company. |
+| All business tables | Have `company_id UUID NOT NULL` referencing `companies(id)`. |
+
+### Isolation
+
+Enforced by PostgreSQL **Row-Level Security** on every table:
+
+```sql
+USING (company_id = get_current_company_id())
+WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...'))
+```
+
+`get_current_company_id()` is a SECURITY DEFINER function that resolves the current user's `profiles.company_id`. Even if app code forgets to filter, the database refuses cross-tenant reads and rejects cross-tenant inserts.
+
+### Signup flow
+
+- **Self-serve signup** — `handle_new_user` trigger creates a fresh `companies` row, the user becomes its owner with `role='admin'`.
+- **Invitation** — admin includes `company_id` in the invited user's `auth.users.raw_user_meta_data`. Trigger attaches them to that company instead of creating a new one.
+
+### Code surface
+
+- `AuthedUser.companyId` — current user's tenant, available via [`requirePageRole` / `requireActionRole`](lib/auth.ts)
+- `companyRepo` — read/update the current company (via [contracts/company.ts](lib/repositories/contracts/company.ts))
+- Every other repo filters by `company_id` **transparently** via RLS — no code change needed in pages/actions
+
+### Migration file
+
+[supabase/009_multitenancy.sql](supabase/009_multitenancy.sql) — idempotent, safe to re-run. Backfills existing data into a `Legacy` company so nothing is orphaned.
 
 ---
 

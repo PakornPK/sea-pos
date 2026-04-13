@@ -2,10 +2,23 @@
 
 export type UserRole = 'admin' | 'manager' | 'cashier' | 'purchasing'
 
+export type CompanyPlan = 'free' | 'pro' | 'enterprise'
+
+export type Company = {
+  id: string
+  name: string
+  slug: string | null
+  owner_id: string | null
+  plan: CompanyPlan
+  settings: Record<string, unknown>
+  created_at: string
+}
+
 export type Profile = {
   id: string
   role: UserRole
   full_name: string | null
+  company_id: string | null
   created_at: string
 }
 
