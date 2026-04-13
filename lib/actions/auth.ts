@@ -15,7 +15,8 @@ export async function signIn(_prev: unknown, formData: FormData) {
   if (error) return { error }
 
   revalidatePath('/', 'layout')
-  redirect('/inventory')
+  // Redirect to the dashboard root — it will route to each role's home page.
+  redirect('/')
 }
 
 export async function signOut() {

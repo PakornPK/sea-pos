@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { hardenCookieOptions } from './cookie-options'
 
 export async function createClient() {
   const cookieStore = await cookies()
@@ -15,11 +16,11 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, hardenCookieOptions(options))
             )
           } catch {
             // setAll called from a Server Component — cookies cannot be set.
-            // This is safe to ignore if the session is refreshed via proxy.ts.
+            // Safe to ignore; proxy.ts will refresh the session on the next request.
           }
         },
       },

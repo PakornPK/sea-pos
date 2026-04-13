@@ -70,6 +70,18 @@ export async function resetUserPassword(formData: FormData): Promise<void> {
   revalidatePath('/users')
 }
 
+export async function forceSignOutUser(id: string): Promise<void> {
+  const { me } = await requireActionRole(['admin'])
+  if (!id) throw new Error('ไม่พบผู้ใช้')
+  if (me.id === id) throw new Error('ใช้ปุ่ม "ออกจากระบบ" เพื่อออกจากบัญชีตัวเอง')
+
+  const admin = createAdminClient()
+  const err = await userRepo.forceSignOut(admin, id, 'global')
+  if (err) throw new Error(err)
+
+  revalidatePath('/users')
+}
+
 export async function deleteUser(id: string): Promise<void> {
   const { me } = await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบผู้ใช้')

@@ -72,4 +72,19 @@ export const userRepo = {
     const { error } = await db.auth.admin.deleteUser(id)
     return error?.message ?? null
   },
+
+  /**
+   * Invalidate all refresh tokens for this user across every device.
+   * The user's current access token (≤10 min TTL) still works until it
+   * expires — that's the inherent tradeoff of stateless JWT auth.
+   * Scope 'global' = all sessions; 'others' = keep the caller's own.
+   */
+  async forceSignOut(
+    db: DB,
+    id: string,
+    scope: 'global' | 'others' = 'global'
+  ): Promise<string | null> {
+    const { error } = await db.auth.admin.signOut(id, scope)
+    return error?.message ?? null
+  },
 }

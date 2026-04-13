@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Pencil, Trash2, KeyRound, X, Check } from 'lucide-react'
+import { Pencil, Trash2, KeyRound, LogOut, X, Check } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { deleteUser, resetUserPassword, updateUser } from '@/lib/actions/users'
+import { deleteUser, forceSignOutUser, resetUserPassword, updateUser } from '@/lib/actions/users'
 import { ROLE_LABELS, ROLE_BADGE_VARIANT } from '@/lib/labels'
 import type { UserRole } from '@/types/database'
 
@@ -53,6 +53,19 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
         setEditingId(null)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'แก้ไขไม่สำเร็จ')
+      }
+    })
+  }
+
+  function handleForceSignOut(id: string, email: string) {
+    if (!confirm(`บังคับออกจากระบบสำหรับ "${email}"? (ทำให้ token บนทุกอุปกรณ์ใช้ไม่ได้)`)) return
+    setError(null)
+    startTransition(async () => {
+      try {
+        await forceSignOutUser(id)
+        alert('บังคับออกจากระบบสำเร็จ')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'บังคับออกจากระบบไม่สำเร็จ')
       }
     })
   }
@@ -208,6 +221,15 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
                       title="เปลี่ยนรหัสผ่าน"
                     >
                       <KeyRound className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleForceSignOut(u.id, u.email)}
+                      disabled={pending || isMe}
+                      title={isMe ? 'ใช้ปุ่ม ออกจากระบบ สำหรับบัญชีของคุณ' : 'บังคับออกจากระบบทุกอุปกรณ์'}
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="sm"

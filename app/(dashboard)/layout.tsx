@@ -1,25 +1,18 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requirePage } from '@/lib/auth'
 import { DashboardShell } from '@/components/layout/DashboardShell'
-import type { UserRole } from '@/types/database'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('role, full_name').eq('id', user.id).single()
+  const { me } = await requirePage()
 
   return (
     <DashboardShell
-      email={user.email ?? ''}
-      role={(profile?.role ?? 'cashier') as UserRole}
-      fullName={(profile?.full_name as string | null) ?? ''}
+      email={me.email ?? ''}
+      role={me.role}
+      fullName={me.fullName ?? ''}
     >
       {children}
     </DashboardShell>

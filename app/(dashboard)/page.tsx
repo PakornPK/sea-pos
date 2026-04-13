@@ -10,10 +10,8 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 export default async function DashboardPage() {
-  try {
-    const { me } = await getActionUser()
-    redirect(ROLE_HOME[me.role] ?? '/inventory')
-  } catch {
-    redirect('/login')
-  }
+  // proxy.ts already guarantees an authenticated user before we reach here,
+  // so we don't need to guard for unauthenticated state.
+  const { me } = await getActionUser()
+  redirect(ROLE_HOME[me.role] ?? '/inventory')
 }
