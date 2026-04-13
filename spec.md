@@ -174,15 +174,15 @@ erDiagram
     text    name
     text    slug UK
     uuid    owner_id FK
-    text    plan "free | pro | enterprise"
+    text    plan "free or pro or enterprise"
     jsonb   settings
     timestamptz created_at
   }
 
   profiles {
-    uuid id PK_FK
+    uuid id PK "FK to auth.users.id"
     uuid company_id FK
-    text role "admin | manager | cashier | purchasing"
+    text role "admin or manager or cashier or purchasing"
     text full_name
     timestamptz created_at
   }
@@ -246,8 +246,8 @@ erDiagram
     uuid    customer_id FK
     uuid    user_id FK
     numeric total_amount
-    text    payment_method "cash | card | transfer"
-    text    status "completed | voided"
+    text    payment_method "cash or card or transfer"
+    text    status "completed or voided"
     timestamptz created_at
   }
 
@@ -266,7 +266,7 @@ erDiagram
     uuid    company_id FK
     uuid    supplier_id FK
     uuid    user_id FK
-    text    status "draft | ordered | received | cancelled"
+    text    status "draft or ordered or received or cancelled"
     numeric total_amount
     text    notes
     timestamptz ordered_at
