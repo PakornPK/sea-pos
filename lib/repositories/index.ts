@@ -20,6 +20,7 @@ import { supabaseRepos } from './supabase'
 const repos: Repositories = supabaseRepos
 
 export const companyRepo       = repos.company
+export const planRepo          = repos.plan
 export const productRepo       = repos.product
 export const categoryRepo      = repos.category
 export const customerRepo      = repos.customer
@@ -34,6 +35,7 @@ export const analyticsRepo     = repos.analytics
 // Also re-export contract types so callers never need to reach into contracts/
 export type {
   Repositories,
+  PlanInput,
   CustomerInput,
   SupplierInput,
   POLineInput,

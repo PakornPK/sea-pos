@@ -10,8 +10,12 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 export default async function DashboardPage() {
-  // proxy.ts already guarantees an authenticated user before we reach here,
-  // so we don't need to guard for unauthenticated state.
+  // proxy.ts already guarantees an authenticated user before we reach here.
   const { me } = await getActionUser()
+
+  // Platform admins live in a completely separate UI under /platform.
+  // They don't see customer-facing pages and don't need the dashboard home.
+  if (me.isPlatformAdmin) redirect('/platform/companies')
+
   redirect(ROLE_HOME[me.role] ?? '/inventory')
 }

@@ -2,7 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users, BarChart2, LogOut, UserCog } from 'lucide-react'
+import {
+  LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users,
+  BarChart2, LogOut, UserCog, Settings, Building2, Shield, PackageOpen,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -15,7 +18,7 @@ type NavItem = {
   roles: UserRole[]
 }
 
-const NAV_ITEMS: NavItem[] = [
+const CUSTOMER_NAV: NavItem[] = [
   { href: '/dashboard',  label: 'ภาพรวมร้าน',   icon: LayoutDashboard, roles: ['admin', 'manager'] },
   { href: '/inventory',  label: 'คลังสินค้า',  icon: Package,      roles: ['admin', 'manager', 'purchasing'] },
   { href: '/pos',        label: 'ขายสินค้า',   icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
@@ -23,31 +26,49 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/purchasing', label: 'จัดซื้อ',     icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
   { href: '/customers',  label: 'ลูกค้า',      icon: Users,        roles: ['admin', 'manager', 'cashier'] },
   { href: '/reports',    label: 'รายงาน',      icon: BarChart2,    roles: ['admin', 'manager'] },
-  { href: '/users',      label: 'ผู้ใช้งาน',    icon: UserCog,      roles: ['admin'] },
+  { href: '/users',            label: 'ผู้ใช้งาน',   icon: UserCog,  roles: ['admin'] },
+  { href: '/settings/company', label: 'ตั้งค่าบริษัท', icon: Settings, roles: ['admin'] },
+]
+
+const PLATFORM_NAV: Array<{ href: string; label: string; icon: React.ElementType }> = [
+  { href: '/platform/companies', label: 'บริษัทลูกค้า', icon: Building2 },
+  { href: '/platform/plans',     label: 'แพ็กเกจ',      icon: PackageOpen },
 ]
 
 type SidebarProps = {
   role: UserRole
+  isPlatformAdmin: boolean
 }
 
-export function Sidebar({ role }: SidebarProps) {
+export function Sidebar({ role, isPlatformAdmin }: SidebarProps) {
   const pathname = usePathname()
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role))
+  const isActive = (href: string) =>
+    pathname === href || (href !== '/pos' && pathname.startsWith(href))
+
+  const items = isPlatformAdmin
+    ? PLATFORM_NAV
+    : CUSTOMER_NAV.filter((item) => item.roles.includes(role))
 
   return (
     <aside className="flex h-full w-60 flex-col border-r bg-background">
-      <div className="flex h-14 items-center border-b px-4">
+      <div className="flex h-14 items-center gap-2 border-b px-4">
         <span className="text-lg font-semibold tracking-tight">SEA-POS</span>
+        {isPlatformAdmin && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <Shield className="h-3 w-3" />
+            แพลตฟอร์ม
+          </span>
+        )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 p-3">
-        {visibleItems.map(({ href, label, icon: Icon }) => (
+      <nav className="flex flex-1 flex-col gap-1 p-3 overflow-y-auto">
+        {items.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             className={cn(
               'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              pathname === href || (href !== '/pos' && pathname.startsWith(href))
+              isActive(href)
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}

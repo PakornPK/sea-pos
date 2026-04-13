@@ -10,6 +10,7 @@ export type AuthedUser = {
   role: UserRole
   fullName: string | null
   companyId: string | null
+  isPlatformAdmin: boolean
 }
 
 /**
@@ -46,7 +47,9 @@ const loadUser = cache(async (): Promise<AuthedUser | null> => {
 
   const supabase = await createClient()
   const { data: profile } = await supabase
-    .from('profiles').select('role, full_name, company_id').eq('id', userId).single()
+    .from('profiles')
+    .select('role, full_name, company_id, is_platform_admin')
+    .eq('id', userId).single()
 
   return {
     id: userId,
@@ -54,22 +57,29 @@ const loadUser = cache(async (): Promise<AuthedUser | null> => {
     role: (profile?.role ?? 'cashier') as UserRole,
     fullName: (profile?.full_name as string | null) ?? null,
     companyId: (profile?.company_id as string | null) ?? null,
+    isPlatformAdmin: Boolean(profile?.is_platform_admin),
   }
 })
 
 /**
- * For protected pages that require a specific set of roles.
- * Redirects to /login if unauthenticated, to / if role not allowed.
+ * For protected CUSTOMER pages that require a specific set of roles.
+ * Redirects to:
+ *   - /login if unauthenticated
+ *   - /platform/companies if the user is a platform admin (they shouldn't
+ *     see customer-facing UI; their workspace is separate)
+ *   - / if role not allowed (which then routes to the user's home)
  */
 export async function requirePageRole(allowed: UserRole[]): Promise<{ me: AuthedUser }> {
   const me = await loadUser()
   if (!me) redirect('/login')
+  if (me.isPlatformAdmin) redirect('/platform/companies')
   if (!allowed.includes(me.role)) redirect('/')
   return { me }
 }
 
 /**
- * For protected pages where any authenticated role is fine (e.g. layouts).
+ * For protected pages where any authenticated role (customer OR platform)
+ * is acceptable — currently just the dashboard layout.
  */
 export async function requirePage(): Promise<{ me: AuthedUser }> {
   const me = await loadUser()
@@ -85,6 +95,17 @@ export async function requireActionRole(allowed: UserRole[]): Promise<{ me: Auth
   const me = await loadUser()
   if (!me) throw new Error('กรุณาเข้าสู่ระบบใหม่')
   if (!allowed.includes(me.role)) throw new Error('ไม่มีสิทธิ์ดำเนินการ')
+  return { me }
+}
+
+/**
+ * For pages and actions reachable only by platform operators (SEA-POS
+ * staff), not customer company users.
+ */
+export async function requirePlatformAdmin(): Promise<{ me: AuthedUser }> {
+  const me = await loadUser()
+  if (!me) redirect('/login')
+  if (!me.isPlatformAdmin) redirect('/')
   return { me }
 }
 

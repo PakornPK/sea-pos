@@ -2,6 +2,7 @@ import type { Product, ProductInsert, ProductWithCategory } from '@/types/databa
 import type { PageParams, Paginated } from '@/lib/pagination'
 
 export interface ProductRepository {
+  countAll(): Promise<number>
   listAll(): Promise<Product[]>
   listWithCategory(): Promise<ProductWithCategory[]>
   listInStock(): Promise<Product[]>

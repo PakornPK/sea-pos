@@ -1,7 +1,9 @@
 'use client'
 
 import { useActionState } from 'react'
+import Link from 'next/link'
 import { signIn } from '@/lib/actions/auth'
+import { features } from '@/lib/features'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,6 +48,14 @@ export function LoginForm() {
           <Button type="submit" disabled={pending}>
             {pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
           </Button>
+          {features.enableSignup && (
+            <p className="text-center text-sm text-muted-foreground">
+              ยังไม่มีบัญชี?{' '}
+              <Link href="/signup" className="text-primary hover:underline">
+                สมัครใช้งาน
+              </Link>
+            </p>
+          )}
         </form>
       </CardContent>
     </Card>

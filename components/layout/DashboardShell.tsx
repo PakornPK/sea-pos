@@ -7,12 +7,15 @@ type DashboardShellProps = {
   email: string
   fullName: string
   role: UserRole
+  isPlatformAdmin: boolean
 }
 
-export function DashboardShell({ children, email, fullName, role }: DashboardShellProps) {
+export function DashboardShell({
+  children, email, fullName, role, isPlatformAdmin,
+}: DashboardShellProps) {
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar role={role} />
+      <Sidebar role={role} isPlatformAdmin={isPlatformAdmin} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header email={email} fullName={fullName} role={role} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>

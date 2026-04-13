@@ -12,7 +12,8 @@
  *   - No database specifics (connection, query builders) leak into here.
  */
 
-export type { CompanyRepository }        from './company'
+export type { CompanyRepository, CompanyListRow } from './company'
+export type { PlanRepository, PlanInput } from './plan'
 export type { ProductRepository }        from './product'
 export type { CategoryRepository }       from './category'
 export type { CustomerRepository, CustomerInput } from './customer'
@@ -41,6 +42,7 @@ export type {
 } from './analytics'
 
 import type { CompanyRepository }         from './company'
+import type { PlanRepository }            from './plan'
 import type { ProductRepository }         from './product'
 import type { CategoryRepository }        from './category'
 import type { CustomerRepository }        from './customer'
@@ -55,6 +57,7 @@ import type { AnalyticsRepository }       from './analytics'
 /** Aggregate type — an adapter implements all of these to be a valid backend. */
 export interface Repositories {
   company:       CompanyRepository
+  plan:          PlanRepository
   product:       ProductRepository
   category:      CategoryRepository
   customer:      CustomerRepository

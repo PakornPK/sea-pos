@@ -10,7 +10,9 @@ export const metadata: Metadata = {
 
 export default async function UsersPage() {
   const { me } = await requirePageRole(['admin'])
-  const users = await userRepo.listAll()
+
+  // Tenant-safe: only users in the caller's company, never across tenants.
+  const users = me.companyId ? await userRepo.listByCompany(me.companyId) : []
 
   return (
     <div className="flex flex-col gap-6">

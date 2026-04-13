@@ -65,20 +65,20 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
-  const isLoginPage = pathname.startsWith('/login')
+  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup')
   const isPublicAsset =
     pathname.startsWith('/_next') || pathname.startsWith('/favicon')
 
   // 4. Auth routing.
   if (!isPublicAsset) {
-    if (!user && !isLoginPage) {
+    if (!user && !isAuthPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       const res = NextResponse.redirect(url)
       cookiesToWrite.forEach((c) => res.cookies.set(c.name, c.value, c.options))
       return res
     }
-    if (user && isLoginPage) {
+    if (user && isAuthPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       const res = NextResponse.redirect(url)

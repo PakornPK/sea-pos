@@ -13,13 +13,39 @@ they belong to; ticks move up as they ship.
 - [x] `CompanyRepository` contract + Supabase adapter (`getCurrent`, `updateSettings`, `updateName`)
 - [x] Demo seed (`reset_and_demo.sql`) puts every row under the `SEA-POS Demo Store` company
 
-### Deferred to later in R1
-- [ ] **Signup page** — currently only `/login` exists. Need `/signup` that creates `auth.users` + triggers company creation via `handle_new_user`
-- [ ] **Company settings UI** — `/settings/company` for admin to edit name, logo, receipt header, tax ID, phone
-- [ ] **Invitation flow** — admin invites email → magic link with `company_id` in metadata → new user auto-joins
-- [ ] **Company switcher** — for internal support staff with multiple company memberships (requires `company_members` join table; single-company users never see it)
-- [ ] **Billing / plan management** — Stripe hookup, plan-gated features, usage tracking
+### Shipped in MVP1 finalization
+- [x] **Signup page `/signup`** (gated by `NEXT_PUBLIC_ENABLE_SIGNUP`) — self-serve path exists in code; disabled for MVP1 invite-only launch
+- [x] **Company settings UI `/settings/company`** — admin edits company name, phone, address, tax ID, receipt header/footer
+- [x] **Invite fix** — admin creating a user via `/users` now passes `company_id` so the invitee joins the admin's company
+- [x] **Auth trigger polished** — `handle_new_user` honors optional `company_name` in metadata
+
+### Shipped: Invite-only platform admin (MVP1 model)
+- [x] **`companies.status`** lifecycle (`pending` / `active` / `suspended` / `closed`)
+- [x] **`profiles.is_platform_admin`** flag + `is_platform_admin()` SQL helper + RLS bypass for all-tenant visibility
+- [x] **Bootstrap `platform@sea-pos.com`** (password `PlatformAdmin1234!` — change after first login)
+- [x] **`/platform/companies`** list, detail, and create-company flow (creates company + first admin user in one step)
+- [x] **Activate / suspend / close** buttons on company detail page
+- [x] **Status gate** — users of pending/suspended/closed companies land on `/blocked` instead of the app
+- [x] **Sidebar platform section** — "แพลตฟอร์ม → บริษัทลูกค้า / แพ็กเกจ" visible only to platform admins
+
+### Shipped: Plan management + limits enforcement
+- [x] **`plans` config table** — replaces hardcoded enum. 4 seeded tiers: `free` / `lite_pro` / `standard_pro` / `enterprise`
+- [x] **`companies.plan` → FK(plans.code)** — renaming/adding plans no longer requires code deploy
+- [x] **Usage enforcement** — `addProduct` and `createUser` actions check `max_products` / `max_users` before insert; return friendly Thai error pointing the admin to upgrade
+- [x] **Usage cards on `/settings/company`** — live "X / Y สินค้า", "X / Y ผู้ใช้งาน" with progress bars, "ใกล้เต็ม" warning at 80%, "ใช้เต็มแล้ว" at 100%
+- [x] **`/platform/plans`** — platform admin edits name, description, price, and three limits (`max_products`, `max_users`, `max_branches`); each limit empty = unlimited
+- [x] **`CompanyPlanControls`** now loads plans from DB + shows ฿price + 3 limits per card
+
+### Deferred beyond MVP1
+- [ ] **Flip to self-serve signup** — set `NEXT_PUBLIC_ENABLE_SIGNUP=true` + change `handle_new_user` to start new companies as `pending`
+- [ ] **Magic-link invitations** — email the invitee a sign-in link. Current flow: admin sets password, shares it out-of-band
+- [ ] **Company switcher** — for support staff with multiple company memberships (`company_members` join table)
+- [ ] **Stripe billing** — plan pricing is recorded but not charged; wire Stripe Checkout + webhook to flip `status` on payment events
+- [ ] **Platform dashboard** — cross-company MRR / active users / sales volume charts
+- [ ] **Impersonate-as-customer** — platform admins click into a company and operate as their admin for support (audit-logged)
 - [ ] **Legal & data residency** — per-company data export, GDPR delete, terms acceptance log
+- [ ] **Email verification** — turn on Supabase's `Confirm email` + build confirmation page
+- [ ] **Password reset flow** — `/forgot-password` + email link
 
 ## Release 2 — Multi-branch (not started)
 

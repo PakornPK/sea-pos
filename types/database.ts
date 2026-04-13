@@ -2,7 +2,28 @@
 
 export type UserRole = 'admin' | 'manager' | 'cashier' | 'purchasing'
 
-export type CompanyPlan = 'free' | 'pro' | 'enterprise'
+/**
+ * Plan code — FK to `plans.code`. String at the type level because platform
+ * admins can add tiers via the plans config table (see `lib/repositories/plan.ts`).
+ * Seeded defaults: 'free', 'lite_pro', 'standard_pro', 'enterprise'.
+ */
+export type CompanyPlan = string
+
+export type CompanyStatus = 'pending' | 'active' | 'suspended' | 'closed'
+
+export type Plan = {
+  code: string
+  name: string
+  description: string | null
+  max_products: number | null   // null = unlimited
+  max_users: number | null
+  max_branches: number | null
+  monthly_price_baht: number | null   // null = "Contact us"
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
 
 export type Company = {
   id: string
@@ -10,6 +31,7 @@ export type Company = {
   slug: string | null
   owner_id: string | null
   plan: CompanyPlan
+  status: CompanyStatus
   settings: Record<string, unknown>
   created_at: string
 }
@@ -19,6 +41,7 @@ export type Profile = {
   role: UserRole
   full_name: string | null
   company_id: string | null
+  is_platform_admin: boolean
   created_at: string
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
 import { productRepo, stockLogRepo } from '@/lib/repositories'
+import { checkProductLimit, formatLimitError } from '@/lib/limits'
 
 const ADJUST_ROLES = ['admin', 'manager'] as const
 const CREATE_ROLES = ['admin', 'manager', 'purchasing'] as const
@@ -85,6 +86,10 @@ export async function quickCreateProduct(input: {
 
     const name = input.name.trim()
     if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
+
+    const currentCount = await productRepo.countAll()
+    const usage = await checkProductLimit(currentCount)
+    if (usage?.reached) return { error: formatLimitError('product', usage) }
 
     let sku = input.sku?.trim() || null
     if (!sku && input.categoryId) {

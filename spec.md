@@ -432,9 +432,51 @@ WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...')
 - `companyRepo` — read/update the current company (via [contracts/company.ts](lib/repositories/contracts/company.ts))
 - Every other repo filters by `company_id` **transparently** via RLS — no code change needed in pages/actions
 
-### Migration file
+### Migration files
 
-[supabase/009_multitenancy.sql](supabase/009_multitenancy.sql) — idempotent, safe to re-run. Backfills existing data into a `Legacy` company so nothing is orphaned.
+- [supabase/009_multitenancy.sql](supabase/009_multitenancy.sql) — adds `companies`, `company_id` columns, RLS rewrite. Backfills existing data into a `Legacy` company.
+- [supabase/010_signup.sql](supabase/010_signup.sql) — `handle_new_user` reads optional `company_name` from metadata (self-serve signup).
+
+### Pages
+
+- **`/signup`** — self-serve onboarding. Gated by `NEXT_PUBLIC_ENABLE_SIGNUP`. When `false` (MVP1 default), returns 404; platform admin creates every company. When `true`, `handle_new_user` creates a fresh company with the user as owner.
+- **`/login`** — email/password. Shows the `/signup` link only when the env flag is on.
+- **`/settings/company`** — admin-only. Company name + contact info + receipt header/footer, stored in `companies.settings` jsonb.
+- **`/users`** — admin creates staff. Passes `company_id` through metadata so invitees attach to the admin's tenant.
+
+### Platform admin (invite-only MVP1 model)
+
+- **`companies.status`** — lifecycle states: `pending`, `active`, `suspended`, `closed`. Enforced by middleware: non-active company users land on `/blocked`.
+- **`profiles.is_platform_admin`** + `is_platform_admin()` SQL helper — SECURITY DEFINER function used in every RLS policy (`USING (is_platform_admin() OR company_id = get_current_company_id())`). Platform admins see and operate across all tenants.
+- **Bootstrap account** — migration 011 seeds `platform@sea-pos.com` (password `PlatformAdmin1234!`). Change via SQL (see migration header comment) or grant the flag to an existing user.
+- **`/platform/companies`** — list all companies with owner / user count / status.
+- **`/platform/companies/new`** — platform admin creates a company + first admin user in one form. Company is created `active` (already vetted).
+- **`/platform/companies/[id]`** — detail + activate/suspend/close controls.
+- **`/blocked`** — dead-end page for non-active-company users (pending review / suspended / closed messages + sign out).
+
+### Migration files for R1
+
+- [supabase/009_multitenancy.sql](supabase/009_multitenancy.sql)
+- [supabase/010_signup.sql](supabase/010_signup.sql)
+- [supabase/011_platform_admin.sql](supabase/011_platform_admin.sql) — platform admin role + company.status + RLS bypass
+- [supabase/012_plans_config.sql](supabase/012_plans_config.sql) — `plans` config table, `companies.plan` FK, seed 4 tiers
+
+### Plans & limits
+
+Plan tiers are stored in the **`plans`** table (not hardcoded), so platform admins can rename, re-price, or adjust limits without code changes.
+
+| code | name | max_products | max_users | max_branches | monthly_price |
+|---|---|---|---|---|---|
+| `free` | ฟรี | 50 | 3 | 1 | ฿0 |
+| `lite_pro` | โปร Lite | 300 | 10 | 2 | ฿399 |
+| `standard_pro` | โปร Standard | 1,500 | 50 | 5 | ฿990 |
+| `enterprise` | องค์กร | unlimited | unlimited | unlimited | Contact us |
+
+**Enforcement** is in `lib/limits.ts`. `addProduct` and `createUser` server actions call `checkProductLimit` / `checkUserLimit` before insert; when the cap is reached they return `formatLimitError(...)` in Thai. `max_branches` is reserved for Release 2.
+
+**Platform admin UI** at `/platform/plans` allows editing every tier inline — name, description, price, and the three limits. Leaving a limit field empty stores `NULL` meaning unlimited. A plan can be marked inactive to hide it from the picker without deleting any company references.
+
+**Customer UI** — `/settings/company` shows live usage cards ("23 / 50 สินค้า") with progress bars turning amber at 80% and red at 100%. The admin sees a clear "ใช้เต็มแล้ว" badge long before they hit the hard error from the action.
 
 ---
 

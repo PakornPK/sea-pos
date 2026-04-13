@@ -6,6 +6,13 @@ import type { ProductRepository } from '@/lib/repositories/contracts'
 import { getDb } from './db'
 
 export const supabaseProductRepo: ProductRepository = {
+  async countAll(): Promise<number> {
+    const db = await getDb()
+    const { count } = await db
+      .from('products').select('id', { count: 'exact', head: true })
+    return count ?? 0
+  },
+
   async listAll(): Promise<Product[]> {
     const db = await getDb()
     const { data } = await db.from('products').select('*').order('name')
