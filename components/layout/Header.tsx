@@ -1,14 +1,8 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { ROLE_LABELS } from '@/lib/labels'
 import type { UserRole } from '@/types/database'
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  admin:      'ผู้ดูแลระบบ',
-  manager:    'ผู้จัดการ',
-  cashier:    'พนักงานเก็บเงิน',
-  purchasing: 'จัดซื้อ',
-}
 
 type HeaderProps = {
   email: string

@@ -6,14 +6,14 @@ import { createUser } from '@/lib/actions/users'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ROLE_LABELS } from '@/lib/labels'
 import type { UserRole } from '@/types/database'
 
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'admin',      label: 'ผู้ดูแลระบบ' },
-  { value: 'manager',    label: 'ผู้จัดการ' },
-  { value: 'cashier',    label: 'พนักงานเก็บเงิน' },
-  { value: 'purchasing', label: 'จัดซื้อ' },
-]
+const ROLE_OPTIONS: { value: UserRole; label: string }[] =
+  (Object.keys(ROLE_LABELS) as UserRole[]).map((value) => ({
+    value,
+    label: ROLE_LABELS[value],
+  }))
 
 export function AddUserForm() {
   const [state, formAction, pending] = useActionState(createUser, undefined)

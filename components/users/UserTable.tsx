@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { deleteUser, resetUserPassword, updateUser } from '@/lib/actions/users'
+import { ROLE_LABELS, ROLE_BADGE_VARIANT } from '@/lib/labels'
 import type { UserRole } from '@/types/database'
 
 export type UserRow = {
@@ -20,19 +21,6 @@ export type UserRow = {
   created_at: string
 }
 
-const ROLE_LABELS: Record<UserRole, string> = {
-  admin:      'ผู้ดูแลระบบ',
-  manager:    'ผู้จัดการ',
-  cashier:    'พนักงานเก็บเงิน',
-  purchasing: 'จัดซื้อ',
-}
-
-const ROLE_VARIANT: Record<UserRole, 'default' | 'secondary' | 'outline'> = {
-  admin:      'default',
-  manager:    'secondary',
-  cashier:    'outline',
-  purchasing: 'outline',
-}
 
 type UserTableProps = {
   users: UserRow[]
@@ -199,7 +187,7 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
                 </TableCell>
                 <TableCell>{u.full_name || <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell>
-                  <Badge variant={ROLE_VARIANT[u.role]}>{ROLE_LABELS[u.role]}</Badge>
+                  <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{ROLE_LABELS[u.role]}</Badge>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex gap-1.5">

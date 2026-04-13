@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { createSale } from '@/lib/actions/pos'
+import { formatBaht } from '@/lib/format'
+import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
 import type { Category, Product } from '@/types/database'
 
 type CartItem = {
@@ -20,19 +22,23 @@ type CartItem = {
 type POSTerminalProps = {
   products: Product[]
   categories: Category[]
+  customers: PickerCustomer[]
 }
 
-const PAYMENT_METHODS = [
-  { value: 'cash',     label: 'เงินสด' },
-  { value: 'card',     label: 'บัตร' },
-  { value: 'transfer', label: 'โอนเงิน' },
-]
+import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
 
-export function POSTerminal({ products, categories }: POSTerminalProps) {
+const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
+  (Object.keys(PAYMENT_LABEL) as PaymentMethod[]).map((value) => ({
+    value,
+    label: PAYMENT_LABEL[value],
+  }))
+
+export function POSTerminal({ products, categories, customers }: POSTerminalProps) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [search, setSearch] = useState('')
   const [payment, setPayment] = useState('cash')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [customer, setCustomer] = useState<PickerCustomer | null>(null)
   const [state, formAction, isPending] = useActionState(createSale, undefined)
 
   const filtered = products.filter(
@@ -140,7 +146,7 @@ export function POSTerminal({ products, categories }: POSTerminalProps) {
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{product.sku || '—'}</p>
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-sm font-semibold">฿{product.price.toFixed(2)}</span>
+                  <span className="text-sm font-semibold">{formatBaht(product.price)}</span>
                   <Badge
                     variant={product.stock <= product.min_stock ? 'destructive' : 'outline'}
                     className="text-xs"
@@ -206,7 +212,7 @@ export function POSTerminal({ products, categories }: POSTerminalProps) {
                     </button>
                   </div>
                   <span className="text-sm tabular-nums font-medium">
-                    ฿{(item.price * item.quantity).toFixed(2)}
+                    {formatBaht(item.price * item.quantity)}
                   </span>
                 </div>
               </div>
@@ -218,7 +224,7 @@ export function POSTerminal({ products, categories }: POSTerminalProps) {
         <div className="border-t p-4 space-y-3 shrink-0">
           <div className="flex justify-between items-baseline">
             <span className="text-muted-foreground text-sm">รวมทั้งสิ้น</span>
-            <span className="text-2xl font-bold tabular-nums">฿{total.toFixed(2)}</span>
+            <span className="text-2xl font-bold tabular-nums">{formatBaht(total)}</span>
           </div>
 
           <Separator />
@@ -226,6 +232,14 @@ export function POSTerminal({ products, categories }: POSTerminalProps) {
           <form action={formAction} className="space-y-3">
             <input type="hidden" name="cart" value={JSON.stringify(cart)} />
             <input type="hidden" name="paymentMethod" value={payment} />
+            <input type="hidden" name="customerId" value={customer?.id ?? ''} />
+
+            {/* Customer picker */}
+            <CustomerPicker
+              customers={customers}
+              selected={customer}
+              onChange={setCustomer}
+            />
 
             {/* Payment method selector */}
             <div className="grid grid-cols-3 gap-1.5">

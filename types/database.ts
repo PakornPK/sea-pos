@@ -12,11 +12,13 @@ export type Profile = {
 export type Category = {
   id: string
   name: string
+  sku_prefix: string | null
   created_at: string
 }
 
 export type CategoryInsert = {
   name: string
+  sku_prefix?: string | null
 }
 
 export type Product = {
@@ -83,12 +85,16 @@ export type SaleItem = {
   subtotal: number
 }
 
+export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
+
 export type PurchaseOrder = {
   id: string
+  po_no: number
   supplier_id: string
   user_id: string
-  status: 'draft' | 'ordered' | 'received' | 'cancelled'
+  status: PurchaseOrderStatus
   total_amount: number
+  notes: string | null
   ordered_at: string | null
   received_at: string | null
   created_at: string

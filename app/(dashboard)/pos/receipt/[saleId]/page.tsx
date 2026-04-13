@@ -2,27 +2,18 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
+import { requirePageRole } from '@/lib/auth'
 import { PrintButton } from '@/components/pos/PrintButton'
 import { VoidSaleForm } from '@/components/pos/VoidSaleForm'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { formatReceiptNo, formatBaht } from '@/lib/format'
+import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
 
 export const metadata: Metadata = {
   title: 'ใบเสร็จ | SEA-POS',
-}
-
-function formatReceiptNo(no: number | null): string {
-  if (!no) return '—'
-  return `REC-${String(no).padStart(5, '0')}`
-}
-
-const PAYMENT_LABEL: Record<string, string> = {
-  cash:     'เงินสด',
-  card:     'บัตรเครดิต/เดบิต',
-  transfer: 'โอนเงิน',
 }
 
 export default async function ReceiptPage({
@@ -31,16 +22,14 @@ export default async function ReceiptPage({
   params: Promise<{ saleId: string }>
 }) {
   const { saleId } = await params
-  const supabase = await createClient()
+  const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
 
-  // Fetch sale, current user role, and line items in parallel
-  const [{ data: sale }, { data: { user } }, { data: rawItems }] = await Promise.all([
+  const [{ data: sale }, { data: rawItems }] = await Promise.all([
     supabase
       .from('sales')
       .select('*, customer:customers(name, phone)')
       .eq('id', saleId)
       .single(),
-    supabase.auth.getUser(),
     supabase
       .from('sale_items')
       .select('*, product:products(name, sku)')
@@ -50,20 +39,9 @@ export default async function ReceiptPage({
 
   if (!sale) notFound()
 
-  // Get role for showing void form
-  let userRole = ''
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    userRole = profile?.role ?? ''
-  }
-
   const items = rawItems ?? []
   const isVoided = sale.status === 'voided'
-  const canVoid = !isVoided && ['admin', 'manager'].includes(userRole)
+  const canVoid = !isVoided && (me.role === 'admin' || me.role === 'manager')
 
   const createdAt = new Date(sale.created_at).toLocaleString('th-TH', {
     dateStyle: 'medium',
@@ -114,7 +92,7 @@ export default async function ReceiptPage({
         <div className="space-y-1 text-sm">
           <Row label="เลขที่ใบเสร็จ" value={formatReceiptNo(sale.receipt_no)} mono />
           <Row label="วันที่"         value={createdAt} />
-          <Row label="ชำระด้วย"      value={PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method} />
+          <Row label="ชำระด้วย"      value={PAYMENT_LABEL[sale.payment_method as PaymentMethod] ?? sale.payment_method} />
           {customer && <Row label="ลูกค้า" value={customer.name} />}
         </div>
 
@@ -129,11 +107,11 @@ export default async function ReceiptPage({
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-snug">{product?.name ?? '—'}</p>
                   <p className="text-muted-foreground text-xs">
-                    {item.quantity} × ฿{Number(item.unit_price).toFixed(2)}
+                    {item.quantity} × {formatBaht(item.unit_price)}
                   </p>
                 </div>
                 <span className="tabular-nums font-medium shrink-0">
-                  ฿{Number(item.subtotal).toFixed(2)}
+                  {formatBaht(item.subtotal)}
                 </span>
               </div>
             )
@@ -146,7 +124,7 @@ export default async function ReceiptPage({
         <div className="flex justify-between items-baseline">
           <span className="font-semibold">รวมทั้งสิ้น</span>
           <span className="text-2xl font-bold tabular-nums">
-            ฿{Number(sale.total_amount).toFixed(2)}
+            {formatBaht(sale.total_amount)}
           </span>
         </div>
 

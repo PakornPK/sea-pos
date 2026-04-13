@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requirePageRole } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AddUserForm } from '@/components/users/AddUserForm'
 import { UserTable, type UserRow } from '@/components/users/UserTable'
@@ -11,13 +10,7 @@ export const metadata: Metadata = {
 }
 
 export default async function UsersPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') redirect('/')
+  const { me } = await requirePageRole(['admin'])
 
   const admin = createAdminClient()
   const [{ data: authData }, { data: profiles }] = await Promise.all([
@@ -48,7 +41,7 @@ export default async function UsersPage() {
 
       <AddUserForm />
 
-      <UserTable users={users} currentUserId={user.id} />
+      <UserTable users={users} currentUserId={me.id} />
     </div>
   )
 }

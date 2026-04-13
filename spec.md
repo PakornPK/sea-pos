@@ -281,15 +281,40 @@ Roles are set in `raw_user_meta_data` at signup and synced to `profiles` via a D
 - **Routes/Files:** `/pos` → [app/(dashboard)/pos/page.tsx](app/(dashboard)/pos/page.tsx), [lib/actions/pos.ts](lib/actions/pos.ts)
 - **Planned:** Cart UI, checkout, receipt generation, sales history
 
-### Purchasing *(stub)*
+### Purchasing
 
-- **Routes/Files:** `/purchasing` → [app/(dashboard)/purchasing/page.tsx](app/(dashboard)/purchasing/page.tsx), [lib/actions/purchasing.ts](lib/actions/purchasing.ts)
-- **Planned:** Purchase order creation, supplier management, goods receiving (auto-updates stock)
+- **Purpose:** Full purchase-order lifecycle — from drafting to supplier confirmation to partial goods receiving that updates stock automatically.
+- **Routes/Files:**
+  - `/purchasing` → [app/(dashboard)/purchasing/page.tsx](app/(dashboard)/purchasing/page.tsx) — PO list with status filter tabs
+  - `/purchasing/new` → [app/(dashboard)/purchasing/new/page.tsx](app/(dashboard)/purchasing/new/page.tsx) — create draft PO
+  - `/purchasing/[id]` → [app/(dashboard)/purchasing/[id]/page.tsx](app/(dashboard)/purchasing/%5Bid%5D/page.tsx) — detail, edit/confirm/cancel/receive
+  - `/purchasing/suppliers` → [app/(dashboard)/purchasing/suppliers/page.tsx](app/(dashboard)/purchasing/suppliers/page.tsx) — supplier CRUD
+  - Actions: [lib/actions/purchasing.ts](lib/actions/purchasing.ts) (`createPurchaseOrder`, `updatePurchaseOrder`, `confirmPurchaseOrder`, `cancelPurchaseOrder`, `receivePurchaseOrder`), [lib/actions/suppliers.ts](lib/actions/suppliers.ts) (`addSupplier`, `updateSupplier`, `deleteSupplier`)
+  - Components: [POList](components/purchasing/POList.tsx), [POForm](components/purchasing/POForm.tsx), [POLineEditor](components/purchasing/POLineEditor.tsx), [POActions](components/purchasing/POActions.tsx), [ReceiveForm](components/purchasing/ReceiveForm.tsx), [SupplierTable](components/purchasing/SupplierTable.tsx), [SupplierForm](components/purchasing/SupplierForm.tsx)
+  - Helpers: [lib/po.ts](lib/po.ts) (`formatPoNo`, status labels/variants)
+- **Roles:** admin, manager, purchasing for all operations; only admin can delete suppliers.
+- **Status machine:** `draft → ordered → received`, plus `draft|ordered → cancelled`. Status transitions are enforced server-side in each action.
+- **Document numbering:** `purchase_orders.po_no` is an auto-incremented `INTEGER` via `po_number_seq`, formatted `PO-00001` in the UI (same pattern as `receipt_no`).
+- **Receiving flow (partial):** on an `ordered` PO, [ReceiveForm](components/purchasing/ReceiveForm.tsx) lets the user enter a qty per line (≤ remaining). On submit, the action calls the SECURITY DEFINER RPC `receive_po_item(item_id, qty, user_id)` which: (1) locks the PO line, (2) validates qty against outstanding, (3) increments `products.stock`, (4) updates `quantity_received`, (5) writes a `stock_logs` row (`รับของจาก PO-XXXXX`), (6) auto-flips PO status to `received` and stamps `received_at` when every line is complete.
+- **Why SECURITY DEFINER:** the purchasing role is not allowed to UPDATE `products` directly via RLS — the RPC bypasses this safely with validated inputs, mirroring the `decrement_stock` pattern used by POS.
+- **Schema migration:** [supabase/006_purchasing.sql](supabase/006_purchasing.sql) adds `po_number_seq`, `purchase_orders.po_no`, `purchase_orders.notes`, the `receive_po_item` function, and a `purchase_order_items_delete` RLS policy (needed so drafts can be re-edited by replacing their line items).
 
-### Customers *(stub)*
+### Customers
 
-- **Routes/Files:** `/customers` → [app/(dashboard)/customers/page.tsx](app/(dashboard)/customers/page.tsx), [lib/actions/customers.ts](lib/actions/customers.ts)
-- **Planned:** Customer profiles, purchase history, contact info
+- **Purpose:** CRM module — manage customer profiles, view per-customer purchase history, and attach a customer to a sale at checkout.
+- **Routes/Files:**
+  - `/customers` → [app/(dashboard)/customers/page.tsx](app/(dashboard)/customers/page.tsx)
+  - `/customers/[id]` → [app/(dashboard)/customers/[id]/page.tsx](app/(dashboard)/customers/[id]/page.tsx)
+  - [components/customers/CustomerTable.tsx](components/customers/CustomerTable.tsx), [CustomerForm.tsx](components/customers/CustomerForm.tsx), [CustomerPicker.tsx](components/customers/CustomerPicker.tsx), [CustomerDeleteButton.tsx](components/customers/CustomerDeleteButton.tsx)
+  - [lib/actions/customers.ts](lib/actions/customers.ts): `addCustomer`, `updateCustomer`, `deleteCustomer`, `quickCreateCustomer`
+- **Roles:** admin, manager, cashier can view and add; admin and manager can edit; only admin can delete.
+- **List page behavior:**
+  - Server Component aggregates completed sales per customer (count, total spent, last purchase)
+  - Client-side search on name / phone / email
+  - Inline "เพิ่มลูกค้า" form (managers only)
+  - Clicking a row opens detail page
+- **Detail page:** profile form + stats cards (order count, total spent, average per order) + full purchase history table linking to each receipt. Delete is blocked if the customer has any sales (hard-delete guard preserves history).
+- **POS integration:** [CustomerPicker](components/customers/CustomerPicker.tsx) is rendered above the payment-method selector in [POSTerminal](components/pos/POSTerminal.tsx). Cashiers can search existing customers or quick-create a new one inline via `quickCreateCustomer`. Selected `customer_id` is submitted as a hidden field; `walk-in` leaves it null.
 
 ### Reports *(stub)*
 

@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getActionUser } from '@/lib/auth'
+import type { UserRole } from '@/types/database'
 
-const ROLE_HOME: Record<string, string> = {
+const ROLE_HOME: Record<UserRole, string> = {
   admin:      '/inventory',
   manager:    '/inventory',
   cashier:    '/pos',
@@ -9,18 +10,10 @@ const ROLE_HOME: Record<string, string> = {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  redirect(ROLE_HOME[profile?.role ?? 'cashier'] ?? '/inventory')
+  try {
+    const { me } = await getActionUser()
+    redirect(ROLE_HOME[me.role] ?? '/inventory')
+  } catch {
+    redirect('/login')
+  }
 }

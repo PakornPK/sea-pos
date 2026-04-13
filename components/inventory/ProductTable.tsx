@@ -14,15 +14,17 @@ import { StockAdjustButton } from '@/components/inventory/StockAdjustButton'
 import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { formatBaht } from '@/lib/format'
 import { Plus, Filter } from 'lucide-react'
 import { useState } from 'react'
 
 type ProductTableProps = {
   products: ProductWithCategory[]
   categories: Category[]
+  canAdjust?: boolean
 }
 
-export function ProductTable({ products, categories }: ProductTableProps) {
+export function ProductTable({ products, categories, canAdjust = false }: ProductTableProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
   const filtered = selectedCategory
@@ -88,7 +90,7 @@ export function ProductTable({ products, categories }: ProductTableProps) {
             <TableHead className="text-right">คงเหลือ</TableHead>
             <TableHead className="text-right">ขั้นต่ำ</TableHead>
             <TableHead className="text-center">สถานะ</TableHead>
-            <TableHead className="text-center">ปรับสต๊อก</TableHead>
+            {canAdjust && <TableHead className="text-center">ปรับสต๊อก</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -109,7 +111,7 @@ export function ProductTable({ products, categories }: ProductTableProps) {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{product.sku || '—'}</TableCell>
                 <TableCell className="text-right tabular-nums">
-                  ฿{Number(product.price).toFixed(2)}
+                  {formatBaht(product.price)}
                 </TableCell>
                 <TableCell className="text-right">{product.stock}</TableCell>
                 <TableCell className="text-right">{product.min_stock}</TableCell>
@@ -120,13 +122,15 @@ export function ProductTable({ products, categories }: ProductTableProps) {
                     <Badge variant="secondary">ปกติ</Badge>
                   )}
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-center gap-2">
-                    <StockAdjustButton productId={product.id} delta={-1} disabled={product.stock <= 0} />
-                    <span className="w-8 text-center tabular-nums">{product.stock}</span>
-                    <StockAdjustButton productId={product.id} delta={1} />
-                  </div>
-                </TableCell>
+                {canAdjust && (
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-2">
+                      <StockAdjustButton productId={product.id} delta={-1} disabled={product.stock <= 0} />
+                      <span className="w-8 text-center tabular-nums">{product.stock}</span>
+                      <StockAdjustButton productId={product.id} delta={1} />
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             )
           })}

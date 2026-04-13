@@ -1,51 +1,22 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Eye } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
+import { requirePageRole } from '@/lib/auth'
 import { Badge } from '@/components/ui/badge'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { formatReceiptNo, formatDateTime, formatBaht } from '@/lib/format'
+import { PAYMENT_LABEL, SALE_STATUS_LABEL, type PaymentMethod, type SaleStatus } from '@/lib/labels'
 
 export const metadata: Metadata = {
   title: 'รายการขาย | SEA-POS',
 }
 
-function formatReceiptNo(no: number | null): string {
-  if (!no) return '—'
-  return `REC-${String(no).padStart(5, '0')}`
-}
-
-const PAYMENT_LABEL: Record<string, string> = {
-  cash:     'เงินสด',
-  card:     'บัตร',
-  transfer: 'โอนเงิน',
-}
-
 export default async function SalesListPage() {
-  const supabase = await createClient()
-
-  // Guard: admin and manager only
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!['admin', 'manager'].includes(profile?.role ?? '')) {
-    redirect('/pos')
-  }
+  const { supabase } = await requirePageRole(['admin', 'manager'])
 
   const { data } = await supabase
     .from('sales')
@@ -54,7 +25,6 @@ export default async function SalesListPage() {
     .limit(200)
 
   const sales = data ?? []
-
   const totalCompleted = sales
     .filter((s) => s.status === 'completed')
     .reduce((sum, s) => sum + Number(s.total_amount), 0)
@@ -65,9 +35,7 @@ export default async function SalesListPage() {
         <h1 className="text-2xl font-semibold">รายการขาย</h1>
         <div className="text-sm text-muted-foreground">
           ยอดรวม (ไม่รวมที่ยกเลิก):{' '}
-          <span className="font-semibold text-foreground">
-            ฿{totalCompleted.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-          </span>
+          <span className="font-semibold text-foreground">{formatBaht(totalCompleted)}</span>
         </div>
       </div>
 
@@ -89,29 +57,26 @@ export default async function SalesListPage() {
           <TableBody>
             {sales.map((sale) => {
               const customer = Array.isArray(sale.customer) ? null : sale.customer as { name: string } | null
-              const createdAt = new Date(sale.created_at).toLocaleString('th-TH', {
-                dateStyle: 'short',
-                timeStyle: 'short',
-              })
+              const status = sale.status as SaleStatus
               return (
-                <TableRow key={sale.id} className={sale.status === 'voided' ? 'opacity-50' : ''}>
+                <TableRow key={sale.id} className={status === 'voided' ? 'opacity-50' : ''}>
                   <TableCell className="font-mono font-medium">
                     {formatReceiptNo(sale.receipt_no)}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{createdAt}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {formatDateTime(sale.created_at)}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {customer?.name ?? <span className="italic">walk-in</span>}
                   </TableCell>
-                  <TableCell>{PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}</TableCell>
+                  <TableCell>{PAYMENT_LABEL[sale.payment_method as PaymentMethod] ?? sale.payment_method}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    ฿{Number(sale.total_amount).toFixed(2)}
+                    {formatBaht(sale.total_amount)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {sale.status === 'voided' ? (
-                      <Badge variant="destructive">ยกเลิกแล้ว</Badge>
-                    ) : (
-                      <Badge variant="secondary">สำเร็จ</Badge>
-                    )}
+                    <Badge variant={status === 'voided' ? 'destructive' : 'secondary'}>
+                      {SALE_STATUS_LABEL[status]}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <Link

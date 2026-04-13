@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { requireActionRole } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { UserRole } from '@/types/database'
 
@@ -9,22 +9,12 @@ const VALID_ROLES: UserRole[] = ['admin', 'manager', 'cashier', 'purchasing']
 
 export type UserActionState = { error?: string; success?: boolean } | undefined
 
-async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('กรุณาเข้าสู่ระบบใหม่')
-  const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('เฉพาะผู้ดูแลระบบเท่านั้น')
-  return user
-}
-
 export async function createUser(
   _prev: UserActionState,
   formData: FormData
 ): Promise<UserActionState> {
   try {
-    await requireAdmin()
+    await requireActionRole(['admin'])
 
     const email = String(formData.get('email') ?? '').trim().toLowerCase()
     const password = String(formData.get('password') ?? '')
@@ -56,7 +46,7 @@ export async function createUser(
 }
 
 export async function updateUser(formData: FormData): Promise<void> {
-  await requireAdmin()
+  await requireActionRole(['admin'])
 
   const id = String(formData.get('id') ?? '')
   const role = String(formData.get('role') ?? '') as UserRole
@@ -74,7 +64,7 @@ export async function updateUser(formData: FormData): Promise<void> {
 }
 
 export async function resetUserPassword(formData: FormData): Promise<void> {
-  await requireAdmin()
+  await requireActionRole(['admin'])
 
   const id = String(formData.get('id') ?? '')
   const password = String(formData.get('password') ?? '')
@@ -89,9 +79,9 @@ export async function resetUserPassword(formData: FormData): Promise<void> {
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  const currentUser = await requireAdmin()
+  const { me } = await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบผู้ใช้')
-  if (currentUser.id === id) throw new Error('ไม่สามารถลบบัญชีตัวเองได้')
+  if (me.id === id) throw new Error('ไม่สามารถลบบัญชีตัวเองได้')
 
   const admin = createAdminClient()
   const { error } = await admin.auth.admin.deleteUser(id)
