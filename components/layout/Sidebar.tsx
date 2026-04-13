@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Package, ShoppingCart, ScrollText, Truck, Users, BarChart2, LogOut, UserCog } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users, BarChart2, LogOut, UserCog } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { href: '/dashboard',  label: 'ภาพรวมร้าน',   icon: LayoutDashboard, roles: ['admin', 'manager'] },
   { href: '/inventory',  label: 'คลังสินค้า',  icon: Package,      roles: ['admin', 'manager', 'purchasing'] },
   { href: '/pos',        label: 'ขายสินค้า',   icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
   { href: '/pos/sales',  label: 'รายการขาย',   icon: ScrollText,   roles: ['admin', 'manager'] },

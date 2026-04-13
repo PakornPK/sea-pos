@@ -8,12 +8,12 @@ export const metadata: Metadata = {
 }
 
 export default async function POSPage() {
-  const { supabase } = await requirePageRole(['admin', 'manager', 'cashier'])
+  await requirePageRole(['admin', 'manager', 'cashier'])
 
   const [products, categories, customers] = await Promise.all([
-    productRepo.listInStock(supabase),
-    categoryRepo.list(supabase),
-    customerRepo.listForPicker(supabase),
+    productRepo.listInStock(),
+    categoryRepo.list(),
+    customerRepo.listForPicker(),
   ])
 
   return (

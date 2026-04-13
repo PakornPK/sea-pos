@@ -10,18 +10,18 @@ const CREATE_ROLES = ['admin', 'manager', 'purchasing'] as const
 
 export async function adjustStock(productId: string, delta: number) {
   try {
-    const { supabase, me } = await requireActionRole([...ADJUST_ROLES])
+    const { me } = await requireActionRole([...ADJUST_ROLES])
 
-    const current = await productRepo.getStock(supabase, productId)
+    const current = await productRepo.getStock(productId)
     if (current === null) throw new Error('Product not found')
 
     const newStock = current + delta
     if (newStock < 0) return { error: 'สต๊อกไม่เพียงพอ' }
 
-    const updateErr = await productRepo.updateStock(supabase, productId, newStock)
+    const updateErr = await productRepo.updateStock(productId, newStock)
     if (updateErr) return { error: updateErr }
 
-    await stockLogRepo.insert(supabase, {
+    await stockLogRepo.insert({
       product_id: productId,
       change: delta,
       reason: delta > 0 ? 'ปรับเพิ่มสต๊อก (ผู้จัดการ)' : 'ปรับลดสต๊อก (ผู้จัดการ)',
@@ -35,7 +35,7 @@ export async function adjustStock(productId: string, delta: number) {
 }
 
 export async function addProduct(_prev: unknown, formData: FormData) {
-  const { supabase } = await requireActionRole([...ADJUST_ROLES])
+  await requireActionRole([...ADJUST_ROLES])
 
   const name = (formData.get('name') as string).trim()
   let sku = (formData.get('sku') as string | null)?.trim() ?? ''
@@ -47,11 +47,11 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
   if (!sku && categoryId) {
-    const generated = await productRepo.nextSkuForCategory(supabase, categoryId)
+    const generated = await productRepo.nextSkuForCategory(categoryId)
     if (generated) sku = generated
   }
 
-  const res = await productRepo.create(supabase, {
+  const res = await productRepo.create({
     name,
     sku: sku || undefined,
     min_stock: minStock,
@@ -66,8 +66,6 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   redirect('/inventory')
 }
 
-// Used by PO line editor to catalog a new SKU inline while drafting a PO.
-// Returns the created product so the client can immediately add it as a line.
 export async function quickCreateProduct(input: {
   name: string
   sku: string | null
@@ -80,7 +78,7 @@ export async function quickCreateProduct(input: {
   | { error: string }
 > {
   try {
-    const { supabase, me } = await getActionUser()
+    const { me } = await getActionUser()
     if (!(CREATE_ROLES as readonly string[]).includes(me.role)) {
       return { error: 'ไม่มีสิทธิ์เพิ่มสินค้า' }
     }
@@ -90,10 +88,10 @@ export async function quickCreateProduct(input: {
 
     let sku = input.sku?.trim() || null
     if (!sku && input.categoryId) {
-      sku = await productRepo.nextSkuForCategory(supabase, input.categoryId)
+      sku = await productRepo.nextSkuForCategory(input.categoryId)
     }
 
-    const res = await productRepo.createReturning(supabase, {
+    const res = await productRepo.createReturning({
       name,
       sku,
       category_id: input.categoryId,
@@ -121,9 +119,9 @@ export async function quickCreateProduct(input: {
 }
 
 export async function deleteProduct(productId: string) {
-  const { supabase } = await requireActionRole(['admin'])
+  await requireActionRole(['admin'])
 
-  const error = await productRepo.delete(supabase, productId)
+  const error = await productRepo.delete(productId)
   if (error) return { error }
 
   revalidatePath('/inventory')

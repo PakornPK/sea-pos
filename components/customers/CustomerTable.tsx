@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Search, UserPlus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { CustomerForm } from '@/components/customers/CustomerForm'
+import { CustomerSearch } from '@/components/customers/CustomerSearch'
 import { formatBaht, formatDate } from '@/lib/format'
 import type { UserRole } from '@/types/database'
 
@@ -28,33 +28,16 @@ type Props = {
   customers: CustomerRow[]
   canManage: boolean
   role: UserRole
+  currentSearch: string
 }
 
-export function CustomerTable({ customers, canManage }: Props) {
-  const [search, setSearch] = useState('')
+export function CustomerTable({ customers, canManage, currentSearch }: Props) {
   const [adding, setAdding] = useState(false)
-
-  const q = search.trim().toLowerCase()
-  const filtered = q
-    ? customers.filter((c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.phone ?? '').toLowerCase().includes(q) ||
-        (c.email ?? '').toLowerCase().includes(q)
-      )
-    : customers
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="ค้นหา ชื่อ เบอร์ อีเมล..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+        <CustomerSearch initial={currentSearch} />
         {canManage && !adding && (
           <Button size="sm" onClick={() => setAdding(true)}>
             <UserPlus className="mr-1 h-4 w-4" />
@@ -65,9 +48,9 @@ export function CustomerTable({ customers, canManage }: Props) {
 
       {adding && <CustomerForm onDone={() => setAdding(false)} />}
 
-      {filtered.length === 0 ? (
+      {customers.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          {q ? 'ไม่พบลูกค้าที่ตรงกับการค้นหา' : 'ยังไม่มีลูกค้าในระบบ'}
+          {currentSearch ? 'ไม่พบลูกค้าที่ตรงกับการค้นหา' : 'ยังไม่มีลูกค้าในระบบ'}
         </p>
       ) : (
         <Table>
@@ -82,7 +65,7 @@ export function CustomerTable({ customers, canManage }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((c) => (
+            {customers.map((c) => (
               <TableRow key={c.id} className="cursor-pointer">
                 <TableCell className="font-medium">
                   <Link href={`/customers/${c.id}`} className="hover:underline">

@@ -25,12 +25,12 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
+  const { me } = await requirePageRole(['admin', 'manager', 'cashier'])
   const role = me.role
 
   const [customer, sales] = await Promise.all([
-    customerRepo.getById(supabase, id),
-    saleRepo.listForCustomer(supabase, id),
+    customerRepo.getById(id),
+    saleRepo.listForCustomer(id),
   ])
 
   if (!customer) notFound()

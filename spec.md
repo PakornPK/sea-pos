@@ -246,6 +246,83 @@ Roles are set in `raw_user_meta_data` at signup and synced to `profiles` via a D
 
 ---
 
+## Architecture Contract
+
+**UI never touches Supabase.** Every `.from(...)`, `.rpc(...)`, and `.auth.*` call lives in exactly one of three zones:
+
+| Zone | Allowed |
+|---|---|
+| [lib/repositories/**](lib/repositories/) | All domain data access (products, customers, sales, POs, analytics, auth, users) |
+| [lib/auth.ts](lib/auth.ts) | Trust anchor: reads the validated user from request headers + one `profiles` lookup |
+| [proxy.ts](proxy.ts) | Middleware: validates Supabase session on every request, injects `x-sea-user-id` header |
+
+Pages, components, and server actions go through:
+- [`requirePageRole(roles)` / `requireActionRole(roles)` / `requirePage()` / `getActionUser()`](lib/auth.ts) for auth
+- Repositories imported from [`@/lib/repositories`](lib/repositories/) for data
+
+Audit command:
+```bash
+# Should return only lib/repositories/**, lib/auth.ts, proxy.ts
+grep -rn "\.from(['\"]|\.rpc(['\"]|\.auth\." --include="*.ts" --include="*.tsx"
+```
+
+Swapping Supabase for another backend means rewriting `lib/repositories/` + `lib/auth.ts` + `proxy.ts` only. Pages and components stay untouched.
+
+---
+
+## Pagination & Search
+
+All list pages use **server-side offset pagination** with URL-driven state. The convention is shared across every listing.
+
+### URL parameters
+
+| Param | Purpose | Default | Allowed values |
+|---|---|---|---|
+| `page` | 1-indexed page number | `1` | positive integer |
+| `pageSize` | rows per page | `20` | `10`, `20`, `50`, `100` |
+| `q` | free-text search (where supported) | none | any string |
+| `status` | filter by status (PO list) | none | `draft`, `ordered`, `received`, `cancelled` |
+| `category` | filter by category (inventory) | none | category UUID |
+
+Example: `/customers?q=สมชาย&page=2&pageSize=50`
+
+### Shared library
+
+- [lib/pagination.ts](lib/pagination.ts): `parsePageParams`, `toSupabaseRange`, `packPaginated`, `Paginated<T>` type
+- [components/ui/pagination.tsx](components/ui/pagination.tsx): reusable navigator — preserves all other query params when linking to a new page, shows row window (`1 – 20 จาก 347`), ellipsis for large page counts
+
+### Repo pattern
+
+Paginated methods live alongside the full-list methods (kept for POS terminal and other contexts that genuinely need all rows). Each returns `{ rows, totalCount, page, pageSize, totalPages }` in a single Supabase query (`count: 'exact'` + `.range(from, to)`).
+
+| Repo | Paginated method | Extra filters |
+|---|---|---|
+| `productRepo` | `listWithCategoryPaginated` | `categoryId` |
+| `customerRepo` | `listPaginated` | `search` (ILIKE across name/phone/email) |
+| `supplierRepo` | `listPaginated` | — |
+| `saleRepo` | `listRecentPaginated` | — |
+| `purchaseOrderRepo` | `listRecentPaginated` | `status` |
+
+### Search UX (customers)
+
+[CustomerSearch](components/customers/CustomerSearch.tsx) debounces input by 300ms, then pushes `?q=…&page=1` via `router.push` inside `useTransition`. Each keystroke (after debounce) runs a server-side ILIKE query — escapes `%` and `_` before concatenating wildcards to prevent pattern injection. Backspacing to empty removes the `q` param entirely.
+
+### Streaming
+
+Each paginated table is wrapped in `<Suspense key={…}>` with a `TableSkeleton` fallback. The key includes all pagination/filter values, so page navigation + filter changes show a skeleton instead of a blank flash while the new query runs. The page shell (header, action buttons) stays static and renders instantly.
+
+### Paginated routes
+
+| Route | Extra params |
+|---|---|
+| [/inventory](app/(dashboard)/inventory/page.tsx) | `category` |
+| [/customers](app/(dashboard)/customers/page.tsx) | `q` |
+| [/purchasing](app/(dashboard)/purchasing/page.tsx) | `status` |
+| [/purchasing/suppliers](app/(dashboard)/purchasing/suppliers/page.tsx) | — |
+| [/pos/sales](app/(dashboard)/pos/sales/page.tsx) | — |
+
+---
+
 ## Features
 
 ### Authentication

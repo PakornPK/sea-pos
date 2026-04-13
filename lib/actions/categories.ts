@@ -17,11 +17,11 @@ export async function addCategory(
   formData: FormData
 ): Promise<CategoryState> {
   try {
-    const { supabase } = await requireActionRole([...MANAGE_ROLES])
+    await requireActionRole([...MANAGE_ROLES])
     const name = (formData.get('name') as string).trim()
     if (!name) return { error: 'กรุณาระบุชื่อหมวดหมู่' }
 
-    const error = await categoryRepo.create(supabase, {
+    const error = await categoryRepo.create({
       name,
       sku_prefix: cleanPrefix(formData.get('sku_prefix') as string | null),
     })
@@ -35,15 +35,15 @@ export async function addCategory(
 }
 
 export async function updateCategoryPrefix(categoryId: string, prefix: string) {
-  const { supabase } = await requireActionRole([...MANAGE_ROLES])
-  const error = await categoryRepo.updatePrefix(supabase, categoryId, cleanPrefix(prefix))
+  await requireActionRole([...MANAGE_ROLES])
+  const error = await categoryRepo.updatePrefix(categoryId, cleanPrefix(prefix))
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
 }
 
 export async function deleteCategory(categoryId: string) {
-  const { supabase } = await requireActionRole([...MANAGE_ROLES])
-  const error = await categoryRepo.delete(supabase, categoryId)
+  await requireActionRole([...MANAGE_ROLES])
+  const error = await categoryRepo.delete(categoryId)
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
   revalidatePath('/inventory')

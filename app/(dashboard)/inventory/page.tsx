@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { Plus, Tag } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
 import { productRepo, categoryRepo } from '@/lib/repositories'
+import { parsePageParams } from '@/lib/pagination'
 import { ProductTable } from '@/components/inventory/ProductTable'
+import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -16,10 +18,17 @@ export const metadata: Metadata = {
 
 const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
 
-export default async function InventoryPage() {
-  // Role check renders instantly thanks to cached loadUser.
+type Search = { page?: string; pageSize?: string; category?: string }
+
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>
+}) {
   const { me } = await requirePageRole(ALLOWED)
   const canManage = me.role === 'admin' || me.role === 'manager'
+
+  const sp = await searchParams
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,20 +53,38 @@ export default async function InventoryPage() {
         </div>
       </div>
 
-      <Suspense fallback={<TableSkeleton columns={8} rows={10} withFilters />}>
-        <InventoryTable canAdjust={canManage} />
+      <Suspense
+        key={`${sp.page ?? 1}-${sp.pageSize ?? 20}-${sp.category ?? ''}`}
+        fallback={<TableSkeleton columns={8} rows={10} withFilters />}
+      >
+        <InventoryTable sp={sp} canAdjust={canManage} />
       </Suspense>
     </div>
   )
 }
 
-// Streamed server component — the DB fetch happens here, the page shell
-// above renders instantly while this is pending.
-async function InventoryTable({ canAdjust }: { canAdjust: boolean }) {
-  const { supabase } = await requirePageRole(ALLOWED)
-  const [products, categories] = await Promise.all([
-    productRepo.listWithCategory(supabase),
-    categoryRepo.list(supabase),
+async function InventoryTable({ sp, canAdjust }: { sp: Search; canAdjust: boolean }) {
+  await requirePageRole(ALLOWED)
+  const pageParams = parsePageParams(sp)
+
+  const [result, categories] = await Promise.all([
+    productRepo.listWithCategoryPaginated(pageParams, {
+      categoryId: sp.category || undefined,
+    }),
+    categoryRepo.list(),
   ])
-  return <ProductTable products={products} categories={categories} canAdjust={canAdjust} />
+
+  return (
+    <>
+      <ProductTable products={result.rows} categories={categories} canAdjust={canAdjust} />
+      <Pagination
+        basePath="/inventory"
+        searchParams={sp}
+        page={result.page}
+        pageSize={result.pageSize}
+        totalCount={result.totalCount}
+        totalPages={result.totalPages}
+      />
+    </>
+  )
 }

@@ -26,14 +26,14 @@ export default async function PODetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const { supabase } = await requirePageRole(['admin', 'manager', 'purchasing'])
+  await requirePageRole(['admin', 'manager', 'purchasing'])
 
   const [po, items, suppliers, products, categories] = await Promise.all([
-    purchaseOrderRepo.getById(supabase, id),
-    purchaseOrderRepo.listItemsWithProduct(supabase, id),
-    supplierRepo.list(supabase),
-    productRepo.listAll(supabase),
-    categoryRepo.list(supabase),
+    purchaseOrderRepo.getById(id),
+    purchaseOrderRepo.listItemsWithProduct(id),
+    supplierRepo.list(),
+    productRepo.listAll(),
+    categoryRepo.list(),
   ])
 
   if (!po) notFound()

@@ -23,11 +23,11 @@ export default async function ReceiptPage({
   params: Promise<{ saleId: string }>
 }) {
   const { saleId } = await params
-  const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
+  const { me } = await requirePageRole(['admin', 'manager', 'cashier'])
 
   const [sale, items] = await Promise.all([
-    saleRepo.getById(supabase, saleId),
-    saleRepo.listItemsWithProduct(supabase, saleId),
+    saleRepo.getById(saleId),
+    saleRepo.listItemsWithProduct(saleId),
   ])
 
   if (!sale) notFound()

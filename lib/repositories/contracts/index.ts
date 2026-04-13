@@ -1,0 +1,65 @@
+/**
+ * Repository contracts — the ports of our hexagonal architecture.
+ *
+ * Callers (pages, server actions, components) depend ONLY on these
+ * interfaces. Swapping backends means implementing these interfaces
+ * with a different adapter (REST API client, Prisma, gRPC, mock, …)
+ * and wiring it into `lib/repositories/index.ts`.
+ *
+ * Rules:
+ *   - Contracts never import from @/lib/supabase/* — they are pure types.
+ *   - Method signatures use domain types from @/types/database.ts.
+ *   - No database specifics (connection, query builders) leak into here.
+ */
+
+export type { ProductRepository }        from './product'
+export type { CategoryRepository }       from './category'
+export type { CustomerRepository, CustomerInput } from './customer'
+export type { SupplierRepository, SupplierInput } from './supplier'
+export type {
+  SaleRepository, SaleListRow, SaleSummaryForStats, SaleDetail, SaleItemWithProduct,
+} from './sale'
+export type {
+  PurchaseOrderRepository, POListRow, POLineInput, POItemWithProduct,
+} from './purchaseOrder'
+export type { StockLogRepository }       from './stockLog'
+export type { UserRepository, UserListRow } from './user'
+export type { AuthRepository }           from './auth'
+export type {
+  AnalyticsRepository,
+  TodaySummary,
+  DailySeriesPoint,
+  PaymentMixPoint,
+  TopProduct,
+  LowStockItem,
+  RecentSale,
+  InventoryValueByCategory,
+  StockMovement,
+  SalesByRangeSummary,
+  SalesRowForExport,
+} from './analytics'
+
+import type { ProductRepository }         from './product'
+import type { CategoryRepository }        from './category'
+import type { CustomerRepository }        from './customer'
+import type { SupplierRepository }        from './supplier'
+import type { SaleRepository }            from './sale'
+import type { PurchaseOrderRepository }   from './purchaseOrder'
+import type { StockLogRepository }        from './stockLog'
+import type { UserRepository }            from './user'
+import type { AuthRepository }            from './auth'
+import type { AnalyticsRepository }       from './analytics'
+
+/** Aggregate type — an adapter implements all of these to be a valid backend. */
+export interface Repositories {
+  product:       ProductRepository
+  category:      CategoryRepository
+  customer:      CustomerRepository
+  supplier:      SupplierRepository
+  sale:          SaleRepository
+  purchaseOrder: PurchaseOrderRepository
+  stockLog:      StockLogRepository
+  user:          UserRepository
+  auth:          AuthRepository
+  analytics:     AnalyticsRepository
+}

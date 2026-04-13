@@ -18,24 +18,24 @@ export type AuthedUser = {
  * the trusted x-sea-user-id header onto the server-side request.
  *
  * This function reads that header and loads the role from the profiles table.
+ * It's the ONE place outside of the repository layer that reads from Supabase
+ * directly — specifically the `profiles` table, to resolve the role for
+ * request-scoped authorization. The rest of the app goes through repos.
  *
  * WHY THIS IS SAFE:
  *   1. proxy.ts strips any incoming x-sea-* headers BEFORE validation, so
  *      clients cannot forge identity.
  *   2. The header lives on the internal request-to-handler path; browsers
  *      never see or send it.
- *   3. Middleware runs on every route (see config.matcher in proxy.ts), so
- *      there is no bypass path to a page/action without validation.
- *   4. We still hit the database for the role on every request — role changes
- *      take effect within one page load, no stale JWT role claim.
+ *   3. Middleware runs on every route, so there is no bypass path.
+ *   4. We hit the DB for the role on every request — role changes take
+ *      effect within one page load, no stale JWT role claim.
  *
  * WHY THIS IS FAST:
  *   - React's cache() memoizes this function within a single request render,
- *     so if a page layout + page handler + multiple Server Actions all call
- *     requirePage/requirePageRole/requireActionRole, only ONE profiles query
- *     runs per request.
- *   - No redundant supabase.auth.getUser() call from page code (proxy already
- *     did it once — a second call would be a wasted network round-trip).
+ *     so repeated auth checks (layout + page + multiple Server Actions) all
+ *     share one profiles query.
+ *   - No redundant supabase.auth.getUser() call from page code.
  * ────────────────────────────────────────────────────────────────────────────
  */
 const loadUser = cache(async (): Promise<AuthedUser | null> => {
@@ -59,44 +59,39 @@ const loadUser = cache(async (): Promise<AuthedUser | null> => {
  * For protected pages that require a specific set of roles.
  * Redirects to /login if unauthenticated, to / if role not allowed.
  */
-export async function requirePageRole(allowed: UserRole[]) {
+export async function requirePageRole(allowed: UserRole[]): Promise<{ me: AuthedUser }> {
   const me = await loadUser()
   if (!me) redirect('/login')
   if (!allowed.includes(me.role)) redirect('/')
-  const supabase = await createClient()
-  return { supabase, me }
+  return { me }
 }
 
 /**
- * For protected pages where any authenticated role is fine (e.g., the
- * dashboard layout which is common to every role).
+ * For protected pages where any authenticated role is fine (e.g. layouts).
  */
-export async function requirePage() {
+export async function requirePage(): Promise<{ me: AuthedUser }> {
   const me = await loadUser()
   if (!me) redirect('/login')
-  const supabase = await createClient()
-  return { supabase, me }
+  return { me }
 }
 
 /**
  * For Server Actions that require a specific set of roles.
- * Throws a user-visible Error on failure (Actions surface errors via state).
+ * Throws a user-visible Error on failure.
  */
-export async function requireActionRole(allowed: UserRole[]) {
+export async function requireActionRole(allowed: UserRole[]): Promise<{ me: AuthedUser }> {
   const me = await loadUser()
   if (!me) throw new Error('กรุณาเข้าสู่ระบบใหม่')
   if (!allowed.includes(me.role)) throw new Error('ไม่มีสิทธิ์ดำเนินการ')
-  const supabase = await createClient()
-  return { supabase, me }
+  return { me }
 }
 
 /**
  * For Server Actions that branch on role internally instead of hard-gating.
  * Throws only if the user is unauthenticated.
  */
-export async function getActionUser() {
+export async function getActionUser(): Promise<{ me: AuthedUser }> {
   const me = await loadUser()
   if (!me) throw new Error('กรุณาเข้าสู่ระบบใหม่')
-  const supabase = await createClient()
-  return { supabase, me }
+  return { me }
 }

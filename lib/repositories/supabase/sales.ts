@@ -1,25 +1,14 @@
-import type { DB } from './types'
 import type { Sale, SaleItem } from '@/types/database'
+import { toSupabaseRange, packPaginated, type PageParams, type Paginated } from '@/lib/pagination'
+import type {
+  SaleRepository, SaleListRow, SaleSummaryForStats,
+  SaleDetail, SaleItemWithProduct,
+} from '@/lib/repositories/contracts'
+import { getDb } from './db'
 
-export type SaleSummaryForStats = {
-  customer_id: string | null
-  total_amount: number
-  created_at: string
-  status: string
-}
-
-export type SaleListRow = {
-  id: string
-  receipt_no: number
-  created_at: string
-  total_amount: number
-  payment_method: string
-  status: string
-  customer: { name: string } | { name: string }[] | null
-}
-
-export const saleRepo = {
-  async listRecent(db: DB, limit = 200): Promise<SaleListRow[]> {
+export const supabaseSaleRepo: SaleRepository = {
+  async listRecent(limit = 200): Promise<SaleListRow[]> {
+    const db = await getDb()
     const { data } = await db
       .from('sales')
       .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)')
@@ -28,7 +17,20 @@ export const saleRepo = {
     return (data ?? []) as SaleListRow[]
   },
 
-  async listForCustomer(db: DB, customerId: string) {
+  async listRecentPaginated(p: PageParams): Promise<Paginated<SaleListRow>> {
+    const db = await getDb()
+    const { from, to } = toSupabaseRange(p)
+    const { data, count } = await db
+      .from('sales')
+      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)',
+        { count: 'exact' })
+      .order('receipt_no', { ascending: false })
+      .range(from, to)
+    return packPaginated((data ?? []) as SaleListRow[], count ?? 0, p)
+  },
+
+  async listForCustomer(customerId: string) {
+    const db = await getDb()
     const { data } = await db
       .from('sales')
       .select('id, receipt_no, created_at, total_amount, payment_method, status')
@@ -37,8 +39,8 @@ export const saleRepo = {
     return data ?? []
   },
 
-  /** Minimal fields used for aggregating per-customer purchase stats. */
-  async listCompletedForStats(db: DB): Promise<SaleSummaryForStats[]> {
+  async listCompletedForStats(): Promise<SaleSummaryForStats[]> {
+    const db = await getDb()
     const { data } = await db
       .from('sales')
       .select('customer_id, total_amount, created_at, status')
@@ -46,51 +48,44 @@ export const saleRepo = {
     return (data ?? []) as SaleSummaryForStats[]
   },
 
-  async getById(db: DB, id: string) {
+  async getById(id: string): Promise<SaleDetail | null> {
+    const db = await getDb()
     const { data } = await db
       .from('sales')
       .select('*, customer:customers(name, phone)')
       .eq('id', id)
       .single()
-    return data
+    return (data as SaleDetail | null) ?? null
   },
 
-  async getStatus(db: DB, id: string): Promise<string | null> {
+  async getStatus(id: string): Promise<string | null> {
+    const db = await getDb()
     const { data } = await db
       .from('sales').select('status').eq('id', id).single()
     return data?.status ?? null
   },
 
-  async createHeader(
-    db: DB,
-    input: {
-      user_id: string
-      customer_id: string | null
-      total_amount: number
-      payment_method: Sale['payment_method']
-    }
-  ): Promise<{ id: string } | { error: string }> {
+  async createHeader(input): Promise<{ id: string } | { error: string }> {
+    const db = await getDb()
     const { data, error } = await db
       .from('sales')
-      .insert({ ...input, status: 'completed' })
+      .insert({ ...input, status: 'completed' as Sale['status'] })
       .select('id')
       .single()
     if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }
     return { id: data.id }
   },
 
-  async insertItems(
-    db: DB,
-    saleId: string,
-    items: Array<{ product_id: string; quantity: number; unit_price: number; subtotal: number }>
-  ): Promise<string | null> {
+  async insertItems(saleId, items): Promise<string | null> {
+    const db = await getDb()
     const { error } = await db
       .from('sale_items')
       .insert(items.map((i) => ({ sale_id: saleId, ...i })))
     return error?.message ?? null
   },
 
-  async listItems(db: DB, saleId: string): Promise<Pick<SaleItem, 'product_id' | 'quantity'>[]> {
+  async listItems(saleId: string) {
+    const db = await getDb()
     const { data } = await db
       .from('sale_items')
       .select('product_id, quantity')
@@ -98,20 +93,18 @@ export const saleRepo = {
     return (data ?? []) as Pick<SaleItem, 'product_id' | 'quantity'>[]
   },
 
-  async listItemsWithProduct(db: DB, saleId: string) {
+  async listItemsWithProduct(saleId: string): Promise<SaleItemWithProduct[]> {
+    const db = await getDb()
     const { data } = await db
       .from('sale_items')
       .select('*, product:products(name, sku)')
       .eq('sale_id', saleId)
       .order('id')
-    return data ?? []
+    return (data ?? []) as SaleItemWithProduct[]
   },
 
-  /**
-   * Atomic void: only transitions a currently-completed sale. Returns true
-   * if a row was actually updated (false means already voided or not found).
-   */
-  async markVoided(db: DB, id: string): Promise<boolean | { error: string }> {
+  async markVoided(id: string): Promise<boolean | { error: string }> {
+    const db = await getDb()
     const { data, error } = await db
       .from('sales')
       .update({ status: 'voided' })

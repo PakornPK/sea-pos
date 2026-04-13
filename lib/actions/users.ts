@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { userRepo } from '@/lib/repositories'
 import type { UserRole } from '@/types/database'
 
@@ -27,8 +26,7 @@ export async function createUser(
     if (password.length < 8) return { error: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }
     if (!VALID_ROLES.includes(role)) return { error: 'บทบาทไม่ถูกต้อง' }
 
-    const admin = createAdminClient()
-    const res = await userRepo.create(admin, { email, password, role, full_name })
+    const res = await userRepo.create({ email, password, role, full_name })
     if ('error' in res) return { error: res.error }
 
     revalidatePath('/users')
@@ -48,8 +46,7 @@ export async function updateUser(formData: FormData): Promise<void> {
   if (!id) throw new Error('ไม่พบผู้ใช้')
   if (!VALID_ROLES.includes(role)) throw new Error('บทบาทไม่ถูกต้อง')
 
-  const admin = createAdminClient()
-  const err = await userRepo.updateProfile(admin, id, { role, full_name })
+  const err = await userRepo.updateProfile(id, { role, full_name })
   if (err) throw new Error(err)
 
   revalidatePath('/users')
@@ -63,8 +60,7 @@ export async function resetUserPassword(formData: FormData): Promise<void> {
   if (!id) throw new Error('ไม่พบผู้ใช้')
   if (password.length < 8) throw new Error('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร')
 
-  const admin = createAdminClient()
-  const err = await userRepo.updatePassword(admin, id, password)
+  const err = await userRepo.updatePassword(id, password)
   if (err) throw new Error(err)
 
   revalidatePath('/users')
@@ -75,8 +71,7 @@ export async function forceSignOutUser(id: string): Promise<void> {
   if (!id) throw new Error('ไม่พบผู้ใช้')
   if (me.id === id) throw new Error('ใช้ปุ่ม "ออกจากระบบ" เพื่อออกจากบัญชีตัวเอง')
 
-  const admin = createAdminClient()
-  const err = await userRepo.forceSignOut(admin, id, 'global')
+  const err = await userRepo.forceSignOut(id, 'global')
   if (err) throw new Error(err)
 
   revalidatePath('/users')
@@ -87,8 +82,7 @@ export async function deleteUser(id: string): Promise<void> {
   if (!id) throw new Error('ไม่พบผู้ใช้')
   if (me.id === id) throw new Error('ไม่สามารถลบบัญชีตัวเองได้')
 
-  const admin = createAdminClient()
-  const err = await userRepo.delete(admin, id)
+  const err = await userRepo.delete(id)
   if (err) throw new Error(err)
 
   revalidatePath('/users')

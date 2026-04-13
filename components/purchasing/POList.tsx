@@ -1,6 +1,3 @@
-'use client'
-
-import { useState } from 'react'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
 import {
@@ -32,34 +29,37 @@ const FILTER_LABEL: Record<string, string> = {
   all: 'ทั้งหมด', ...PO_STATUS_LABEL,
 }
 
-export function POList({ orders }: { orders: POListRow[] }) {
-  const [filter, setFilter] = useState<'all' | PurchaseOrderStatus>('all')
+type Props = {
+  orders: POListRow[]
+  currentStatus: 'all' | PurchaseOrderStatus
+}
 
-  const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
-
+export function POList({ orders, currentStatus }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-1.5 flex-wrap">
         {FILTERS.map((f) => {
-          const count = f === 'all' ? orders.length : orders.filter((o) => o.status === f).length
+          const href = f === 'all'
+            ? '/purchasing'
+            : `/purchasing?status=${f}`
           return (
-            <button
+            <Link
               key={f}
-              onClick={() => setFilter(f)}
+              href={href}
               className={cn(
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                filter === f
+                currentStatus === f
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'hover:bg-accent'
               )}
             >
-              {FILTER_LABEL[f]} ({count})
-            </button>
+              {FILTER_LABEL[f]}
+            </Link>
           )
         })}
       </div>
 
-      {filtered.length === 0 ? (
+      {orders.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
           ไม่มีใบสั่งซื้อ
         </p>
@@ -78,7 +78,7 @@ export function POList({ orders }: { orders: POListRow[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((o) => (
+            {orders.map((o) => (
               <TableRow key={o.id}>
                 <TableCell className="font-mono font-medium">
                   {formatPoNo(o.po_no)}

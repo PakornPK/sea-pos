@@ -3,8 +3,8 @@ import { getActionUser } from '@/lib/auth'
 import type { UserRole } from '@/types/database'
 
 const ROLE_HOME: Record<UserRole, string> = {
-  admin:      '/inventory',
-  manager:    '/inventory',
+  admin:      '/dashboard',
+  manager:    '/dashboard',
   cashier:    '/pos',
   purchasing: '/purchasing',
 }

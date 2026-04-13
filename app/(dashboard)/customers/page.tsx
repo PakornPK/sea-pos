@@ -1,21 +1,63 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { requirePageRole } from '@/lib/auth'
 import { customerRepo, saleRepo } from '@/lib/repositories'
+import { parsePageParams } from '@/lib/pagination'
 import { CustomerTable, type CustomerRow } from '@/components/customers/CustomerTable'
+import { Pagination } from '@/components/ui/pagination'
+import { TableSkeleton } from '@/components/loading/TableSkeleton'
+import type { UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'ลูกค้า | SEA-POS',
 }
 
-export default async function CustomersPage() {
-  const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
-  const role = me.role
+const ALLOWED: UserRole[] = ['admin', 'manager', 'cashier']
+type Search = { page?: string; pageSize?: string; q?: string }
 
-  const [customers, completedSales] = await Promise.all([
-    customerRepo.list(supabase),
-    saleRepo.listCompletedForStats(supabase),
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>
+}) {
+  const { me } = await requirePageRole(ALLOWED)
+  const sp = await searchParams
+  const canManage = me.role === 'admin' || me.role === 'manager' || me.role === 'cashier'
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">ลูกค้า</h1>
+      </div>
+
+      <Suspense
+        key={`${sp.page ?? 1}-${sp.pageSize ?? 20}-${sp.q ?? ''}`}
+        fallback={<TableSkeleton columns={6} rows={8} withToolbar />}
+      >
+        <CustomersList sp={sp} canManage={canManage} role={me.role} />
+      </Suspense>
+    </div>
+  )
+}
+
+async function CustomersList({
+  sp, canManage, role,
+}: {
+  sp: Search
+  canManage: boolean
+  role: UserRole
+}) {
+  await requirePageRole(ALLOWED)
+  const p = parsePageParams(sp)
+  const search = sp.q?.trim() ?? ''
+
+  const [result, completedSales] = await Promise.all([
+    customerRepo.listPaginated(p, { search }),
+    saleRepo.listCompletedForStats(),
   ])
 
+  // Aggregate per-customer stats from ALL completed sales (so totals are
+  // correct even when the current page is filtered/paginated).
   const stats = new Map<string, { total: number; count: number; last: string }>()
   for (const s of completedSales) {
     if (!s.customer_id) continue
@@ -26,7 +68,7 @@ export default async function CustomersPage() {
     stats.set(s.customer_id, cur)
   }
 
-  const rows: CustomerRow[] = customers.map((c) => {
+  const rows: CustomerRow[] = result.rows.map((c) => {
     const st = stats.get(c.id)
     return {
       id: c.id,
@@ -41,14 +83,22 @@ export default async function CustomersPage() {
     }
   })
 
-  const canManage = role === 'admin' || role === 'manager' || role === 'cashier'
-
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">ลูกค้า</h1>
-      </div>
-      <CustomerTable customers={rows} canManage={canManage} role={role} />
-    </div>
+    <>
+      <CustomerTable
+        customers={rows}
+        canManage={canManage}
+        role={role}
+        currentSearch={search}
+      />
+      <Pagination
+        basePath="/customers"
+        searchParams={sp}
+        page={result.page}
+        pageSize={result.pageSize}
+        totalCount={result.totalCount}
+        totalPages={result.totalPages}
+      />
+    </>
   )
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { requirePageRole } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { userRepo } from '@/lib/repositories'
 import { AddUserForm } from '@/components/users/AddUserForm'
 import { UserTable } from '@/components/users/UserTable'
@@ -11,8 +10,7 @@ export const metadata: Metadata = {
 
 export default async function UsersPage() {
   const { me } = await requirePageRole(['admin'])
-  const admin = createAdminClient()
-  const users = await userRepo.listAll(admin)
+  const users = await userRepo.listAll()
 
   return (
     <div className="flex flex-col gap-6">

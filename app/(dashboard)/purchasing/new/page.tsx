@@ -12,12 +12,12 @@ export const metadata: Metadata = {
 }
 
 export default async function NewPOPage() {
-  const { supabase } = await requirePageRole(['admin', 'manager', 'purchasing'])
+  await requirePageRole(['admin', 'manager', 'purchasing'])
 
   const [suppliers, products, categories] = await Promise.all([
-    supplierRepo.list(supabase),
-    productRepo.listAll(supabase),
-    categoryRepo.list(supabase),
+    supplierRepo.list(),
+    productRepo.listAll(),
+    categoryRepo.list(),
   ])
 
   return (

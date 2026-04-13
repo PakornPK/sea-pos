@@ -19,7 +19,7 @@ type CartItem = {
 }
 
 export async function createSale(_prev: SaleState, formData: FormData): Promise<SaleState> {
-  const { supabase, me } = await getActionUser()
+  const { me } = await getActionUser()
   if (!(SELL_ROLES as readonly string[]).includes(me.role)) {
     return { error: 'ไม่มีสิทธิ์ขายสินค้า' }
   }
@@ -39,7 +39,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
 
   const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
-  const header = await saleRepo.createHeader(supabase, {
+  const header = await saleRepo.createHeader({
     user_id: me.id,
     customer_id: customerId,
     total_amount: totalAmount,
@@ -48,7 +48,6 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   if ('error' in header) return { error: header.error }
 
   const itemsError = await saleRepo.insertItems(
-    supabase,
     header.id,
     cart.map((i) => ({
       product_id: i.productId,
@@ -60,7 +59,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   if (itemsError) return { error: itemsError }
 
   for (const item of cart) {
-    const stockErr = await productRepo.decrementStock(supabase, {
+    const stockErr = await productRepo.decrementStock({
       productId: item.productId,
       quantity:  item.quantity,
       saleId:    header.id,
@@ -77,7 +76,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
 
 export async function voidSale(_prev: VoidState, formData: FormData): Promise<VoidState> {
   try {
-    const { supabase, me } = await requireActionRole([...VOID_ROLES])
+    const { me } = await requireActionRole([...VOID_ROLES])
 
     const saleId = formData.get('saleId') as string
     const reason = (formData.get('reason') as string | null)?.trim() ?? ''
@@ -85,18 +84,18 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (!saleId) return { error: 'ไม่พบรายการขาย' }
     if (!reason) return { error: 'กรุณาระบุเหตุผลการยกเลิก' }
 
-    const items = await saleRepo.listItems(supabase, saleId)
+    const items = await saleRepo.listItems(saleId)
 
-    const voidResult = await saleRepo.markVoided(supabase, saleId)
+    const voidResult = await saleRepo.markVoided(saleId)
     if (typeof voidResult !== 'boolean') return { error: voidResult.error }
     if (!voidResult) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
 
     for (const item of items) {
-      const current = await productRepo.getStock(supabase, item.product_id)
+      const current = await productRepo.getStock(item.product_id)
       if (current === null) continue
 
-      await productRepo.updateStock(supabase, item.product_id, current + item.quantity)
-      await stockLogRepo.insert(supabase, {
+      await productRepo.updateStock(item.product_id, current + item.quantity)
+      await stockLogRepo.insert({
         product_id: item.product_id,
         change: item.quantity,
         reason: `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`,

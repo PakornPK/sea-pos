@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActionRole } from '@/lib/auth'
-import { purchaseOrderRepo, type POLineInput } from '@/lib/repositories/purchaseOrders'
+import { purchaseOrderRepo, type POLineInput } from '@/lib/repositories'
 
 export type POState = { error?: string; success?: boolean } | undefined
 
@@ -47,14 +47,13 @@ function sumTotal(lines: POLineFormInput[]): number {
   return lines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
 }
 
-// ── CREATE PO (draft) ─────────────────────────────────────────
 export async function createPurchaseOrder(
   _prev: POState,
   formData: FormData
 ): Promise<POState> {
   let newPoId: string | null = null
   try {
-    const { supabase, me } = await requireActionRole([...MANAGE_ROLES])
+    const { me } = await requireActionRole([...MANAGE_ROLES])
 
     const supplierId = String(formData.get('supplierId') ?? '')
     const notes      = String(formData.get('notes')      ?? '').trim() || null
@@ -63,7 +62,7 @@ export async function createPurchaseOrder(
     if (!supplierId)        return { error: 'กรุณาเลือกผู้จำหน่าย' }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' }
 
-    const header = await purchaseOrderRepo.createHeader(supabase, {
+    const header = await purchaseOrderRepo.createHeader({
       supplier_id:  supplierId,
       user_id:      me.id,
       total_amount: sumTotal(lines),
@@ -72,7 +71,7 @@ export async function createPurchaseOrder(
     if ('error' in header) return { error: header.error }
     newPoId = header.id
 
-    const itemsErr = await purchaseOrderRepo.replaceItems(supabase, header.id, toRepoLines(lines))
+    const itemsErr = await purchaseOrderRepo.replaceItems(header.id, toRepoLines(lines))
     if (itemsErr) return { error: itemsErr }
 
     revalidatePath('/purchasing')
@@ -83,13 +82,12 @@ export async function createPurchaseOrder(
   return { error: 'เกิดข้อผิดพลาด' }
 }
 
-// ── UPDATE DRAFT PO ───────────────────────────────────────────
 export async function updatePurchaseOrder(
   _prev: POState,
   formData: FormData
 ): Promise<POState> {
   try {
-    const { supabase } = await requireActionRole([...MANAGE_ROLES])
+    await requireActionRole([...MANAGE_ROLES])
 
     const id         = String(formData.get('id')         ?? '')
     const supplierId = String(formData.get('supplierId') ?? '')
@@ -100,14 +98,14 @@ export async function updatePurchaseOrder(
     if (!supplierId)        return { error: 'กรุณาเลือกผู้จำหน่าย' }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' }
 
-    const status = await purchaseOrderRepo.getStatus(supabase, id)
+    const status = await purchaseOrderRepo.getStatus(id)
     if (!status) return { error: 'ไม่พบใบสั่งซื้อ' }
     if (status !== 'draft') return { error: 'แก้ไขได้เฉพาะใบสั่งซื้อที่เป็นฉบับร่างเท่านั้น' }
 
-    const itemsErr = await purchaseOrderRepo.replaceItems(supabase, id, toRepoLines(lines))
+    const itemsErr = await purchaseOrderRepo.replaceItems(id, toRepoLines(lines))
     if (itemsErr) return { error: itemsErr }
 
-    const updateErr = await purchaseOrderRepo.updateHeader(supabase, id, {
+    const updateErr = await purchaseOrderRepo.updateHeader(id, {
       supplier_id:  supplierId,
       notes,
       total_amount: sumTotal(lines),
@@ -122,42 +120,39 @@ export async function updatePurchaseOrder(
   }
 }
 
-// ── CONFIRM (draft → ordered) ─────────────────────────────────
 export async function confirmPurchaseOrder(id: string): Promise<void> {
-  const { supabase } = await requireActionRole([...MANAGE_ROLES])
+  await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
-  const err = await purchaseOrderRepo.confirm(supabase, id)
+  const err = await purchaseOrderRepo.confirm(id)
   if (err) throw new Error(err)
 
   revalidatePath('/purchasing')
   revalidatePath(`/purchasing/${id}`)
 }
 
-// ── CANCEL ────────────────────────────────────────────────────
 export async function cancelPurchaseOrder(id: string): Promise<void> {
-  const { supabase } = await requireActionRole([...MANAGE_ROLES])
+  await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
-  const status = await purchaseOrderRepo.getStatus(supabase, id)
+  const status = await purchaseOrderRepo.getStatus(id)
   if (!status) throw new Error('ไม่พบใบสั่งซื้อ')
   if (status === 'received')  throw new Error('ใบสั่งซื้อที่รับของแล้วไม่สามารถยกเลิกได้')
   if (status === 'cancelled') throw new Error('ใบสั่งซื้อถูกยกเลิกแล้ว')
 
-  const err = await purchaseOrderRepo.cancel(supabase, id)
+  const err = await purchaseOrderRepo.cancel(id)
   if (err) throw new Error(err)
 
   revalidatePath('/purchasing')
   revalidatePath(`/purchasing/${id}`)
 }
 
-// ── RECEIVE (partial) ─────────────────────────────────────────
 export async function receivePurchaseOrder(
   _prev: POState,
   formData: FormData
 ): Promise<POState> {
   try {
-    const { supabase, me } = await requireActionRole([...MANAGE_ROLES])
+    const { me } = await requireActionRole([...MANAGE_ROLES])
 
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบใบสั่งซื้อ' }
@@ -172,12 +167,12 @@ export async function receivePurchaseOrder(
 
     if (receipts.length === 0) return { error: 'กรุณาระบุจำนวนที่รับอย่างน้อย 1 รายการ' }
 
-    const status = await purchaseOrderRepo.getStatus(supabase, id)
+    const status = await purchaseOrderRepo.getStatus(id)
     if (!status) return { error: 'ไม่พบใบสั่งซื้อ' }
     if (status !== 'ordered') return { error: 'รับของได้เฉพาะใบสั่งซื้อสถานะ "สั่งซื้อแล้ว"' }
 
     for (const r of receipts) {
-      const err = await purchaseOrderRepo.receiveItem(supabase, {
+      const err = await purchaseOrderRepo.receiveItem({
         itemId: r.itemId,
         qty:    r.qty,
         userId: me.id,

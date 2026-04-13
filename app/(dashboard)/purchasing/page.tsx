@@ -1,35 +1,34 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, Truck } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
 import { purchaseOrderRepo } from '@/lib/repositories'
+import { parsePageParams } from '@/lib/pagination'
 import { POList, type POListRow } from '@/components/purchasing/POList'
+import { Pagination } from '@/components/ui/pagination'
+import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { PurchaseOrderStatus } from '@/types/database'
+import type { PurchaseOrderStatus, UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'จัดซื้อ | SEA-POS',
 }
 
-export default async function PurchasingPage() {
-  const { supabase } = await requirePageRole(['admin', 'manager', 'purchasing'])
+const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
 
-  const raw = await purchaseOrderRepo.listRecent(supabase)
+type Search = { page?: string; pageSize?: string; status?: string }
 
-  const orders: POListRow[] = raw.map((o) => {
-    const supplier = Array.isArray(o.supplier) ? o.supplier[0] : o.supplier
-    return {
-      id: o.id,
-      po_no: o.po_no,
-      supplier_name: supplier?.name ?? '—',
-      status: o.status as PurchaseOrderStatus,
-      total_amount: Number(o.total_amount),
-      ordered_at: o.ordered_at,
-      received_at: o.received_at,
-      created_at: o.created_at,
-    }
-  })
+const VALID_STATUSES: PurchaseOrderStatus[] = ['draft', 'ordered', 'received', 'cancelled']
+
+export default async function PurchasingPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>
+}) {
+  await requirePageRole(ALLOWED)
+  const sp = await searchParams
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,7 +51,52 @@ export default async function PurchasingPage() {
           </Link>
         </div>
       </div>
-      <POList orders={orders} />
+
+      <Suspense
+        key={`${sp.page ?? 1}-${sp.pageSize ?? 20}-${sp.status ?? 'all'}`}
+        fallback={<TableSkeleton columns={8} rows={10} withFilters />}
+      >
+        <POListContent sp={sp} />
+      </Suspense>
     </div>
+  )
+}
+
+async function POListContent({ sp }: { sp: Search }) {
+  await requirePageRole(ALLOWED)
+  const p = parsePageParams(sp)
+
+  const statusFilter = sp.status && VALID_STATUSES.includes(sp.status as PurchaseOrderStatus)
+    ? (sp.status as PurchaseOrderStatus)
+    : undefined
+
+  const result = await purchaseOrderRepo.listRecentPaginated(p, { status: statusFilter })
+
+  const orders: POListRow[] = result.rows.map((o) => {
+    const supplier = Array.isArray(o.supplier) ? o.supplier[0] : o.supplier
+    return {
+      id: o.id,
+      po_no: o.po_no,
+      supplier_name: supplier?.name ?? '—',
+      status: o.status as PurchaseOrderStatus,
+      total_amount: Number(o.total_amount),
+      ordered_at: o.ordered_at,
+      received_at: o.received_at,
+      created_at: o.created_at,
+    }
+  })
+
+  return (
+    <>
+      <POList orders={orders} currentStatus={statusFilter ?? 'all'} />
+      <Pagination
+        basePath="/purchasing"
+        searchParams={sp}
+        page={result.page}
+        pageSize={result.pageSize}
+        totalCount={result.totalCount}
+        totalPages={result.totalPages}
+      />
+    </>
   )
 }

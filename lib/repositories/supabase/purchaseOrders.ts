@@ -1,25 +1,13 @@
-import type { DB } from './types'
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/database'
+import { toSupabaseRange, packPaginated, type PageParams, type Paginated } from '@/lib/pagination'
+import type {
+  PurchaseOrderRepository, POListRow, POLineInput, POItemWithProduct,
+} from '@/lib/repositories/contracts'
+import { getDb } from './db'
 
-export type POLineInput = {
-  product_id: string
-  quantity_ordered: number
-  unit_cost: number
-}
-
-export type POListRow = {
-  id: string
-  po_no: number
-  status: PurchaseOrderStatus
-  total_amount: number
-  ordered_at: string | null
-  received_at: string | null
-  created_at: string
-  supplier: { name: string } | { name: string }[] | null
-}
-
-export const purchaseOrderRepo = {
-  async listRecent(db: DB, limit = 200): Promise<POListRow[]> {
+export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
+  async listRecent(limit = 200): Promise<POListRow[]> {
+    const db = await getDb()
     const { data } = await db
       .from('purchase_orders')
       .select(`
@@ -31,35 +19,51 @@ export const purchaseOrderRepo = {
     return (data ?? []) as POListRow[]
   },
 
-  async getById(db: DB, id: string): Promise<PurchaseOrder | null> {
+  async listRecentPaginated(
+    p: PageParams,
+    opts: { status?: PurchaseOrderStatus } = {}
+  ): Promise<Paginated<POListRow>> {
+    const db = await getDb()
+    const { from, to } = toSupabaseRange(p)
+    let q = db
+      .from('purchase_orders')
+      .select(`
+        id, po_no, status, total_amount, ordered_at, received_at, created_at,
+        supplier:suppliers(name)
+      `, { count: 'exact' })
+      .order('po_no', { ascending: false })
+      .range(from, to)
+    if (opts.status) q = q.eq('status', opts.status)
+
+    const { data, count } = await q
+    return packPaginated((data ?? []) as POListRow[], count ?? 0, p)
+  },
+
+  async getById(id: string): Promise<PurchaseOrder | null> {
+    const db = await getDb()
     const { data } = await db
       .from('purchase_orders').select('*').eq('id', id).single()
     return (data as PurchaseOrder | null) ?? null
   },
 
-  async getStatus(db: DB, id: string): Promise<PurchaseOrderStatus | null> {
+  async getStatus(id: string): Promise<PurchaseOrderStatus | null> {
+    const db = await getDb()
     const { data } = await db
       .from('purchase_orders').select('status').eq('id', id).single()
     return (data?.status as PurchaseOrderStatus | null) ?? null
   },
 
-  async listItemsWithProduct(db: DB, poId: string) {
+  async listItemsWithProduct(poId: string): Promise<POItemWithProduct[]> {
+    const db = await getDb()
     const { data } = await db
       .from('purchase_order_items')
       .select('id, product_id, quantity_ordered, quantity_received, unit_cost, product:products(name, sku)')
       .eq('po_id', poId)
-    return data ?? []
+    return (data ?? []) as POItemWithProduct[]
   },
 
-  async createHeader(
-    db: DB,
-    input: {
-      supplier_id: string
-      user_id: string
-      total_amount: number
-      notes: string | null
-    }
-  ): Promise<{ id: string } | { error: string }> {
+  async createHeader(input): Promise<{ id: string } | { error: string }> {
+    const db = await getDb()
     const { data, error } = await db
       .from('purchase_orders')
       .insert({ ...input, status: 'draft' })
@@ -69,7 +73,8 @@ export const purchaseOrderRepo = {
     return { id: data.id }
   },
 
-  async replaceItems(db: DB, poId: string, items: POLineInput[]): Promise<string | null> {
+  async replaceItems(poId: string, items: POLineInput[]): Promise<string | null> {
+    const db = await getDb()
     await db.from('purchase_order_items').delete().eq('po_id', poId)
     const { error } = await db
       .from('purchase_order_items')
@@ -77,18 +82,15 @@ export const purchaseOrderRepo = {
     return error?.message ?? null
   },
 
-  async updateHeader(
-    db: DB,
-    id: string,
-    input: { supplier_id: string; notes: string | null; total_amount: number }
-  ): Promise<string | null> {
+  async updateHeader(id, input): Promise<string | null> {
+    const db = await getDb()
     const { error } = await db
       .from('purchase_orders').update(input).eq('id', id)
     return error?.message ?? null
   },
 
-  /** Transition draft → ordered (sets ordered_at). Returns any error message. */
-  async confirm(db: DB, id: string): Promise<string | null> {
+  async confirm(id: string): Promise<string | null> {
+    const db = await getDb()
     const { error } = await db
       .from('purchase_orders')
       .update({ status: 'ordered', ordered_at: new Date().toISOString() })
@@ -97,17 +99,15 @@ export const purchaseOrderRepo = {
     return error?.message ?? null
   },
 
-  async cancel(db: DB, id: string): Promise<string | null> {
+  async cancel(id: string): Promise<string | null> {
+    const db = await getDb()
     const { error } = await db
       .from('purchase_orders').update({ status: 'cancelled' }).eq('id', id)
     return error?.message ?? null
   },
 
-  /** RPC: atomic partial receive that also bumps product stock and writes stock_logs. */
-  async receiveItem(
-    db: DB,
-    input: { itemId: string; qty: number; userId: string }
-  ): Promise<string | null> {
+  async receiveItem(input): Promise<string | null> {
+    const db = await getDb()
     const { error } = await db.rpc('receive_po_item', {
       p_item_id: input.itemId,
       p_qty:     input.qty,

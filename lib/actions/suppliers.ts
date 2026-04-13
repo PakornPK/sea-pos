@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
-import { supplierRepo, type SupplierInput } from '@/lib/repositories/suppliers'
+import { supplierRepo, type SupplierInput } from '@/lib/repositories'
 
 export type SupplierState = { error?: string; success?: boolean } | undefined
 
@@ -22,11 +22,11 @@ export async function addSupplier(
   formData: FormData
 ): Promise<SupplierState> {
   try {
-    const { supabase } = await requireActionRole([...MANAGE_ROLES])
+    await requireActionRole([...MANAGE_ROLES])
     const payload = parseForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อผู้จำหน่าย' }
 
-    const error = await supplierRepo.create(supabase, payload)
+    const error = await supplierRepo.create(payload)
     if (error) return { error }
 
     revalidatePath('/purchasing/suppliers')
@@ -42,14 +42,14 @@ export async function updateSupplier(
   formData: FormData
 ): Promise<SupplierState> {
   try {
-    const { supabase } = await requireActionRole([...MANAGE_ROLES])
+    await requireActionRole([...MANAGE_ROLES])
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบผู้จำหน่าย' }
 
     const payload = parseForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อผู้จำหน่าย' }
 
-    const error = await supplierRepo.update(supabase, id, payload)
+    const error = await supplierRepo.update(id, payload)
     if (error) return { error }
 
     revalidatePath('/purchasing/suppliers')
@@ -60,14 +60,14 @@ export async function updateSupplier(
 }
 
 export async function deleteSupplier(id: string): Promise<void> {
-  const { supabase } = await requireActionRole(['admin'])
+  await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบผู้จำหน่าย')
 
-  if (await supplierRepo.hasOrders(supabase, id)) {
+  if (await supplierRepo.hasOrders(id)) {
     throw new Error('ไม่สามารถลบผู้จำหน่ายที่มีใบสั่งซื้อได้')
   }
 
-  const error = await supplierRepo.delete(supabase, id)
+  const error = await supplierRepo.delete(id)
   if (error) throw new Error(error)
 
   revalidatePath('/purchasing/suppliers')

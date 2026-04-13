@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 }
 
 export default async function AddProductPage() {
-  const { supabase } = await requirePageRole(['admin', 'manager'])
-  const categories = await categoryRepo.list(supabase)
+  await requirePageRole(['admin', 'manager'])
+  const categories = await categoryRepo.list()
 
   return (
     <div className="flex flex-col gap-6">

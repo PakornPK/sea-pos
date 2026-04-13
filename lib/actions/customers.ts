@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { customerRepo, type CustomerInput } from '@/lib/repositories/customers'
+import { customerRepo, type CustomerInput } from '@/lib/repositories'
 
 export type CustomerState = { error?: string; success?: boolean } | undefined
 
@@ -24,11 +24,11 @@ export async function addCustomer(
   formData: FormData
 ): Promise<CustomerState> {
   try {
-    const { supabase } = await requireActionRole([...CREATE_ROLES])
+    await requireActionRole([...CREATE_ROLES])
     const payload = parseCustomerForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
-    const error = await customerRepo.create(supabase, payload)
+    const error = await customerRepo.create(payload)
     if (error) return { error }
 
     revalidatePath('/customers')
@@ -43,7 +43,7 @@ export async function updateCustomer(
   formData: FormData
 ): Promise<CustomerState> {
   try {
-    const { supabase } = await requireActionRole([...MANAGE_ROLES])
+    await requireActionRole([...MANAGE_ROLES])
 
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบลูกค้า' }
@@ -51,7 +51,7 @@ export async function updateCustomer(
     const payload = parseCustomerForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
-    const error = await customerRepo.update(supabase, id, payload)
+    const error = await customerRepo.update(id, payload)
     if (error) return { error }
 
     revalidatePath('/customers')
@@ -63,14 +63,14 @@ export async function updateCustomer(
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
-  const { supabase } = await requireActionRole(['admin'])
+  await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบลูกค้า')
 
-  if (await customerRepo.hasSales(supabase, id)) {
+  if (await customerRepo.hasSales(id)) {
     throw new Error('ไม่สามารถลบลูกค้าที่มีประวัติการขายได้')
   }
 
-  const error = await customerRepo.delete(supabase, id)
+  const error = await customerRepo.delete(id)
   if (error) throw new Error(error)
 
   revalidatePath('/customers')
@@ -82,11 +82,11 @@ export async function quickCreateCustomer(
   phone: string | null
 ): Promise<{ id: string; name: string; phone: string | null } | { error: string }> {
   try {
-    const { supabase } = await getActionUser()
+    await getActionUser()
     const trimmed = name.trim()
     if (!trimmed) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
-    const res = await customerRepo.createReturning(supabase, {
+    const res = await customerRepo.createReturning({
       name: trimmed,
       phone: phone?.trim() || null,
     })
