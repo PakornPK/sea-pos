@@ -133,8 +133,9 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
         )}
 
         <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 content-start">
-          {filtered.map((product) => {
+          {filtered.map((product, idx) => {
             const inCart = cart.find((i) => i.productId === product.id)
+            const aboveFold = idx < 10
             return (
               <div
                 key={product.id}
@@ -167,6 +168,7 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
                       className="object-cover"
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                       unoptimized
+                      priority={aboveFold}
                     />
                   ) : (
                     <div className="absolute inset-0 grid place-items-center">
