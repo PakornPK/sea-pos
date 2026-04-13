@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { saleRepo } from '@/lib/repositories'
 import { Badge } from '@/components/ui/badge'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -18,13 +19,7 @@ export const metadata: Metadata = {
 export default async function SalesListPage() {
   const { supabase } = await requirePageRole(['admin', 'manager'])
 
-  const { data } = await supabase
-    .from('sales')
-    .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)')
-    .order('receipt_no', { ascending: false })
-    .limit(200)
-
-  const sales = data ?? []
+  const sales = await saleRepo.listRecent(supabase)
   const totalCompleted = sales
     .filter((s) => s.status === 'completed')
     .reduce((sum, s) => sum + Number(s.total_amount), 0)
@@ -56,7 +51,7 @@ export default async function SalesListPage() {
           </TableHeader>
           <TableBody>
             {sales.map((sale) => {
-              const customer = Array.isArray(sale.customer) ? null : sale.customer as { name: string } | null
+              const customer = Array.isArray(sale.customer) ? sale.customer[0] : sale.customer
               const status = sale.status as SaleStatus
               return (
                 <TableRow key={sale.id} className={status === 'voided' ? 'opacity-50' : ''}>

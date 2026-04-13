@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { requirePageRole } from '@/lib/auth'
+import { productRepo, categoryRepo, customerRepo } from '@/lib/repositories'
 import { POSTerminal } from '@/components/pos/POSTerminal'
-import type { Category, Product } from '@/types/database'
-import type { PickerCustomer } from '@/components/customers/CustomerPicker'
 
 export const metadata: Metadata = {
   title: 'ขายสินค้า | SEA-POS',
@@ -11,21 +10,16 @@ export const metadata: Metadata = {
 export default async function POSPage() {
   const { supabase } = await requirePageRole(['admin', 'manager', 'cashier'])
 
-  const [{ data: productData }, { data: categoryData }, { data: customerData }] =
-    await Promise.all([
-      supabase.from('products').select('*').gt('stock', 0).order('name'),
-      supabase.from('categories').select('*').order('name'),
-      supabase.from('customers').select('id, name, phone').order('name'),
-    ])
+  const [products, categories, customers] = await Promise.all([
+    productRepo.listInStock(supabase),
+    categoryRepo.list(supabase),
+    customerRepo.listForPicker(supabase),
+  ])
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold shrink-0">ขายสินค้า</h1>
-      <POSTerminal
-        products={(productData ?? []) as Product[]}
-        categories={(categoryData ?? []) as Category[]}
-        customers={(customerData ?? []) as PickerCustomer[]}
-      />
+      <POSTerminal products={products} categories={categories} customers={customers} />
     </div>
   )
 }

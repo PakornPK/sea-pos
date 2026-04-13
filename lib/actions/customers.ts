@@ -3,13 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
+import { customerRepo, type CustomerInput } from '@/lib/repositories/customers'
 
 export type CustomerState = { error?: string; success?: boolean } | undefined
 
 const CREATE_ROLES = ['admin', 'manager', 'cashier'] as const
 const MANAGE_ROLES = ['admin', 'manager'] as const
 
-function parseCustomerForm(formData: FormData) {
+function parseCustomerForm(formData: FormData): CustomerInput {
   return {
     name:    String(formData.get('name')    ?? '').trim(),
     phone:   String(formData.get('phone')   ?? '').trim() || null,
@@ -27,8 +28,8 @@ export async function addCustomer(
     const payload = parseCustomerForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
-    const { error } = await supabase.from('customers').insert(payload)
-    if (error) return { error: error.message }
+    const error = await customerRepo.create(supabase, payload)
+    if (error) return { error }
 
     revalidatePath('/customers')
     return { success: true }
@@ -50,8 +51,8 @@ export async function updateCustomer(
     const payload = parseCustomerForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
-    const { error } = await supabase.from('customers').update(payload).eq('id', id)
-    if (error) return { error: error.message }
+    const error = await customerRepo.update(supabase, id, payload)
+    if (error) return { error }
 
     revalidatePath('/customers')
     revalidatePath(`/customers/${id}`)
@@ -65,24 +66,17 @@ export async function deleteCustomer(id: string): Promise<void> {
   const { supabase } = await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบลูกค้า')
 
-  // Block delete if sales exist (preserve history)
-  const { count } = await supabase
-    .from('sales').select('id', { count: 'exact', head: true })
-    .eq('customer_id', id)
-
-  if ((count ?? 0) > 0) {
+  if (await customerRepo.hasSales(supabase, id)) {
     throw new Error('ไม่สามารถลบลูกค้าที่มีประวัติการขายได้')
   }
 
-  const { error } = await supabase.from('customers').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  const error = await customerRepo.delete(supabase, id)
+  if (error) throw new Error(error)
 
   revalidatePath('/customers')
   redirect('/customers')
 }
 
-// Quick-create used by POS picker — returns the created customer so the
-// client can select it immediately without a round trip to the DB.
 export async function quickCreateCustomer(
   name: string,
   phone: string | null
@@ -92,16 +86,14 @@ export async function quickCreateCustomer(
     const trimmed = name.trim()
     if (!trimmed) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
-    const { data, error } = await supabase
-      .from('customers')
-      .insert({ name: trimmed, phone: phone?.trim() || null })
-      .select('id, name, phone')
-      .single()
-
-    if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }
+    const res = await customerRepo.createReturning(supabase, {
+      name: trimmed,
+      phone: phone?.trim() || null,
+    })
+    if ('error' in res) return res
 
     revalidatePath('/customers')
-    return { id: data.id, name: data.name, phone: data.phone }
+    return res
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }

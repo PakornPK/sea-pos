@@ -2,12 +2,13 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
+import { supplierRepo, type SupplierInput } from '@/lib/repositories/suppliers'
 
 export type SupplierState = { error?: string; success?: boolean } | undefined
 
 const MANAGE_ROLES = ['admin', 'manager', 'purchasing'] as const
 
-function parseForm(formData: FormData) {
+function parseForm(formData: FormData): SupplierInput {
   return {
     name:         String(formData.get('name')         ?? '').trim(),
     contact_name: String(formData.get('contact_name') ?? '').trim() || null,
@@ -25,8 +26,8 @@ export async function addSupplier(
     const payload = parseForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อผู้จำหน่าย' }
 
-    const { error } = await supabase.from('suppliers').insert(payload)
-    if (error) return { error: error.message }
+    const error = await supplierRepo.create(supabase, payload)
+    if (error) return { error }
 
     revalidatePath('/purchasing/suppliers')
     revalidatePath('/purchasing')
@@ -48,8 +49,8 @@ export async function updateSupplier(
     const payload = parseForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อผู้จำหน่าย' }
 
-    const { error } = await supabase.from('suppliers').update(payload).eq('id', id)
-    if (error) return { error: error.message }
+    const error = await supplierRepo.update(supabase, id, payload)
+    if (error) return { error }
 
     revalidatePath('/purchasing/suppliers')
     return { success: true }
@@ -62,16 +63,12 @@ export async function deleteSupplier(id: string): Promise<void> {
   const { supabase } = await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบผู้จำหน่าย')
 
-  const { count } = await supabase
-    .from('purchase_orders').select('id', { count: 'exact', head: true })
-    .eq('supplier_id', id)
-
-  if ((count ?? 0) > 0) {
+  if (await supplierRepo.hasOrders(supabase, id)) {
     throw new Error('ไม่สามารถลบผู้จำหน่ายที่มีใบสั่งซื้อได้')
   }
 
-  const { error } = await supabase.from('suppliers').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  const error = await supplierRepo.delete(supabase, id)
+  if (error) throw new Error(error)
 
   revalidatePath('/purchasing/suppliers')
 }

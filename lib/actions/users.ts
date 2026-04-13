@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { userRepo } from '@/lib/repositories'
 import type { UserRole } from '@/types/database'
 
 const VALID_ROLES: UserRole[] = ['admin', 'manager', 'cashier', 'purchasing']
@@ -27,16 +28,8 @@ export async function createUser(
     if (!VALID_ROLES.includes(role)) return { error: 'บทบาทไม่ถูกต้อง' }
 
     const admin = createAdminClient()
-    const { data, error } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { role, full_name },
-    })
-    if (error) return { error: error.message }
-
-    // handle_new_user trigger inserts profile from metadata, but ensure it's correct
-    await admin.from('profiles').upsert({ id: data.user.id, role, full_name })
+    const res = await userRepo.create(admin, { email, password, role, full_name })
+    if ('error' in res) return { error: res.error }
 
     revalidatePath('/users')
     return { success: true }
@@ -56,9 +49,8 @@ export async function updateUser(formData: FormData): Promise<void> {
   if (!VALID_ROLES.includes(role)) throw new Error('บทบาทไม่ถูกต้อง')
 
   const admin = createAdminClient()
-  const { error } = await admin.from('profiles')
-    .update({ role, full_name }).eq('id', id)
-  if (error) throw new Error(error.message)
+  const err = await userRepo.updateProfile(admin, id, { role, full_name })
+  if (err) throw new Error(err)
 
   revalidatePath('/users')
 }
@@ -72,8 +64,8 @@ export async function resetUserPassword(formData: FormData): Promise<void> {
   if (password.length < 8) throw new Error('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร')
 
   const admin = createAdminClient()
-  const { error } = await admin.auth.admin.updateUserById(id, { password })
-  if (error) throw new Error(error.message)
+  const err = await userRepo.updatePassword(admin, id, password)
+  if (err) throw new Error(err)
 
   revalidatePath('/users')
 }
@@ -84,8 +76,8 @@ export async function deleteUser(id: string): Promise<void> {
   if (me.id === id) throw new Error('ไม่สามารถลบบัญชีตัวเองได้')
 
   const admin = createAdminClient()
-  const { error } = await admin.auth.admin.deleteUser(id)
-  if (error) throw new Error(error.message)
+  const err = await userRepo.delete(admin, id)
+  if (err) throw new Error(err)
 
   revalidatePath('/users')
 }

@@ -2,11 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { categoryRepo } from '@/lib/repositories'
 import { AddCategoryForm } from '@/components/inventory/AddCategoryForm'
 import { CategoryRow } from '@/components/inventory/CategoryRow'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Category } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'จัดการหมวดหมู่ | SEA-POS',
@@ -14,8 +14,7 @@ export const metadata: Metadata = {
 
 export default async function CategoriesPage() {
   const { supabase } = await requirePageRole(['admin', 'manager'])
-  const { data } = await supabase.from('categories').select('*').order('name')
-  const categories = (data ?? []) as Category[]
+  const categories = await categoryRepo.list(supabase)
 
   return (
     <div className="flex flex-col gap-6 max-w-lg">
@@ -26,10 +25,8 @@ export default async function CategoriesPage() {
         <h1 className="text-2xl font-semibold">จัดการหมวดหมู่</h1>
       </div>
 
-      {/* Add form */}
       <AddCategoryForm />
 
-      {/* Category list */}
       <div className="flex flex-col gap-2">
         {categories.length === 0 ? (
           <p className="text-muted-foreground text-sm py-4">ยังไม่มีหมวดหมู่</p>

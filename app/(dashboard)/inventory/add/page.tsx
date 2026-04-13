@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { categoryRepo } from '@/lib/repositories'
 import { AddProductForm } from '@/components/inventory/AddProductForm'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Category } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'เพิ่มสินค้า | SEA-POS',
@@ -13,8 +13,7 @@ export const metadata: Metadata = {
 
 export default async function AddProductPage() {
   const { supabase } = await requirePageRole(['admin', 'manager'])
-  const { data } = await supabase.from('categories').select('*').order('name')
-  const categories = (data ?? []) as Category[]
+  const categories = await categoryRepo.list(supabase)
 
   return (
     <div className="flex flex-col gap-6">

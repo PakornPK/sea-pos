@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { saleRepo } from '@/lib/repositories'
 import { PrintButton } from '@/components/pos/PrintButton'
 import { VoidSaleForm } from '@/components/pos/VoidSaleForm'
 import { Separator } from '@/components/ui/separator'
@@ -24,22 +25,12 @@ export default async function ReceiptPage({
   const { saleId } = await params
   const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
 
-  const [{ data: sale }, { data: rawItems }] = await Promise.all([
-    supabase
-      .from('sales')
-      .select('*, customer:customers(name, phone)')
-      .eq('id', saleId)
-      .single(),
-    supabase
-      .from('sale_items')
-      .select('*, product:products(name, sku)')
-      .eq('sale_id', saleId)
-      .order('id'),
+  const [sale, items] = await Promise.all([
+    saleRepo.getById(supabase, saleId),
+    saleRepo.listItemsWithProduct(supabase, saleId),
   ])
 
   if (!sale) notFound()
-
-  const items = rawItems ?? []
   const isVoided = sale.status === 'voided'
   const canVoid = !isVoided && (me.role === 'admin' || me.role === 'manager')
 

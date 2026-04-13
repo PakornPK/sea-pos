@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 import { requirePageRole } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { userRepo } from '@/lib/repositories'
 import { AddUserForm } from '@/components/users/AddUserForm'
-import { UserTable, type UserRow } from '@/components/users/UserTable'
-import type { UserRole } from '@/types/database'
+import { UserTable } from '@/components/users/UserTable'
 
 export const metadata: Metadata = {
   title: 'จัดการผู้ใช้งาน | SEA-POS',
@@ -11,27 +11,8 @@ export const metadata: Metadata = {
 
 export default async function UsersPage() {
   const { me } = await requirePageRole(['admin'])
-
   const admin = createAdminClient()
-  const [{ data: authData }, { data: profiles }] = await Promise.all([
-    admin.auth.admin.listUsers({ perPage: 200 }),
-    admin.from('profiles').select('id, role, full_name'),
-  ])
-
-  const profileMap = new Map(
-    (profiles ?? []).map((p) => [p.id as string, p])
-  )
-
-  const users: UserRow[] = (authData?.users ?? []).map((u) => {
-    const p = profileMap.get(u.id)
-    return {
-      id: u.id,
-      email: u.email ?? '',
-      full_name: (p?.full_name as string | null) ?? null,
-      role: ((p?.role as UserRole) ?? 'cashier'),
-      created_at: u.created_at,
-    }
-  }).sort((a, b) => a.email.localeCompare(b.email))
+  const users = await userRepo.listAll(admin)
 
   return (
     <div className="flex flex-col gap-6">

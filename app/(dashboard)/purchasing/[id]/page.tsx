@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import {
+  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo,
+} from '@/lib/repositories'
 import { POForm } from '@/components/purchasing/POForm'
 import { POActions } from '@/components/purchasing/POActions'
 import { ReceiveForm, type ReceiveLine } from '@/components/purchasing/ReceiveForm'
@@ -11,9 +14,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatPoNo, formatDateTime, formatBaht } from '@/lib/format'
 import { PO_STATUS_LABEL, PO_STATUS_VARIANT } from '@/lib/labels'
-import type {
-  Category, Product, PurchaseOrder, PurchaseOrderStatus, Supplier,
-} from '@/types/database'
+import type { PurchaseOrderStatus } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'ใบสั่งซื้อ | SEA-POS',
@@ -27,38 +28,16 @@ export default async function PODetailPage({
   const { id } = await params
   const { supabase } = await requirePageRole(['admin', 'manager', 'purchasing'])
 
-  const [
-    { data: poData },
-    { data: itemsData },
-    { data: suppliersData },
-    { data: productsData },
-    { data: categoriesData },
-  ] = await Promise.all([
-    supabase.from('purchase_orders').select('*').eq('id', id).single(),
-    supabase
-      .from('purchase_order_items')
-      .select('id, product_id, quantity_ordered, quantity_received, unit_cost, product:products(name, sku)')
-      .eq('po_id', id),
-    supabase.from('suppliers').select('*').order('name'),
-    supabase.from('products').select('*').order('name'),
-    supabase.from('categories').select('*').order('name'),
+  const [po, items, suppliers, products, categories] = await Promise.all([
+    purchaseOrderRepo.getById(supabase, id),
+    purchaseOrderRepo.listItemsWithProduct(supabase, id),
+    supplierRepo.list(supabase),
+    productRepo.listAll(supabase),
+    categoryRepo.list(supabase),
   ])
 
-  if (!poData) notFound()
-  const po = poData as PurchaseOrder
-  const suppliers = (suppliersData ?? []) as Supplier[]
-  const products = (productsData ?? []) as Product[]
-  const categories = (categoriesData ?? []) as Category[]
+  if (!po) notFound()
   const supplier = suppliers.find((s) => s.id === po.supplier_id)
-
-  const items = (itemsData ?? []) as Array<{
-    id: string
-    product_id: string
-    quantity_ordered: number
-    quantity_received: number
-    unit_cost: number
-    product: { name?: string; sku?: string | null } | Array<{ name?: string; sku?: string | null }> | null
-  }>
 
   const isDraft    = po.status === 'draft'
   const isOrdered  = po.status === 'ordered'

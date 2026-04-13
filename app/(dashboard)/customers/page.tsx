@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { requirePageRole } from '@/lib/auth'
+import { customerRepo, saleRepo } from '@/lib/repositories'
 import { CustomerTable, type CustomerRow } from '@/components/customers/CustomerTable'
-import type { Customer } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'ลูกค้า | SEA-POS',
@@ -11,25 +11,13 @@ export default async function CustomersPage() {
   const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
   const role = me.role
 
-  const [{ data: customerData }, { data: salesData }] = await Promise.all([
-    supabase.from('customers').select('*').order('name'),
-    supabase
-      .from('sales')
-      .select('customer_id, total_amount, created_at, status')
-      .eq('status', 'completed'),
+  const [customers, completedSales] = await Promise.all([
+    customerRepo.list(supabase),
+    saleRepo.listCompletedForStats(supabase),
   ])
 
-  const customers = (customerData ?? []) as Customer[]
-  const sales = (salesData ?? []) as Array<{
-    customer_id: string | null
-    total_amount: number
-    created_at: string
-    status: string
-  }>
-
-  // Aggregate purchase stats per customer
   const stats = new Map<string, { total: number; count: number; last: string }>()
-  for (const s of sales) {
+  for (const s of completedSales) {
     if (!s.customer_id) continue
     const cur = stats.get(s.customer_id) ?? { total: 0, count: 0, last: '' }
     cur.total += Number(s.total_amount)

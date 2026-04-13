@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Eye, Mail, MapPin, Phone } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { customerRepo, saleRepo } from '@/lib/repositories'
 import { CustomerForm } from '@/components/customers/CustomerForm'
 import { CustomerDeleteButton } from '@/components/customers/CustomerDeleteButton'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +14,6 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatReceiptNo, formatDateTime, formatBaht } from '@/lib/format'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
-import type { Customer } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'รายละเอียดลูกค้า | SEA-POS',
@@ -28,18 +28,12 @@ export default async function CustomerDetailPage({
   const { supabase, me } = await requirePageRole(['admin', 'manager', 'cashier'])
   const role = me.role
 
-  const [{ data: customerData }, { data: salesData }] = await Promise.all([
-    supabase.from('customers').select('*').eq('id', id).single(),
-    supabase
-      .from('sales')
-      .select('id, receipt_no, created_at, total_amount, payment_method, status')
-      .eq('customer_id', id)
-      .order('receipt_no', { ascending: false }),
+  const [customer, sales] = await Promise.all([
+    customerRepo.getById(supabase, id),
+    saleRepo.listForCustomer(supabase, id),
   ])
 
-  if (!customerData) notFound()
-  const customer = customerData as Customer
-  const sales = salesData ?? []
+  if (!customer) notFound()
 
   const completed = sales.filter((s) => s.status === 'completed')
   const totalSpent = completed.reduce((sum, s) => sum + Number(s.total_amount), 0)
@@ -72,13 +66,13 @@ export default async function CustomerDetailPage({
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">ยอดซื้อรวม</p>
           <p className="text-2xl font-bold tabular-nums mt-1">
-            ฿{totalSpent.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+            {formatBaht(totalSpent)}
           </p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">เฉลี่ยต่อบิล</p>
           <p className="text-2xl font-bold tabular-nums mt-1">
-            ฿{avgPerOrder.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+            {formatBaht(avgPerOrder)}
           </p>
         </div>
       </div>

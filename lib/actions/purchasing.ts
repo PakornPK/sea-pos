@@ -3,18 +3,19 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActionRole } from '@/lib/auth'
+import { purchaseOrderRepo, type POLineInput } from '@/lib/repositories/purchaseOrders'
 
 export type POState = { error?: string; success?: boolean } | undefined
 
 const MANAGE_ROLES = ['admin', 'manager', 'purchasing'] as const
 
-type POLineInput = {
+type POLineFormInput = {
   productId: string
   quantity: number
   unitCost: number
 }
 
-function parseLines(raw: unknown): POLineInput[] {
+function parseLines(raw: unknown): POLineFormInput[] {
   if (typeof raw !== 'string') return []
   try {
     const arr = JSON.parse(raw)
@@ -34,7 +35,15 @@ function parseLines(raw: unknown): POLineInput[] {
   }
 }
 
-function sumTotal(lines: POLineInput[]): number {
+function toRepoLines(lines: POLineFormInput[]): POLineInput[] {
+  return lines.map((l) => ({
+    product_id:       l.productId,
+    quantity_ordered: l.quantity,
+    unit_cost:        l.unitCost,
+  }))
+}
+
+function sumTotal(lines: POLineFormInput[]): number {
   return lines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
 }
 
@@ -54,30 +63,17 @@ export async function createPurchaseOrder(
     if (!supplierId)        return { error: 'กรุณาเลือกผู้จำหน่าย' }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' }
 
-    const { data: po, error } = await supabase
-      .from('purchase_orders')
-      .insert({
-        supplier_id:  supplierId,
-        user_id:      me.id,
-        status:       'draft',
-        total_amount: sumTotal(lines),
-        notes,
-      })
-      .select('id')
-      .single()
+    const header = await purchaseOrderRepo.createHeader(supabase, {
+      supplier_id:  supplierId,
+      user_id:      me.id,
+      total_amount: sumTotal(lines),
+      notes,
+    })
+    if ('error' in header) return { error: header.error }
+    newPoId = header.id
 
-    if (error || !po) return { error: error?.message ?? 'ไม่สามารถบันทึกใบสั่งซื้อได้' }
-    newPoId = po.id
-
-    const { error: itemsError } = await supabase.from('purchase_order_items').insert(
-      lines.map((l) => ({
-        po_id:            po.id,
-        product_id:       l.productId,
-        quantity_ordered: l.quantity,
-        unit_cost:        l.unitCost,
-      }))
-    )
-    if (itemsError) return { error: itemsError.message }
+    const itemsErr = await purchaseOrderRepo.replaceItems(supabase, header.id, toRepoLines(lines))
+    if (itemsErr) return { error: itemsErr }
 
     revalidatePath('/purchasing')
   } catch (e) {
@@ -87,7 +83,7 @@ export async function createPurchaseOrder(
   return { error: 'เกิดข้อผิดพลาด' }
 }
 
-// ── UPDATE DRAFT PO (supplier/notes/lines) ────────────────────
+// ── UPDATE DRAFT PO ───────────────────────────────────────────
 export async function updatePurchaseOrder(
   _prev: POState,
   formData: FormData
@@ -104,33 +100,19 @@ export async function updatePurchaseOrder(
     if (!supplierId)        return { error: 'กรุณาเลือกผู้จำหน่าย' }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' }
 
-    const { data: po, error: fetchErr } = await supabase
-      .from('purchase_orders').select('status').eq('id', id).single()
-    if (fetchErr || !po) return { error: 'ไม่พบใบสั่งซื้อ' }
-    if (po.status !== 'draft') return { error: 'แก้ไขได้เฉพาะใบสั่งซื้อที่เป็นฉบับร่างเท่านั้น' }
+    const status = await purchaseOrderRepo.getStatus(supabase, id)
+    if (!status) return { error: 'ไม่พบใบสั่งซื้อ' }
+    if (status !== 'draft') return { error: 'แก้ไขได้เฉพาะใบสั่งซื้อที่เป็นฉบับร่างเท่านั้น' }
 
-    await supabase.from('purchase_order_items').delete().eq('po_id', id)
+    const itemsErr = await purchaseOrderRepo.replaceItems(supabase, id, toRepoLines(lines))
+    if (itemsErr) return { error: itemsErr }
 
-    const { error: itemsError } = await supabase.from('purchase_order_items').insert(
-      lines.map((l) => ({
-        po_id:            id,
-        product_id:       l.productId,
-        quantity_ordered: l.quantity,
-        unit_cost:        l.unitCost,
-      }))
-    )
-    if (itemsError) return { error: itemsError.message }
-
-    const { error: updateErr } = await supabase
-      .from('purchase_orders')
-      .update({
-        supplier_id:  supplierId,
-        notes,
-        total_amount: sumTotal(lines),
-      })
-      .eq('id', id)
-
-    if (updateErr) return { error: updateErr.message }
+    const updateErr = await purchaseOrderRepo.updateHeader(supabase, id, {
+      supplier_id:  supplierId,
+      notes,
+      total_amount: sumTotal(lines),
+    })
+    if (updateErr) return { error: updateErr }
 
     revalidatePath('/purchasing')
     revalidatePath(`/purchasing/${id}`)
@@ -145,40 +127,31 @@ export async function confirmPurchaseOrder(id: string): Promise<void> {
   const { supabase } = await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
-  const { error } = await supabase
-    .from('purchase_orders')
-    .update({ status: 'ordered', ordered_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('status', 'draft')
-
-  if (error) throw new Error(error.message)
+  const err = await purchaseOrderRepo.confirm(supabase, id)
+  if (err) throw new Error(err)
 
   revalidatePath('/purchasing')
   revalidatePath(`/purchasing/${id}`)
 }
 
-// ── CANCEL (draft/ordered → cancelled) ────────────────────────
+// ── CANCEL ────────────────────────────────────────────────────
 export async function cancelPurchaseOrder(id: string): Promise<void> {
   const { supabase } = await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
-  const { data: po } = await supabase
-    .from('purchase_orders').select('status').eq('id', id).single()
+  const status = await purchaseOrderRepo.getStatus(supabase, id)
+  if (!status) throw new Error('ไม่พบใบสั่งซื้อ')
+  if (status === 'received')  throw new Error('ใบสั่งซื้อที่รับของแล้วไม่สามารถยกเลิกได้')
+  if (status === 'cancelled') throw new Error('ใบสั่งซื้อถูกยกเลิกแล้ว')
 
-  if (!po) throw new Error('ไม่พบใบสั่งซื้อ')
-  if (po.status === 'received')  throw new Error('ใบสั่งซื้อที่รับของแล้วไม่สามารถยกเลิกได้')
-  if (po.status === 'cancelled') throw new Error('ใบสั่งซื้อถูกยกเลิกแล้ว')
-
-  const { error } = await supabase
-    .from('purchase_orders').update({ status: 'cancelled' }).eq('id', id)
-
-  if (error) throw new Error(error.message)
+  const err = await purchaseOrderRepo.cancel(supabase, id)
+  if (err) throw new Error(err)
 
   revalidatePath('/purchasing')
   revalidatePath(`/purchasing/${id}`)
 }
 
-// ── RECEIVE (partial) — bumps stock via SECURITY DEFINER RPC ──
+// ── RECEIVE (partial) ─────────────────────────────────────────
 export async function receivePurchaseOrder(
   _prev: POState,
   formData: FormData
@@ -199,20 +172,17 @@ export async function receivePurchaseOrder(
 
     if (receipts.length === 0) return { error: 'กรุณาระบุจำนวนที่รับอย่างน้อย 1 รายการ' }
 
-    const { data: po } = await supabase
-      .from('purchase_orders').select('status').eq('id', id).single()
-    if (!po) return { error: 'ไม่พบใบสั่งซื้อ' }
-    if (po.status !== 'ordered') {
-      return { error: 'รับของได้เฉพาะใบสั่งซื้อสถานะ "สั่งซื้อแล้ว"' }
-    }
+    const status = await purchaseOrderRepo.getStatus(supabase, id)
+    if (!status) return { error: 'ไม่พบใบสั่งซื้อ' }
+    if (status !== 'ordered') return { error: 'รับของได้เฉพาะใบสั่งซื้อสถานะ "สั่งซื้อแล้ว"' }
 
     for (const r of receipts) {
-      const { error } = await supabase.rpc('receive_po_item', {
-        p_item_id: r.itemId,
-        p_qty:     r.qty,
-        p_user_id: me.id,
+      const err = await purchaseOrderRepo.receiveItem(supabase, {
+        itemId: r.itemId,
+        qty:    r.qty,
+        userId: me.id,
       })
-      if (error) return { error: `รับของไม่สำเร็จ: ${error.message}` }
+      if (err) return { error: `รับของไม่สำเร็จ: ${err}` }
     }
 
     revalidatePath('/inventory')

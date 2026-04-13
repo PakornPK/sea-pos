@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Plus, Truck } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { purchaseOrderRepo } from '@/lib/repositories'
 import { POList, type POListRow } from '@/components/purchasing/POList'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -14,21 +15,14 @@ export const metadata: Metadata = {
 export default async function PurchasingPage() {
   const { supabase } = await requirePageRole(['admin', 'manager', 'purchasing'])
 
-  const { data } = await supabase
-    .from('purchase_orders')
-    .select(`
-      id, po_no, status, total_amount, ordered_at, received_at, created_at,
-      supplier:suppliers(name)
-    `)
-    .order('po_no', { ascending: false })
-    .limit(200)
+  const raw = await purchaseOrderRepo.listRecent(supabase)
 
-  const orders: POListRow[] = (data ?? []).map((o) => {
+  const orders: POListRow[] = raw.map((o) => {
     const supplier = Array.isArray(o.supplier) ? o.supplier[0] : o.supplier
     return {
       id: o.id,
       po_no: o.po_no,
-      supplier_name: (supplier as { name?: string } | null)?.name ?? '—',
+      supplier_name: supplier?.name ?? '—',
       status: o.status as PurchaseOrderStatus,
       total_amount: Number(o.total_amount),
       ordered_at: o.ordered_at,

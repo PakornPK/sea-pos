@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
+import { productRepo, stockLogRepo } from '@/lib/repositories'
 
 const ADJUST_ROLES = ['admin', 'manager'] as const
 const CREATE_ROLES = ['admin', 'manager', 'purchasing'] as const
@@ -11,20 +12,16 @@ export async function adjustStock(productId: string, delta: number) {
   try {
     const { supabase, me } = await requireActionRole([...ADJUST_ROLES])
 
-    const { data: product, error: fetchError } = await supabase
-      .from('products').select('stock').eq('id', productId).single()
+    const current = await productRepo.getStock(supabase, productId)
+    if (current === null) throw new Error('Product not found')
 
-    if (fetchError || !product) throw new Error('Product not found')
-
-    const newStock = product.stock + delta
+    const newStock = current + delta
     if (newStock < 0) return { error: 'สต๊อกไม่เพียงพอ' }
 
-    const { error: updateError } = await supabase
-      .from('products').update({ stock: newStock }).eq('id', productId)
+    const updateErr = await productRepo.updateStock(supabase, productId, newStock)
+    if (updateErr) return { error: updateErr }
 
-    if (updateError) return { error: updateError.message }
-
-    await supabase.from('stock_logs').insert({
+    await stockLogRepo.insert(supabase, {
       product_id: productId,
       change: delta,
       reason: delta > 0 ? 'ปรับเพิ่มสต๊อก (ผู้จัดการ)' : 'ปรับลดสต๊อก (ผู้จัดการ)',
@@ -50,22 +47,20 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
   if (!sku && categoryId) {
-    const { data: generated } = await supabase
-      .rpc('next_sku_for_category', { p_category_id: categoryId })
-    if (generated) sku = generated as string
+    const generated = await productRepo.nextSkuForCategory(supabase, categoryId)
+    if (generated) sku = generated
   }
 
-  const { error } = await supabase.from('products').insert({
+  const res = await productRepo.create(supabase, {
     name,
-    sku: sku || null,
+    sku: sku || undefined,
     min_stock: minStock,
     price,
     cost,
     category_id: categoryId,
     stock: 0,
   })
-
-  if (error) return { error: error.message }
+  if ('error' in res) return { error: res.error }
 
   revalidatePath('/inventory')
   redirect('/inventory')
@@ -95,37 +90,30 @@ export async function quickCreateProduct(input: {
 
     let sku = input.sku?.trim() || null
     if (!sku && input.categoryId) {
-      const { data: generated } = await supabase
-        .rpc('next_sku_for_category', { p_category_id: input.categoryId })
-      if (generated) sku = generated as string
+      sku = await productRepo.nextSkuForCategory(supabase, input.categoryId)
     }
 
-    const { data, error } = await supabase
-      .from('products')
-      .insert({
-        name,
-        sku,
-        category_id: input.categoryId,
-        price: Number.isFinite(input.price) ? input.price : 0,
-        cost: Number.isFinite(input.cost) ? input.cost : 0,
-        min_stock: Number.isFinite(input.minStock) ? input.minStock : 0,
-        stock: 0,
-      })
-      .select('id, name, sku, price, cost, category_id, stock, min_stock')
-      .single()
-
-    if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }
+    const res = await productRepo.createReturning(supabase, {
+      name,
+      sku,
+      category_id: input.categoryId,
+      price: Number.isFinite(input.price) ? input.price : 0,
+      cost: Number.isFinite(input.cost) ? input.cost : 0,
+      min_stock: Number.isFinite(input.minStock) ? input.minStock : 0,
+      stock: 0,
+    })
+    if ('error' in res) return res
 
     revalidatePath('/inventory')
     return {
-      id: data.id,
-      name: data.name,
-      sku: data.sku,
-      price: Number(data.price),
-      cost: Number(data.cost),
-      category_id: data.category_id,
-      stock: data.stock,
-      min_stock: data.min_stock,
+      id: res.id,
+      name: res.name,
+      sku: res.sku ?? null,
+      price: res.price,
+      cost: res.cost,
+      category_id: res.category_id,
+      stock: res.stock,
+      min_stock: res.min_stock,
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -135,8 +123,8 @@ export async function quickCreateProduct(input: {
 export async function deleteProduct(productId: string) {
   const { supabase } = await requireActionRole(['admin'])
 
-  const { error } = await supabase.from('products').delete().eq('id', productId)
-  if (error) return { error: error.message }
+  const error = await productRepo.delete(supabase, productId)
+  if (error) return { error }
 
   revalidatePath('/inventory')
 }

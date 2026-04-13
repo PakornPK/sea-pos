@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Plus, Tag } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { productRepo, categoryRepo } from '@/lib/repositories'
 import { ProductTable } from '@/components/inventory/ProductTable'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Category, ProductWithCategory } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'คลังสินค้า | SEA-POS',
@@ -14,13 +14,11 @@ export const metadata: Metadata = {
 export default async function InventoryPage() {
   const { supabase, me } = await requirePageRole(['admin', 'manager', 'purchasing'])
 
-  const [{ data: productData }, { data: categoryData }] = await Promise.all([
-    supabase.from('products').select('*, category:categories(id, name)').order('name'),
-    supabase.from('categories').select('*').order('name'),
+  const [products, categories] = await Promise.all([
+    productRepo.listWithCategory(supabase),
+    categoryRepo.list(supabase),
   ])
 
-  const products = (productData ?? []) as ProductWithCategory[]
-  const categories = (categoryData ?? []) as Category[]
   const canManage = me.role === 'admin' || me.role === 'manager'
 
   return (

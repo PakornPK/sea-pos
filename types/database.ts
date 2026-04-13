@@ -119,7 +119,7 @@ export type ProfileInsert = {
 
 export type ProductInsert = {
   name: string
-  sku?: string
+  sku?: string | null
   price?: number
   cost?: number
   stock?: number

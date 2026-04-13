@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
+import { productRepo, saleRepo, stockLogRepo } from '@/lib/repositories'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
@@ -36,52 +37,42 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     return { error: 'กรุณาเลือกวิธีชำระเงิน' }
   }
 
-  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
-  // ── Insert sale header ────────────────────────────────────────
-  const { data: sale, error: saleError } = await supabase
-    .from('sales')
-    .insert({
-      user_id: me.id,
-      customer_id: customerId,
-      total_amount: totalAmount,
-      payment_method: paymentMethod as 'cash' | 'card' | 'transfer',
-      status: 'completed',
-    })
-    .select('id')
-    .single()
+  const header = await saleRepo.createHeader(supabase, {
+    user_id: me.id,
+    customer_id: customerId,
+    total_amount: totalAmount,
+    payment_method: paymentMethod as 'cash' | 'card' | 'transfer',
+  })
+  if ('error' in header) return { error: header.error }
 
-  if (saleError || !sale) return { error: saleError?.message ?? 'ไม่สามารถบันทึกการขายได้' }
-
-  // ── Insert line items ─────────────────────────────────────────
-  const { error: itemsError } = await supabase.from('sale_items').insert(
-    cart.map((item) => ({
-      sale_id: sale.id,
-      product_id: item.productId,
-      quantity: item.quantity,
-      unit_price: item.price,
-      subtotal: item.price * item.quantity,
+  const itemsError = await saleRepo.insertItems(
+    supabase,
+    header.id,
+    cart.map((i) => ({
+      product_id: i.productId,
+      quantity: i.quantity,
+      unit_price: i.price,
+      subtotal: i.price * i.quantity,
     }))
   )
+  if (itemsError) return { error: itemsError }
 
-  if (itemsError) return { error: itemsError.message }
-
-  // ── Decrement stock atomically via SECURITY DEFINER RPC ──────
   for (const item of cart) {
-    const { error: stockError } = await supabase.rpc('decrement_stock', {
-      p_product_id: item.productId,
-      p_quantity:   item.quantity,
-      p_sale_id:    sale.id,
-      p_user_id:    me.id,
+    const stockErr = await productRepo.decrementStock(supabase, {
+      productId: item.productId,
+      quantity:  item.quantity,
+      saleId:    header.id,
+      userId:    me.id,
     })
-
-    if (stockError) {
-      return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockError.message}` }
+    if (stockErr) {
+      return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockErr}` }
     }
   }
 
   revalidatePath('/inventory')
-  redirect(`/pos/receipt/${sale.id}`)
+  redirect(`/pos/receipt/${header.id}`)
 }
 
 export async function voidSale(_prev: VoidState, formData: FormData): Promise<VoidState> {
@@ -94,36 +85,18 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (!saleId) return { error: 'ไม่พบรายการขาย' }
     if (!reason) return { error: 'กรุณาระบุเหตุผลการยกเลิก' }
 
-    const { data: items } = await supabase
-      .from('sale_items')
-      .select('product_id, quantity')
-      .eq('sale_id', saleId)
+    const items = await saleRepo.listItems(supabase, saleId)
 
-    const { error: voidError, data: voided } = await supabase
-      .from('sales')
-      .update({ status: 'voided' })
-      .eq('id', saleId)
-      .eq('status', 'completed')
-      .select('id')
+    const voidResult = await saleRepo.markVoided(supabase, saleId)
+    if (typeof voidResult !== 'boolean') return { error: voidResult.error }
+    if (!voidResult) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
 
-    if (voidError) return { error: voidError.message }
-    if (!voided?.length) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
+    for (const item of items) {
+      const current = await productRepo.getStock(supabase, item.product_id)
+      if (current === null) continue
 
-    for (const item of items ?? []) {
-      const { data: product } = await supabase
-        .from('products')
-        .select('stock')
-        .eq('id', item.product_id)
-        .single()
-
-      if (!product) continue
-
-      await supabase
-        .from('products')
-        .update({ stock: product.stock + item.quantity })
-        .eq('id', item.product_id)
-
-      await supabase.from('stock_logs').insert({
+      await productRepo.updateStock(supabase, item.product_id, current + item.quantity)
+      await stockLogRepo.insert(supabase, {
         product_id: item.product_id,
         change: item.quantity,
         reason: `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`,

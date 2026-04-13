@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
+import { supplierRepo } from '@/lib/repositories'
 import { SupplierTable } from '@/components/purchasing/SupplierTable'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Supplier } from '@/types/database'
 
 export const metadata: Metadata = {
   title: 'ผู้จำหน่าย | SEA-POS',
@@ -13,9 +13,7 @@ export const metadata: Metadata = {
 
 export default async function SuppliersPage() {
   const { supabase, me } = await requirePageRole(['admin', 'manager', 'purchasing'])
-
-  const { data } = await supabase.from('suppliers').select('*').order('name')
-  const suppliers = (data ?? []) as Supplier[]
+  const suppliers = await supplierRepo.list(supabase)
 
   return (
     <div className="flex flex-col gap-6">
