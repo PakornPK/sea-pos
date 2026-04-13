@@ -4,9 +4,22 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
 import { productRepo, saleRepo, stockLogRepo } from '@/lib/repositories'
+import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
+import type { Product } from '@/types/database'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
+
+export async function searchInStockProducts(input: {
+  page:   number
+  search: string
+}): Promise<Paginated<Product>> {
+  await getActionUser()
+  return productRepo.listInStockPaginated(
+    { page: Math.max(1, input.page), pageSize: DEFAULT_PAGE_SIZE },
+    { search: input.search },
+  )
+}
 
 const SELL_ROLES = ['admin', 'manager', 'cashier'] as const
 const VOID_ROLES = ['admin', 'manager'] as const

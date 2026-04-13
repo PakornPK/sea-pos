@@ -1,33 +1,50 @@
 'use client'
 
-import { useState, useActionState } from 'react'
+import { useEffect, useState, useActionState, useTransition } from 'react'
 import Image from 'next/image'
-import { Search, ShoppingCart, Plus, Minus, Trash2, ImageOff, Info } from 'lucide-react'
+import {
+  Search, ShoppingCart, Plus, Minus, Trash2, ImageOff, Info,
+  ChevronLeft, ChevronRight, Loader2,
+} from 'lucide-react'
 import { ProductDetailDialog } from '@/components/pos/ProductDetailDialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { createSale } from '@/lib/actions/pos'
+import { createSale, searchInStockProducts } from '@/lib/actions/pos'
 import { formatBaht } from '@/lib/format'
 import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
-import type { Category, Product } from '@/types/database'
+import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
+import type { Product } from '@/types/database'
 
 type CartItem = {
   productId: string
-  name: string
-  price: number
-  quantity: number
+  name:      string
+  price:     number
+  quantity:  number
 }
 
 type POSTerminalProps = {
-  products: Product[]
-  categories: Category[]
-  customers: PickerCustomer[]
+  initialProducts: Product[]
+  initialTotal:    number
+  initialPage:     number
+  pageSize:        number
+  customers:       PickerCustomer[]
 }
 
-import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
+/** Build a compact page list with ellipsis: [1, …, 4, 5, 6, …, 12]. */
+function buildPageList(current: number, total: number): Array<number | '…'> {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const set = new Set<number>([1, total, current, current - 1, current + 1])
+  const pages = [...set].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b)
+  const out: Array<number | '…'> = []
+  for (let i = 0; i < pages.length; i++) {
+    if (i > 0 && pages[i] - pages[i - 1] > 1) out.push('…')
+    out.push(pages[i])
+  }
+  return out
+}
 
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
   (Object.keys(PAYMENT_LABEL) as PaymentMethod[]).map((value) => ({
@@ -35,31 +52,52 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
     label: PAYMENT_LABEL[value],
   }))
 
-export function POSTerminal({ products, categories, customers }: POSTerminalProps) {
+export function POSTerminal({
+  initialProducts, initialTotal, initialPage, pageSize, customers,
+}: POSTerminalProps) {
+  // ── Cart (unchanged — user loves this part) ────────────────────
   const [cart, setCart] = useState<CartItem[]>([])
-  const [search, setSearch] = useState('')
   const [payment, setPayment] = useState('cash')
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [customer, setCustomer] = useState<PickerCustomer | null>(null)
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
   const [state, formAction, isPending] = useActionState(createSale, undefined)
 
-  const categoryById = new Map(categories.map((c) => [c.id, c]))
+  // ── Server-driven product grid ─────────────────────────────────
+  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [total, setTotal]       = useState(initialTotal)
+  const [page, setPage]         = useState(initialPage)
+  const [search, setSearch]     = useState('')
+  const [loading, startLoading] = useTransition()
 
-  const filtered = products.filter(
-    (p) =>
-      p.stock > 0 &&
-      (selectedCategory === null || p.category_id === selectedCategory) &&
-      (p.name.toLowerCase().includes(search.toLowerCase()) ||
-        (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
-  )
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
+  // Debounced refetch on search change; immediate fetch on page change.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      startLoading(async () => {
+        const res = await searchInStockProducts({ page, search: search.trim() })
+        setProducts(res.rows)
+        setTotal(res.totalCount)
+      })
+    }, search ? 250 : 0)
+    return () => clearTimeout(handle)
+  }, [page, search])
+
+  function goPrev() { if (page > 1) setPage(page - 1) }
+  function goNext() { if (page < totalPages) setPage(page + 1) }
+
+  // Reset to page 1 when search changes
+  function onSearchChange(v: string) {
+    setSearch(v)
+    setPage(1)
+  }
+
+  // ── Cart handlers ──────────────────────────────────────────────
   function addToCart(product: Product) {
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
       if (existing) {
-        const cartQty = existing.quantity
-        if (cartQty >= product.stock) return prev   // don't exceed stock
+        if (existing.quantity >= product.stock) return prev
         return prev.map((i) =>
           i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
         )
@@ -85,63 +123,44 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
   }
 
   const totalQty = cart.reduce((s, i) => s + i.quantity, 0)
-  const total = cart.reduce((s, i) => s + i.price * i.quantity, 0)
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0)
 
   return (
-    <div className="flex gap-4" style={{ height: 'calc(100vh - 8.5rem)' }}>
-      {/* ── Product grid ─────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 gap-3 overflow-hidden">
+    <div className="flex h-full gap-4 overflow-hidden">
+      {/* ── Product grid ──────────────────────────────────────── */}
+      <div className="flex flex-1 flex-col gap-3 overflow-hidden">
+        {/* Search */}
         <div className="relative shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="ค้นหาสินค้า หรือ SKU..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="pl-9"
           />
         </div>
 
-        {/* Category tabs */}
-        {categories.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap shrink-0">
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap',
-                selectedCategory === null
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'hover:bg-accent'
-              )}
-            >
-              ทั้งหมด
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap',
-                  selectedCategory === cat.id
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
-                )}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Grid — big tap-friendly tiles */}
+        <div
+          className="relative grid flex-1 auto-rows-min grid-cols-3 gap-3 overflow-y-auto content-start md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          {loading && (
+            <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-background/40 backdrop-blur-[1px]">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          )}
 
-        <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 content-start">
-          {filtered.map((product, idx) => {
+          {products.map((product, idx) => {
             const inCart = cart.find((i) => i.productId === product.id)
-            const aboveFold = idx < 10
+            const inCartQty = inCart?.quantity ?? 0
+            const lowStock = product.stock <= product.min_stock
             return (
               <div
                 key={product.id}
                 className={cn(
-                  'group relative rounded-lg border bg-card overflow-hidden transition-colors',
-                  inCart
+                  'relative flex h-36 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
+                  inCartQty > 0
                     ? 'border-primary bg-primary/5'
                     : 'hover:border-primary/50 hover:bg-accent'
                 )}
@@ -149,86 +168,122 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setDetailProduct(product) }}
-                  aria-label="ดูรายละเอียดสินค้า"
-                  className="absolute right-1.5 top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full bg-background/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-primary"
+                  aria-label="ดูรายละเอียด"
+                  className="absolute right-1.5 top-1.5 z-10 grid h-6 w-6 place-items-center rounded-full bg-background/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-primary"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <Info className="h-3 w-3" />
                 </button>
                 <button
                   type="button"
                   onClick={() => addToCart(product)}
-                  className="block w-full text-left cursor-pointer"
+                  className="flex h-full w-full flex-col text-left"
                 >
-                <div className="relative aspect-square w-full bg-muted">
-                  {product.image_url ? (
-                    <Image
-                      src={product.image_url}
-                      alt={product.name}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                      unoptimized
-                      priority={aboveFold}
-                    />
-                  ) : (
-                    <div className="absolute inset-0 grid place-items-center">
-                      <ImageOff className="h-8 w-8 text-muted-foreground/40" />
-                    </div>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p className="font-medium text-sm leading-tight line-clamp-2 min-h-[2.5rem]">
-                    {product.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">{product.sku || '—'}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-sm font-semibold">{formatBaht(product.price)}</span>
-                    <Badge
-                      variant={product.stock <= product.min_stock ? 'destructive' : 'outline'}
-                      className="text-xs"
-                    >
-                      {inCart ? `${inCart.quantity}/${product.stock}` : `เหลือ ${product.stock}`}
-                    </Badge>
+                  <div className="relative h-20 shrink-0 bg-muted">
+                    {product.image_url ? (
+                      <Image
+                        src={product.image_url}
+                        alt={product.name}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                        unoptimized
+                        priority={idx < 12}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center">
+                        <ImageOff className="h-6 w-6 text-muted-foreground/40" />
+                      </div>
+                    )}
                   </div>
-                </div>
+                  <div className="flex flex-1 flex-col justify-between p-2 min-w-0">
+                    <p className="line-clamp-2 text-xs font-medium leading-tight break-words">
+                      {product.name}
+                    </p>
+                    <div className="flex items-center justify-between gap-1 min-w-0">
+                      <span className="truncate text-sm font-semibold tabular-nums">
+                        {formatBaht(product.price)}
+                      </span>
+                      <Badge
+                        variant={lowStock ? 'destructive' : 'outline'}
+                        className="shrink-0 whitespace-nowrap text-[10px] px-1.5 py-0"
+                      >
+                        {inCartQty > 0 ? `${inCartQty}/${product.stock}` : product.stock}
+                      </Badge>
+                    </div>
+                  </div>
                 </button>
               </div>
             )
           })}
 
-          {filtered.length === 0 && (
-            <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
+          {!loading && products.length === 0 && (
+            <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
               ไม่พบสินค้า
             </p>
           )}
         </div>
+
+        {/* Pagination */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
+          <span className="text-xs text-muted-foreground tabular-nums">
+            หน้า {page} / {totalPages} · {total} รายการ
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button" size="sm" variant="outline"
+              onClick={goPrev} disabled={page <= 1 || loading}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {buildPageList(page, totalPages).map((item, idx) =>
+              item === '…' ? (
+                <span key={`gap-${idx}`} className="px-1.5 text-xs text-muted-foreground">…</span>
+              ) : (
+                <Button
+                  key={item}
+                  type="button" size="sm"
+                  variant={item === page ? 'default' : 'outline'}
+                  onClick={() => setPage(item)}
+                  disabled={loading}
+                  className="min-w-8 px-2 tabular-nums"
+                >
+                  {item}
+                </Button>
+              )
+            )}
+            <Button
+              type="button" size="sm" variant="outline"
+              onClick={goNext} disabled={page >= totalPages || loading}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* ── Cart ─────────────────────────────────────────────── */}
-      <div className="w-80 shrink-0 flex flex-col border rounded-xl bg-card overflow-hidden">
+      {/* ── Cart (unchanged structure) ────────────────────────── */}
+      <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border bg-card">
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
+        <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
           <ShoppingCart className="h-4 w-4" />
           <span className="font-semibold">รายการสั่ง</span>
-          {totalQty > 0 && (
-            <Badge className="ml-auto text-xs">{totalQty} รายการ</Badge>
-          )}
+          {totalQty > 0 && <Badge className="ml-auto text-xs">{totalQty} รายการ</Badge>}
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto p-3">
           {cart.length === 0 ? (
-            <p className="text-center text-muted-foreground text-sm py-10">
+            <p className="py-10 text-center text-sm text-muted-foreground">
               กดเลือกสินค้าทางซ้าย
             </p>
           ) : (
             cart.map((item) => (
               <div key={item.productId} className="space-y-1.5">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-snug flex-1">{item.name}</p>
+                  <p className="flex-1 text-sm font-medium leading-snug">{item.name}</p>
                   <button
                     onClick={() => removeItem(item.productId)}
-                    className="text-muted-foreground hover:text-destructive mt-0.5 shrink-0"
+                    className="mt-0.5 shrink-0 text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -237,19 +292,19 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => updateQty(item.productId, -1)}
-                      className="h-6 w-6 rounded border flex items-center justify-center hover:bg-accent"
+                      className="flex h-6 w-6 items-center justify-center rounded border hover:bg-accent"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
                     <span className="w-7 text-center text-sm tabular-nums">{item.quantity}</span>
                     <button
                       onClick={() => updateQty(item.productId, 1)}
-                      className="h-6 w-6 rounded border flex items-center justify-center hover:bg-accent"
+                      className="flex h-6 w-6 items-center justify-center rounded border hover:bg-accent"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>
-                  <span className="text-sm tabular-nums font-medium">
+                  <span className="text-sm font-medium tabular-nums">
                     {formatBaht(item.price * item.quantity)}
                   </span>
                 </div>
@@ -259,10 +314,10 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
         </div>
 
         {/* Checkout */}
-        <div className="border-t p-4 space-y-3 shrink-0">
-          <div className="flex justify-between items-baseline">
-            <span className="text-muted-foreground text-sm">รวมทั้งสิ้น</span>
-            <span className="text-2xl font-bold tabular-nums">{formatBaht(total)}</span>
+        <div className="shrink-0 space-y-3 border-t p-4">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm text-muted-foreground">รวมทั้งสิ้น</span>
+            <span className="text-2xl font-bold tabular-nums">{formatBaht(cartTotal)}</span>
           </div>
 
           <Separator />
@@ -272,14 +327,12 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
             <input type="hidden" name="paymentMethod" value={payment} />
             <input type="hidden" name="customerId" value={customer?.id ?? ''} />
 
-            {/* Customer picker */}
             <CustomerPicker
               customers={customers}
               selected={customer}
               onChange={setCustomer}
             />
 
-            {/* Payment method selector */}
             <div className="grid grid-cols-3 gap-1.5">
               {PAYMENT_METHODS.map(({ value, label }) => (
                 <button
@@ -299,7 +352,7 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
             </div>
 
             {state?.error && (
-              <p className="text-xs text-destructive text-center">{state.error}</p>
+              <p className="text-center text-xs text-destructive">{state.error}</p>
             )}
 
             <Button
@@ -314,7 +367,7 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
               <button
                 type="button"
                 onClick={() => setCart([])}
-                className="w-full text-xs text-muted-foreground hover:text-destructive text-center py-1"
+                className="w-full py-1 text-center text-xs text-muted-foreground hover:text-destructive"
               >
                 ล้างรายการทั้งหมด
               </button>
@@ -325,7 +378,7 @@ export function POSTerminal({ products, categories, customers }: POSTerminalProp
 
       <ProductDetailDialog
         product={detailProduct}
-        category={detailProduct?.category_id ? categoryById.get(detailProduct.category_id) ?? null : null}
+        category={null}
         open={detailProduct !== null}
         onOpenChange={(open) => { if (!open) setDetailProduct(null) }}
         onAddToCart={addToCart}

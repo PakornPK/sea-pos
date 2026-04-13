@@ -6,6 +6,10 @@ export interface ProductRepository {
   listAll(): Promise<Product[]>
   listWithCategory(): Promise<ProductWithCategory[]>
   listInStock(): Promise<Product[]>
+  listInStockPaginated(
+    p: PageParams,
+    opts?: { search?: string | null }
+  ): Promise<Paginated<Product>>
   listWithCategoryPaginated(
     p: PageParams,
     opts?: { categoryId?: string | null }

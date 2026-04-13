@@ -35,6 +35,26 @@ export const supabaseProductRepo: ProductRepository = {
     return (data ?? []) as Product[]
   },
 
+  async listInStockPaginated(
+    p: PageParams,
+    opts: { search?: string | null } = {}
+  ): Promise<Paginated<Product>> {
+    const db = await getDb()
+    const { from, to } = toSupabaseRange(p)
+    let q = db
+      .from('products')
+      .select('*', { count: 'exact' })
+      .gt('stock', 0)
+      .order('name')
+      .range(from, to)
+    if (opts.search?.trim()) {
+      const term = opts.search.trim().replace(/[%,]/g, '')
+      q = q.or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
+    }
+    const { data, count } = await q
+    return packPaginated((data ?? []) as Product[], count ?? 0, p)
+  },
+
   async listWithCategoryPaginated(
     p: PageParams,
     opts: { categoryId?: string | null } = {}
