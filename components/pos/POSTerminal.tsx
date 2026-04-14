@@ -17,12 +17,14 @@ import { formatBaht } from '@/lib/format'
 import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
 import type { ProductWithStock } from '@/types/database'
+import { computeVat, type VatConfig } from '@/lib/vat'
 
 type CartItem = {
-  productId: string
-  name:      string
-  price:     number
-  quantity:  number
+  productId:  string
+  name:       string
+  price:      number
+  quantity:   number
+  vatExempt:  boolean
 }
 
 type POSTerminalProps = {
@@ -31,6 +33,7 @@ type POSTerminalProps = {
   initialPage:     number
   pageSize:        number
   customers:       PickerCustomer[]
+  vatConfig:       VatConfig
 }
 
 /** Build a compact page list with ellipsis: [1, …, 4, 5, 6, …, 12]. */
@@ -53,7 +56,7 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
   }))
 
 export function POSTerminal({
-  initialProducts, initialTotal, initialPage, pageSize, customers,
+  initialProducts, initialTotal, initialPage, pageSize, customers, vatConfig,
 }: POSTerminalProps) {
   // ── Cart (unchanged — user loves this part) ────────────────────
   const [cart, setCart] = useState<CartItem[]>([])
@@ -105,7 +108,13 @@ export function POSTerminal({
       if (product.stock < 1) return prev
       return [
         ...prev,
-        { productId: product.id, name: product.name, price: product.price, quantity: 1 },
+        {
+          productId: product.id,
+          name:      product.name,
+          price:     product.price,
+          quantity:  1,
+          vatExempt: Boolean(product.vat_exempt),
+        },
       ]
     })
   }
@@ -123,7 +132,11 @@ export function POSTerminal({
   }
 
   const totalQty = cart.reduce((s, i) => s + i.quantity, 0)
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0)
+  const breakdown = computeVat(
+    cart.map((i) => ({ price: i.price, quantity: i.quantity, vatExempt: i.vatExempt })),
+    vatConfig,
+  )
+  const showVatRow = vatConfig.mode !== 'none' && breakdown.vatAmount > 0
 
   return (
     <div className="flex h-full gap-4 overflow-hidden">
@@ -315,9 +328,21 @@ export function POSTerminal({
 
         {/* Checkout */}
         <div className="shrink-0 space-y-3 border-t p-4">
+          {showVatRow && (
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>ยอดก่อน VAT</span>
+                <span className="tabular-nums">{formatBaht(breakdown.subtotalExVat)}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>VAT {vatConfig.rate}%</span>
+                <span className="tabular-nums">{formatBaht(breakdown.vatAmount)}</span>
+              </div>
+            </div>
+          )}
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-muted-foreground">รวมทั้งสิ้น</span>
-            <span className="text-2xl font-bold tabular-nums">{formatBaht(cartTotal)}</span>
+            <span className="text-2xl font-bold tabular-nums">{formatBaht(breakdown.total)}</span>
           </div>
 
           <Separator />

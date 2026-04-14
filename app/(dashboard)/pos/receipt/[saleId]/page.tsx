@@ -157,6 +157,20 @@ export default async function ReceiptPage({
 
         <Separator />
 
+        {/* VAT breakdown — only when the sale had VAT */}
+        {sale.vat_amount > 0 && (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>ยอดก่อน VAT</span>
+              <span className="tabular-nums">{formatBaht(sale.subtotal_ex_vat)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>VAT</span>
+              <span className="tabular-nums">{formatBaht(sale.vat_amount)}</span>
+            </div>
+          </div>
+        )}
+
         {/* Total */}
         <div className="flex justify-between items-baseline">
           <span className="font-semibold">รวมทั้งสิ้น</span>

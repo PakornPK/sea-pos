@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { supplierRepo, productRepo, categoryRepo } from '@/lib/repositories'
+import { supplierRepo, productRepo, categoryRepo, branchRepo } from '@/lib/repositories'
 import { POForm } from '@/components/purchasing/POForm'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,12 +12,13 @@ export const metadata: Metadata = {
 }
 
 export default async function NewPOPage() {
-  await requirePageRole(['admin', 'manager', 'purchasing'])
+  const { me } = await requirePageRole(['admin', 'manager', 'purchasing'])
 
-  const [suppliers, products, categories] = await Promise.all([
+  const [suppliers, products, categories, branches] = await Promise.all([
     supplierRepo.list(),
     productRepo.listAll(),
     categoryRepo.list(),
+    branchRepo.list(),
   ])
 
   return (
@@ -42,7 +43,13 @@ export default async function NewPOPage() {
           </p>
         </div>
       ) : (
-        <POForm suppliers={suppliers} products={products} categories={categories} />
+        <POForm
+          suppliers={suppliers}
+          products={products}
+          categories={categories}
+          branches={branches}
+          activeBranchId={me.activeBranchId}
+        />
       )}
     </div>
   )

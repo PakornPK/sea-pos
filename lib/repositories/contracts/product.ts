@@ -47,6 +47,13 @@ export interface ProductRepository {
   updateImageUrl(id: string, url: string | null): Promise<string | null>
   delete(id: string): Promise<string | null>
   nextSkuForCategory(categoryId: string): Promise<string | null>
+
+  /**
+   * Effective VAT-exempt flag per product id = product.vat_exempt OR its
+   * category.vat_exempt. Used by the sale action to recompute VAT server-side
+   * (don't trust a client-supplied flag).
+   */
+  vatExemptMap(productIds: string[]): Promise<Record<string, boolean>>
 }
 
 /**

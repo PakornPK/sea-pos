@@ -34,8 +34,17 @@ ALTER SEQUENCE IF EXISTS receipt_number_seq RESTART WITH 1;
 
 -- ── 1b. Demo company (multi-tenancy root) ────────────────────
 DELETE FROM companies WHERE slug = 'sea-pos-demo';
-INSERT INTO companies (id, name, slug, plan)
-VALUES ('99999999-0000-0000-0000-000000000001', 'SEA-POS Demo Store', 'sea-pos-demo', 'standard_pro');
+INSERT INTO companies (id, name, slug, plan, settings)
+VALUES (
+  '99999999-0000-0000-0000-000000000001',
+  'SEA-POS Demo Store',
+  'sea-pos-demo',
+  'standard_pro',
+  jsonb_build_object(
+    'vat_mode', 'excluded',
+    'vat_rate', 7
+  )
+);
 
 -- ── 1c. Override company_id default for the seeding transaction ──
 -- The SQL Editor runs as superuser with no auth.uid(), so
@@ -372,12 +381,20 @@ END $$;
 UPDATE sales SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
 
 -- ── 8. Fix sale totals to match line items exactly ────────────
+-- Seed line subtotals are treated as the gross (tax-inclusive) price — the
+-- demo company runs `vat_mode='excluded'` so we back VAT out of the gross to
+-- keep subtotal_ex_vat + vat_amount = total_amount.
 UPDATE sales s
 SET total_amount = (
   SELECT COALESCE(SUM(subtotal), 0)
   FROM sale_items
   WHERE sale_id = s.id
 );
+
+UPDATE sales
+SET    subtotal_ex_vat = ROUND(total_amount / 1.07, 2),
+       vat_amount      = ROUND(total_amount - total_amount / 1.07, 2)
+WHERE  status = 'completed';
 
 -- ── 9. Deduct B01 stock for completed sales + log movements ───
 DO $$

@@ -37,6 +37,10 @@ export function AddCategoryForm() {
       <p className="text-xs text-muted-foreground">
         หากระบุ ระบบจะออก SKU อัตโนมัติในรูปแบบ <code>PREFIX-0001</code> เมื่อสร้างสินค้าในหมวดหมู่นี้โดยไม่กรอก SKU เอง
       </p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="vat_exempt" disabled={pending} className="h-4 w-4" />
+        ยกเว้น VAT สำหรับสินค้าในหมวดหมู่นี้
+      </label>
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? 'กำลังบันทึก...' : 'เพิ่มหมวดหมู่'}
       </Button>

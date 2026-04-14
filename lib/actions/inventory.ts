@@ -41,6 +41,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const price = parseFloat(formData.get('price') as string) || 0
   const cost = parseFloat(formData.get('cost') as string) || 0
   const categoryId = (formData.get('category_id') as string) || null
+  const vatExempt = formData.get('vat_exempt') === 'on'
   const rawImage = formData.get('image') as File | null
   const hasImage = !!rawImage && rawImage.size > 0
 
@@ -71,6 +72,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     price,
     cost,
     category_id: categoryId,
+    vat_exempt: vatExempt,
   })
   if ('error' in res) return { error: res.error }
 

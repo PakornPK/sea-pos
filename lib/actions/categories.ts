@@ -24,6 +24,7 @@ export async function addCategory(
     const error = await categoryRepo.create({
       name,
       sku_prefix: cleanPrefix(formData.get('sku_prefix') as string | null),
+      vat_exempt: formData.get('vat_exempt') === 'on',
     })
     if (error) return { error }
 
@@ -39,6 +40,14 @@ export async function updateCategoryPrefix(categoryId: string, prefix: string) {
   const error = await categoryRepo.updatePrefix(categoryId, cleanPrefix(prefix))
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
+}
+
+export async function updateCategoryVatExempt(categoryId: string, vatExempt: boolean) {
+  await requireActionRole([...MANAGE_ROLES])
+  const error = await categoryRepo.updateVatExempt(categoryId, vatExempt)
+  if (error) throw new Error(error)
+  revalidatePath('/inventory/categories')
+  revalidatePath('/inventory')
 }
 
 export async function deleteCategory(categoryId: string) {

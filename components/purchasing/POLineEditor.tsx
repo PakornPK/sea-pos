@@ -120,6 +120,7 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
         min_stock:   res.min_stock,
         category_id: res.category_id,
         image_url:   imageUrl,
+        vat_exempt:  false,
         created_at:  new Date().toISOString(),
       }
       setLocalProducts((prev) => [...prev, prod].sort((a, b) => a.name.localeCompare(b.name)))

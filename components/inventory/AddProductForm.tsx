@@ -153,6 +153,11 @@ export function AddProductForm({ categories }: AddProductFormProps) {
         />
       </div>
 
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="vat_exempt" disabled={pending} className="h-4 w-4" />
+        ยกเว้น VAT สำหรับสินค้ารายการนี้
+      </label>
+
       {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
 
       <Button type="submit" disabled={pending} className="self-start">

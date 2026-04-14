@@ -33,7 +33,12 @@ export function CompanySettingsForm({ company }: Props) {
     address?: string
     logo_url?: string
     letterhead_url?: string
+    vat_mode?: 'none' | 'included' | 'excluded'
+    vat_rate?: number
   }
+  const currentVatMode = settings.vat_mode ?? 'none'
+  const currentVatRate = typeof settings.vat_rate === 'number' ? settings.vat_rate : 7
+  const [vatMode, setVatMode] = useState<'none' | 'included' | 'excluded'>(currentVatMode)
 
   return (
    <div className="flex flex-col gap-6 max-w-xl">
@@ -110,6 +115,48 @@ export function CompanySettingsForm({ company }: Props) {
             disabled={pending}
             defaultValue={settings.address ?? ''}
           />
+        </div>
+      </section>
+
+      {/* VAT configuration */}
+      <section className="rounded-lg border bg-card p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-sm">ภาษีมูลค่าเพิ่ม (VAT)</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            ตั้งค่าการคิด VAT ระดับบริษัท ยกเว้นรายสินค้า/หมวดหมู่ได้ในหน้าสินค้า
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="vat_mode">รูปแบบ VAT</Label>
+            <select
+              id="vat_mode"
+              name="vat_mode"
+              value={vatMode}
+              onChange={(e) => setVatMode(e.target.value as 'none' | 'included' | 'excluded')}
+              disabled={pending}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            >
+              <option value="none">ไม่คิด VAT</option>
+              <option value="excluded">ราคาไม่รวม VAT (บวกเพิ่มตอนชำระ)</option>
+              <option value="included">ราคารวม VAT แล้ว (แยกรายงานภายหลัง)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="vat_rate">อัตรา VAT (%)</Label>
+            <Input
+              id="vat_rate"
+              name="vat_rate"
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              defaultValue={currentVatRate}
+              disabled={pending || vatMode === 'none'}
+              placeholder="7"
+            />
+          </div>
         </div>
       </section>
 

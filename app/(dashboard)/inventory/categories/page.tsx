@@ -37,6 +37,7 @@ export default async function CategoriesPage() {
               id={cat.id}
               name={cat.name}
               prefix={cat.sku_prefix}
+              vatExempt={cat.vat_exempt}
             />
           ))
         )}

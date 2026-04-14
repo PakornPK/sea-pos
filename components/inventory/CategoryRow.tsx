@@ -4,19 +4,33 @@ import { useState, useTransition } from 'react'
 import { Check, Pencil, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { deleteCategory, updateCategoryPrefix } from '@/lib/actions/categories'
+import { deleteCategory, updateCategoryPrefix, updateCategoryVatExempt } from '@/lib/actions/categories'
 
 type Props = {
   id: string
   name: string
   prefix: string | null
+  vatExempt: boolean
 }
 
-export function CategoryRow({ id, name, prefix }: Props) {
+export function CategoryRow({ id, name, prefix, vatExempt }: Props) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(prefix ?? '')
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [isExempt, setIsExempt] = useState(vatExempt)
+
+  function toggleVat(next: boolean) {
+    setError(null)
+    setIsExempt(next)
+    startTransition(async () => {
+      try { await updateCategoryVatExempt(id, next) }
+      catch (e) {
+        setIsExempt(!next)
+        setError(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
+      }
+    })
+  }
 
   function handleSave() {
     setError(null)
@@ -81,6 +95,16 @@ export function CategoryRow({ id, name, prefix }: Props) {
           )}
         </div>
       </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={isExempt}
+          onChange={(e) => toggleVat(e.target.checked)}
+          disabled={pending}
+          className="h-3.5 w-3.5"
+        />
+        ยกเว้น VAT
+      </label>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )

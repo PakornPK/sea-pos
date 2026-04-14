@@ -49,12 +49,14 @@ export type Category = {
   id: string
   name: string
   sku_prefix: string | null
+  vat_exempt: boolean
   created_at: string
 }
 
 export type CategoryInsert = {
   name: string
   sku_prefix?: string | null
+  vat_exempt?: boolean
 }
 
 /**
@@ -71,6 +73,7 @@ export type Product = {
   min_stock: number
   category_id: string | null
   image_url: string | null
+  vat_exempt: boolean
   created_at: string
 }
 
@@ -187,6 +190,8 @@ export type Sale = {
   customer_id: string | null
   user_id: string
   total_amount: number
+  subtotal_ex_vat: number
+  vat_amount: number
   payment_method: 'cash' | 'card' | 'transfer'
   status: 'completed' | 'voided'
   created_at: string
@@ -242,6 +247,7 @@ export type ProductInsert = {
   min_stock?: number
   category_id?: string | null
   image_url?: string | null
+  vat_exempt?: boolean
   // Note: stock is seeded via productStockRepo.set(productId, branchId, qty)
   // in a follow-up call; it is no longer a column on products.
 }
@@ -271,6 +277,8 @@ export type SaleInsert = {
   customer_id?: string | null
   user_id: string
   total_amount: number
+  subtotal_ex_vat?: number
+  vat_amount?: number
   payment_method: Sale['payment_method']
   status?: Sale['status']
 }

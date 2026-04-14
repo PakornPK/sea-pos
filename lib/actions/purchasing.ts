@@ -58,16 +58,24 @@ export async function createPurchaseOrder(
     const supplierId = String(formData.get('supplierId') ?? '')
     const notes      = String(formData.get('notes')      ?? '').trim() || null
     const lines      = parseLines(formData.get('lines'))
+    const rawBranch  = String(formData.get('branchId') ?? '').trim()
 
     if (!supplierId)        return { error: 'กรุณาเลือกผู้จำหน่าย' }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' }
 
-    if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
+    // Branch: explicit picker wins (if supplied), else fall back to active branch.
+    // Non-admins can only create POs at a branch they're assigned to.
+    const branchId = rawBranch || me.activeBranchId
+    if (!branchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
+    const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+    if (!isAdmin && !me.branchIds.includes(branchId)) {
+      return { error: 'ไม่มีสิทธิ์สร้างใบสั่งซื้อที่สาขานี้' }
+    }
 
     const header = await purchaseOrderRepo.createHeader({
       supplier_id:  supplierId,
       user_id:      me.id,
-      branch_id:    me.activeBranchId,
+      branch_id:    branchId,
       total_amount: sumTotal(lines),
       notes,
     })

@@ -3,9 +3,10 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, saleRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, saleRepo, companyRepo } from '@/lib/repositories'
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
 import type { ProductWithStock } from '@/types/database'
+import { computeVat, getVatConfig } from '@/lib/vat'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
@@ -32,6 +33,7 @@ type CartItem = {
   name: string
   price: number
   quantity: number
+  vatExempt?: boolean
 }
 
 export async function createSale(_prev: SaleState, formData: FormData): Promise<SaleState> {
@@ -54,13 +56,28 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     return { error: 'กรุณาเลือกวิธีชำระเงิน' }
   }
 
-  const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  // Re-resolve VAT config + per-item exemption server-side. Never trust the
+  // client-supplied `vatExempt` flag — a tampered payload could otherwise
+  // mis-state the tax on the receipt.
+  const company = await companyRepo.getCurrent()
+  const vatConfig = getVatConfig(company)
+  const exemptMap = await productRepo.vatExemptMap(cart.map((i) => i.productId))
+  const breakdown = computeVat(
+    cart.map((i) => ({
+      price: i.price,
+      quantity: i.quantity,
+      vatExempt: Boolean(exemptMap[i.productId]),
+    })),
+    vatConfig,
+  )
 
   const header = await saleRepo.createHeader({
     user_id: me.id,
     customer_id: customerId,
     branch_id: me.activeBranchId,
-    total_amount: totalAmount,
+    total_amount:    breakdown.total,
+    subtotal_ex_vat: breakdown.subtotalExVat,
+    vat_amount:      breakdown.vatAmount,
     payment_method: paymentMethod as 'cash' | 'card' | 'transfer',
   })
   if ('error' in header) return { error: header.error }

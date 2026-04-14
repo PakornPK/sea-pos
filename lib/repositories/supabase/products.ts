@@ -47,11 +47,12 @@ export const supabaseProductRepo: ProductRepository = {
     const { from, to } = toSupabaseRange(p)
 
     // Inner join on product_stock filtered to the target branch + stock > 0.
-    // Supabase collapses the join result into an array; we flatten below.
+    // Category joined so POS can resolve effective VAT exemption (product
+    // flag OR category flag wins).
     let q = db
       .from('products')
       .select(
-        '*, product_stock!inner(quantity, branch_id)',
+        '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)',
         { count: 'exact' },
       )
       .eq('product_stock.branch_id', opts.branchId)
@@ -66,10 +67,15 @@ export const supabaseProductRepo: ProductRepository = {
 
     const { data, count } = await q
     const rows: ProductWithStock[] = (data ?? []).map((r) => {
-      const row = r as unknown as Product & { product_stock: Array<{ quantity: number }> | { quantity: number } | null }
-      const { product_stock: _ps, ...rest } = row
-      void _ps
-      return { ...rest, stock: flattenStock(row) }
+      const row = r as unknown as Product & {
+        product_stock: Array<{ quantity: number }> | { quantity: number } | null
+        category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
+      }
+      const cat = Array.isArray(row.category) ? row.category[0] : row.category
+      const effectiveVat = Boolean(row.vat_exempt) || Boolean(cat?.vat_exempt)
+      const { product_stock: _ps, category: _c, ...rest } = row
+      void _ps; void _c
+      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(row) }
     })
     return packPaginated(rows, count ?? 0, p)
   },
@@ -223,7 +229,7 @@ export const supabaseProductRepo: ProductRepository = {
     const db = await getDb()
     const { data, error } = await db
       .from('products').insert(input)
-      .select('id, sku, name, price, cost, min_stock, category_id, image_url, created_at')
+      .select('id, sku, name, price, cost, min_stock, category_id, image_url, vat_exempt, created_at')
       .single()
     if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }
     return {
@@ -250,5 +256,25 @@ export const supabaseProductRepo: ProductRepository = {
     const db = await getDb()
     const { data } = await db.rpc('next_sku_for_category', { p_category_id: categoryId })
     return (data as string | null) ?? null
+  },
+
+  async vatExemptMap(productIds: string[]): Promise<Record<string, boolean>> {
+    if (productIds.length === 0) return {}
+    const db = await getDb()
+    const { data } = await db
+      .from('products')
+      .select('id, vat_exempt, category:categories(vat_exempt)')
+      .in('id', productIds)
+
+    const out: Record<string, boolean> = {}
+    for (const r of (data ?? []) as Array<{
+      id: string
+      vat_exempt: boolean
+      category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
+    }>) {
+      const cat = Array.isArray(r.category) ? r.category[0] : r.category
+      out[r.id] = Boolean(r.vat_exempt) || Boolean(cat?.vat_exempt)
+    }
+    return out
   },
 }

@@ -460,6 +460,17 @@ WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...')
 - [supabase/010_signup.sql](supabase/010_signup.sql)
 - [supabase/011_platform_admin.sql](supabase/011_platform_admin.sql) — platform admin role + company.status + RLS bypass
 - [supabase/012_plans_config.sql](supabase/012_plans_config.sql) — `plans` config table, `companies.plan` FK, seed 4 tiers
+- [supabase/014_multi_branch.sql](supabase/014_multi_branch.sql) — `branches`, `product_stock` pivot, `user_branches`, per-branch receipt numbering, branch-aware RLS for stock/branches/transfers
+- [supabase/015_stock_transfers.sql](supabase/015_stock_transfers.sql) — send/receive/cancel transfer RPCs
+- [supabase/016_transfer_partial_receive.sql](supabase/016_transfer_partial_receive.sql) — partial-receive + discrepancy notes
+- [supabase/017_branch_rls.sql](supabase/017_branch_rls.sql) — tightens `sales`/`purchase_orders`/`stock_logs` + child tables to branch scope. Non-admins can only see/mutate rows at a branch they're assigned to; `is_company_admin()` and `is_platform_admin()` bypass the branch check for cross-branch reporting.
+- [supabase/018_vat.sql](supabase/018_vat.sql) — VAT: `categories.vat_exempt`, `products.vat_exempt`, `sales.subtotal_ex_vat` + `sales.vat_amount`. Company-level VAT mode/rate live in `companies.settings` JSONB (`vat_mode`: `none`/`included`/`excluded`, `vat_rate`: percent).
+
+### VAT
+
+Three-level model. Company sets default (`/settings/company` → "ภาษีมูลค่าเพิ่ม"): `none` disables VAT everywhere; `excluded` adds VAT on top of listed prices at checkout; `included` keeps listed prices gross and breaks VAT out for reporting. Per-category ยกเว้น VAT checkbox at [/inventory/categories](app/(dashboard)/inventory/categories/page.tsx) covers an entire category; per-product override on [AddProductForm](components/inventory/AddProductForm.tsx) wins when set.
+
+Effective exemption per line = `product.vat_exempt OR category.vat_exempt`. Pure helper lives in [lib/vat.ts](lib/vat.ts) (`getVatConfig`, `computeVat`). POS recomputes the breakdown from the authoritative server state in [createSale](lib/actions/pos.ts) via `productRepo.vatExemptMap(ids)` — a client-supplied flag is not trusted. Receipts display the breakdown only when `sale.vat_amount > 0`.
 
 ### Plans & limits
 

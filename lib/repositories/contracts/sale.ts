@@ -26,6 +26,8 @@ export type SaleDetail = {
   user_id: string
   branch_id: string
   total_amount: number
+  subtotal_ex_vat: number
+  vat_amount: number
   payment_method: string
   status: string
   created_at: string
@@ -71,6 +73,8 @@ export interface SaleRepository {
     customer_id: string | null
     branch_id: string
     total_amount: number
+    subtotal_ex_vat: number
+    vat_amount: number
     payment_method: Sale['payment_method']
   }): Promise<{ id: string } | { error: string }>
   insertItems(

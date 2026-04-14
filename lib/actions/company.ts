@@ -16,6 +16,8 @@ type CompanySettings = {
   tax_id?:         string   // displayed on receipt if set
   phone?:          string
   address?:        string
+  vat_mode?:       'none' | 'included' | 'excluded'
+  vat_rate?:       number
 }
 
 export async function updateCompanySettings(
@@ -29,12 +31,22 @@ export async function updateCompanySettings(
     const name = String(formData.get('name') ?? '').trim()
     if (!name) return { error: 'กรุณาระบุชื่อร้าน/บริษัท' }
 
+    const rawVatMode = String(formData.get('vat_mode') ?? 'none')
+    const vatMode: 'none' | 'included' | 'excluded' =
+      rawVatMode === 'included' || rawVatMode === 'excluded' ? rawVatMode : 'none'
+    const rawVatRate = Number(formData.get('vat_rate') ?? 7)
+    const vatRate = Number.isFinite(rawVatRate) && rawVatRate >= 0 && rawVatRate <= 100
+      ? Math.round(rawVatRate * 100) / 100
+      : 7
+
     const settings: CompanySettings = {
       receipt_header: String(formData.get('receipt_header') ?? '').trim() || undefined,
       receipt_footer: String(formData.get('receipt_footer') ?? '').trim() || undefined,
       tax_id:         String(formData.get('tax_id')         ?? '').trim() || undefined,
       phone:          String(formData.get('phone')          ?? '').trim() || undefined,
       address:        String(formData.get('address')        ?? '').trim() || undefined,
+      vat_mode:       vatMode,
+      vat_rate:       vatMode === 'none' ? undefined : vatRate,
     }
 
     const nameErr = await companyRepo.updateName(me.companyId, name)

@@ -9,7 +9,7 @@ export const supabaseCategoryRepo: CategoryRepository = {
     return (data ?? []) as Category[]
   },
 
-  async create(input: { name: string; sku_prefix: string | null }): Promise<string | null> {
+  async create(input: { name: string; sku_prefix: string | null; vat_exempt?: boolean }): Promise<string | null> {
     const db = await getDb()
     const { error } = await db.from('categories').insert(input)
     return error?.message ?? null
@@ -19,6 +19,13 @@ export const supabaseCategoryRepo: CategoryRepository = {
     const db = await getDb()
     const { error } = await db.from('categories')
       .update({ sku_prefix: skuPrefix }).eq('id', id)
+    return error?.message ?? null
+  },
+
+  async updateVatExempt(id: string, vatExempt: boolean): Promise<string | null> {
+    const db = await getDb()
+    const { error } = await db.from('categories')
+      .update({ vat_exempt: vatExempt }).eq('id', id)
     return error?.message ?? null
   },
 
