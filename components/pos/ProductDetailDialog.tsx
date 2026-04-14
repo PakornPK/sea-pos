@@ -9,14 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { formatBaht } from '@/lib/format'
-import type { Product, Category } from '@/types/database'
+import type { ProductWithStock, Category } from '@/types/database'
 
 type Props = {
-  product: Product | null
+  product: ProductWithStock | null
   category: Category | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddToCart: (product: Product) => void
+  onAddToCart: (product: ProductWithStock) => void
   inCartQty: number
 }
 

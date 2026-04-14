@@ -1,6 +1,6 @@
 'use client'
 
-import type { Category, ProductWithCategory } from '@/types/database'
+import type { Category, ProductWithStockAndCategory } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -16,16 +16,18 @@ import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatBaht } from '@/lib/format'
-import { Plus, Filter } from 'lucide-react'
+import { Plus, Filter, MapPin } from 'lucide-react'
 import { useState } from 'react'
 
 type ProductTableProps = {
-  products: ProductWithCategory[]
+  products: ProductWithStockAndCategory[]
   categories: Category[]
   canAdjust?: boolean
+  /** Admin "ทุกสาขา" mode — renders a per-branch stock breakdown instead of +/- buttons. */
+  isAllBranches?: boolean
 }
 
-export function ProductTable({ products, categories, canAdjust = false }: ProductTableProps) {
+export function ProductTable({ products, categories, canAdjust = false, isAllBranches = false }: ProductTableProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
   const filtered = selectedCategory
@@ -124,7 +126,32 @@ export function ProductTable({ products, categories, canAdjust = false }: Produc
                 <TableCell className="text-right tabular-nums">
                   {formatBaht(product.price)}
                 </TableCell>
-                <TableCell className="text-right">{product.stock}</TableCell>
+                <TableCell className="text-right">
+                  {isAllBranches && product.stock_by_branch ? (
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="tabular-nums font-semibold">
+                        รวม {product.stock}
+                      </span>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {product.stock_by_branch.map((b) => (
+                          <span
+                            key={b.branch_id}
+                            title={b.branch_name}
+                            className={cn(
+                              'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] tabular-nums',
+                              b.quantity === 0 && 'opacity-50',
+                            )}
+                          >
+                            <MapPin className="h-2.5 w-2.5" />
+                            {b.branch_code}: {b.quantity}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="tabular-nums">{product.stock}</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right">{product.min_stock}</TableCell>
                 <TableCell className="text-center">
                   {isLowStock ? (

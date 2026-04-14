@@ -130,10 +130,11 @@ async function InventoryValueReport() {
 }
 
 async function StockMovementReport({ range }: { range: DateRange }) {
-  await requirePageRole(ALLOWED)
+  const { me } = await requirePageRole(ALLOWED)
   const rows = await analyticsRepo.stockMovements({
     start: range.startIso,
     end: range.endIso,
+    branchId: me.activeBranchId,
     limit: 200,
   })
 

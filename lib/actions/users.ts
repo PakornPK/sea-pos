@@ -2,9 +2,15 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
-import { userRepo } from '@/lib/repositories'
+import { userRepo, branchRepo } from '@/lib/repositories'
 import { checkUserLimit, formatLimitError } from '@/lib/limits'
 import type { UserRole } from '@/types/database'
+
+function parseBranchIds(formData: FormData): string[] {
+  // Accepts repeated `branch_ids` fields or a single comma-joined value.
+  const ids = formData.getAll('branch_ids').map((v) => String(v)).filter(Boolean)
+  return Array.from(new Set(ids))
+}
 
 const VALID_ROLES: UserRole[] = ['admin', 'manager', 'cashier', 'purchasing']
 
@@ -43,6 +49,13 @@ export async function createUser(
     if (password.length < 8) return { error: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }
     if (!VALID_ROLES.includes(role)) return { error: 'บทบาทไม่ถูกต้อง' }
 
+    const branchIds = parseBranchIds(formData)
+    const defaultBranchId = String(formData.get('default_branch_id') ?? '') || null
+    if (branchIds.length === 0) return { error: 'กรุณาเลือกอย่างน้อย 1 สาขา' }
+    if (defaultBranchId && !branchIds.includes(defaultBranchId)) {
+      return { error: 'สาขาเริ่มต้นต้องเป็นสาขาที่เลือก' }
+    }
+
     // Plan limit: block inserts when the company has reached its user cap.
     const currentCount = await userRepo.countByCompany(me.companyId)
     const usage = await checkUserLimit(currentCount)
@@ -53,6 +66,13 @@ export async function createUser(
       companyId: me.companyId,
     })
     if ('error' in res) return { error: res.error }
+
+    const assignErr = await branchRepo.setUserBranches({
+      userId: res.id,
+      branchIds,
+      defaultBranchId: defaultBranchId ?? branchIds[0],
+    })
+    if (assignErr) return { error: `สร้างผู้ใช้สำเร็จ แต่มอบหมายสาขาไม่สำเร็จ: ${assignErr}` }
 
     revalidatePath('/users')
     return { success: true }
@@ -103,6 +123,31 @@ export async function forceSignOutUser(id: string): Promise<void> {
   if (err) throw new Error(err)
 
   revalidatePath('/users')
+}
+
+export async function updateUserBranches(formData: FormData): Promise<void> {
+  const { me } = await requireActionRole(['admin'])
+  const id = String(formData.get('id') ?? '')
+  if (!id) throw new Error('ไม่พบผู้ใช้')
+  await assertTargetInMyCompany(id, me.companyId)
+
+  const branchIds = parseBranchIds(formData)
+  const defaultBranchId = String(formData.get('default_branch_id') ?? '') || null
+
+  if (branchIds.length === 0) throw new Error('กรุณาเลือกอย่างน้อย 1 สาขา')
+  if (defaultBranchId && !branchIds.includes(defaultBranchId)) {
+    throw new Error('สาขาเริ่มต้นต้องเป็นสาขาที่เลือก')
+  }
+
+  const err = await branchRepo.setUserBranches({
+    userId: id,
+    branchIds,
+    defaultBranchId: defaultBranchId ?? branchIds[0],
+  })
+  if (err) throw new Error(err)
+
+  revalidatePath('/users')
+  revalidatePath('/', 'layout')
 }
 
 export async function deleteUser(id: string): Promise<void> {

@@ -6,8 +6,9 @@ import { createUser } from '@/lib/actions/users'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { BranchMultiSelect } from '@/components/users/BranchMultiSelect'
 import { ROLE_LABELS } from '@/lib/labels'
-import type { UserRole } from '@/types/database'
+import type { Branch, UserRole } from '@/types/database'
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] =
   (Object.keys(ROLE_LABELS) as UserRole[]).map((value) => ({
@@ -15,7 +16,9 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] =
     label: ROLE_LABELS[value],
   }))
 
-export function AddUserForm() {
+type Props = { branches: Branch[] }
+
+export function AddUserForm({ branches }: Props) {
   const [state, formAction, pending] = useActionState(createUser, undefined)
   const [open, setOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -92,6 +95,11 @@ export function AddUserForm() {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>สาขาที่มอบหมาย *</Label>
+        <BranchMultiSelect branches={branches} disabled={pending} />
       </div>
 
       {state?.error && <p className="text-sm text-destructive">{state.error}</p>}

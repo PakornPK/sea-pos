@@ -16,6 +16,7 @@ export type POListRow = {
   received_at: string | null
   created_at: string
   supplier: { name: string } | { name: string }[] | null
+  branch:   { code: string; name: string } | { code: string; name: string }[] | null
 }
 
 export type POItemWithProduct = {
@@ -31,10 +32,10 @@ export type POItemWithProduct = {
 }
 
 export interface PurchaseOrderRepository {
-  listRecent(limit?: number): Promise<POListRow[]>
+  listRecent(limit?: number, opts?: { branchId?: string | null }): Promise<POListRow[]>
   listRecentPaginated(
     p: PageParams,
-    opts?: { status?: PurchaseOrderStatus }
+    opts?: { status?: PurchaseOrderStatus; branchId?: string | null }
   ): Promise<Paginated<POListRow>>
   getById(id: string): Promise<PurchaseOrder | null>
   getStatus(id: string): Promise<PurchaseOrderStatus | null>
@@ -42,6 +43,7 @@ export interface PurchaseOrderRepository {
   createHeader(input: {
     supplier_id: string
     user_id: string
+    branch_id: string
     total_amount: number
     notes: string | null
   }): Promise<{ id: string } | { error: string }>

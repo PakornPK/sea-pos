@@ -1,7 +1,15 @@
-/** Human-readable receipt / PO numbers. */
-export function formatReceiptNo(no: number | null | undefined): string {
+/**
+ * Human-readable receipt number. If a branch code is passed, it prefixes
+ * the number so cashiers and customers can tell branches apart (B01-00042).
+ * Falls back to the legacy `REC-` prefix when no branch is available.
+ */
+export function formatReceiptNo(
+  no: number | null | undefined,
+  branchCode?: string | null,
+): string {
   if (!no) return '—'
-  return `REC-${String(no).padStart(5, '0')}`
+  const padded = String(no).padStart(5, '0')
+  return branchCode ? `${branchCode}-${padded}` : `REC-${padded}`
 }
 
 export function formatPoNo(no: number | null | undefined): string {

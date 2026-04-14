@@ -62,9 +62,12 @@ export async function createPurchaseOrder(
     if (!supplierId)        return { error: 'กรุณาเลือกผู้จำหน่าย' }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' }
 
+    if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
+
     const header = await purchaseOrderRepo.createHeader({
       supplier_id:  supplierId,
       user_id:      me.id,
+      branch_id:    me.activeBranchId,
       total_amount: sumTotal(lines),
       notes,
     })

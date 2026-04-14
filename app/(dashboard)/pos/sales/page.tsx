@@ -3,8 +3,10 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { saleRepo } from '@/lib/repositories'
+import { saleRepo, branchRepo } from '@/lib/repositories'
 import { parsePageParams } from '@/lib/pagination'
+import { resolveBranchFilter } from '@/lib/branch-filter'
+import { BranchScopeToggle } from '@/components/layout/BranchScopeToggle'
 import { Badge } from '@/components/ui/badge'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -24,7 +26,7 @@ export const metadata: Metadata = {
 
 const ALLOWED: UserRole[] = ['admin', 'manager']
 
-type Search = { page?: string; pageSize?: string }
+type Search = { page?: string; pageSize?: string; branch?: string }
 
 export default async function SalesListPage({
   searchParams,
@@ -51,16 +53,41 @@ export default async function SalesListPage({
 }
 
 async function SalesTable({ sp }: { sp: Search }) {
-  await requirePageRole(ALLOWED)
+  const { me } = await requirePageRole(ALLOWED)
   const p = parsePageParams(sp)
-  const result = await saleRepo.listRecentPaginated(p)
+  const branchFilter = resolveBranchFilter(me, sp.branch)
+  const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+  const [result, activeBranch] = await Promise.all([
+    saleRepo.listRecentPaginated(p, { branchId: branchFilter }),
+    me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
+  ])
 
   if (result.totalCount === 0) {
-    return <p className="text-center text-muted-foreground py-16">ยังไม่มีรายการขาย</p>
+    return (
+      <>
+        {isAdmin && (
+          <BranchScopeToggle
+            basePath="/pos/sales"
+            searchParams={sp}
+            isAllBranches={branchFilter === null}
+            activeBranchLabel={activeBranch?.name ?? null}
+          />
+        )}
+        <p className="text-center text-muted-foreground py-16">ยังไม่มีรายการขาย</p>
+      </>
+    )
   }
 
   return (
     <>
+      {isAdmin && (
+        <BranchScopeToggle
+          basePath="/pos/sales"
+          searchParams={sp}
+          isAllBranches={branchFilter === null}
+          activeBranchLabel={activeBranch?.name ?? null}
+        />
+      )}
       <Table>
         <TableHeader>
           <TableRow>
@@ -76,11 +103,12 @@ async function SalesTable({ sp }: { sp: Search }) {
         <TableBody>
           {result.rows.map((sale) => {
             const customer = Array.isArray(sale.customer) ? sale.customer[0] : sale.customer
+            const branch = Array.isArray(sale.branch) ? sale.branch[0] : sale.branch
             const status = sale.status as SaleStatus
             return (
               <TableRow key={sale.id} className={status === 'voided' ? 'opacity-50' : ''}>
                 <TableCell className="font-mono font-medium">
-                  {formatReceiptNo(sale.receipt_no)}
+                  {formatReceiptNo(sale.receipt_no, branch?.code)}
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {formatDateTime(sale.created_at)}

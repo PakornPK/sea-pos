@@ -26,7 +26,7 @@ export function RecentSalesList({ sales }: { sales: RecentSale[] }) {
                 href={`/pos/receipt/${s.id}`}
                 className="font-mono text-xs font-medium hover:underline shrink-0"
               >
-                {formatReceiptNo(s.receipt_no)}
+                {formatReceiptNo(s.receipt_no, s.branch_code)}
               </Link>
               <span className="text-xs text-muted-foreground shrink-0">
                 {formatDateTime(s.created_at)}

@@ -6,22 +6,25 @@ import type {
 import { getDb } from './db'
 
 export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
-  async listRecent(limit = 200): Promise<POListRow[]> {
+  async listRecent(limit = 200, opts: { branchId?: string | null } = {}): Promise<POListRow[]> {
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('purchase_orders')
       .select(`
         id, po_no, status, total_amount, ordered_at, received_at, created_at,
-        supplier:suppliers(name)
+        supplier:suppliers(name),
+        branch:branches(code, name)
       `)
       .order('po_no', { ascending: false })
       .limit(limit)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
     return (data ?? []) as POListRow[]
   },
 
   async listRecentPaginated(
     p: PageParams,
-    opts: { status?: PurchaseOrderStatus } = {}
+    opts: { status?: PurchaseOrderStatus; branchId?: string | null } = {}
   ): Promise<Paginated<POListRow>> {
     const db = await getDb()
     const { from, to } = toSupabaseRange(p)
@@ -29,11 +32,13 @@ export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
       .from('purchase_orders')
       .select(`
         id, po_no, status, total_amount, ordered_at, received_at, created_at,
-        supplier:suppliers(name)
+        supplier:suppliers(name),
+        branch:branches(code, name)
       `, { count: 'exact' })
       .order('po_no', { ascending: false })
       .range(from, to)
-    if (opts.status) q = q.eq('status', opts.status)
+    if (opts.status)   q = q.eq('status', opts.status)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
 
     const { data, count } = await q
     return packPaginated((data ?? []) as POListRow[], count ?? 0, p)
@@ -66,7 +71,14 @@ export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
     const db = await getDb()
     const { data, error } = await db
       .from('purchase_orders')
-      .insert({ ...input, status: 'draft' })
+      .insert({
+        supplier_id:  input.supplier_id,
+        user_id:      input.user_id,
+        branch_id:    input.branch_id,
+        total_amount: input.total_amount,
+        notes:        input.notes,
+        status:       'draft',
+      })
       .select('id')
       .single()
     if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }

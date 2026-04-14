@@ -13,13 +13,16 @@ import type { Repositories } from '@/lib/repositories/contracts'
 import { supabaseCompanyRepo }       from './companies'
 import { supabasePlanRepo }          from './plans'
 import { supabaseStorageRepo }       from './storage'
+import { supabaseBranchRepo }        from './branches'
 import { supabaseProductRepo }       from './products'
+import { supabaseProductStockRepo }  from './productStock'
 import { supabaseCategoryRepo }      from './categories'
 import { supabaseCustomerRepo }      from './customers'
 import { supabaseSupplierRepo }      from './suppliers'
 import { supabaseSaleRepo }          from './sales'
 import { supabasePurchaseOrderRepo } from './purchaseOrders'
 import { supabaseStockLogRepo }      from './stockLogs'
+import { supabaseStockTransferRepo } from './stockTransfers'
 import { supabaseUserRepo }          from './users'
 import { supabaseAuthRepo }          from './auth'
 import { supabaseAnalyticsRepo }     from './analytics'
@@ -28,13 +31,16 @@ export const supabaseRepos: Repositories = {
   company:       supabaseCompanyRepo,
   plan:          supabasePlanRepo,
   storage:       supabaseStorageRepo,
+  branch:        supabaseBranchRepo,
   product:       supabaseProductRepo,
+  productStock:  supabaseProductStockRepo,
   category:      supabaseCategoryRepo,
   customer:      supabaseCustomerRepo,
   supplier:      supabaseSupplierRepo,
   sale:          supabaseSaleRepo,
   purchaseOrder: supabasePurchaseOrderRepo,
   stockLog:      supabaseStockLogRepo,
+  stockTransfer: supabaseStockTransferRepo,
   user:          supabaseUserRepo,
   auth:          supabaseAuthRepo,
   analytics:     supabaseAnalyticsRepo,

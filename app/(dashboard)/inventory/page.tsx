@@ -3,9 +3,11 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, Tag } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { productRepo, categoryRepo } from '@/lib/repositories'
+import { productRepo, categoryRepo, branchRepo } from '@/lib/repositories'
 import { parsePageParams } from '@/lib/pagination'
+import { resolveBranchFilter } from '@/lib/branch-filter'
 import { ProductTable } from '@/components/inventory/ProductTable'
+import { BranchScopeToggle } from '@/components/layout/BranchScopeToggle'
 import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
 
 const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
 
-type Search = { page?: string; pageSize?: string; category?: string }
+type Search = { page?: string; pageSize?: string; category?: string; branch?: string }
 
 export default async function InventoryPage({
   searchParams,
@@ -54,7 +56,7 @@ export default async function InventoryPage({
       </div>
 
       <Suspense
-        key={`${sp.page ?? 1}-${sp.pageSize ?? 20}-${sp.category ?? ''}`}
+        key={`${sp.page ?? 1}-${sp.pageSize ?? 20}-${sp.category ?? ''}-${sp.branch ?? 'self'}`}
         fallback={<TableSkeleton columns={8} rows={10} withFilters />}
       >
         <InventoryTable sp={sp} canAdjust={canManage} />
@@ -64,19 +66,48 @@ export default async function InventoryPage({
 }
 
 async function InventoryTable({ sp, canAdjust }: { sp: Search; canAdjust: boolean }) {
-  await requirePageRole(ALLOWED)
+  const { me } = await requirePageRole(ALLOWED)
   const pageParams = parsePageParams(sp, { pageSize: 10 })
 
-  const [result, categories] = await Promise.all([
-    productRepo.listWithCategoryPaginated(pageParams, {
-      categoryId: sp.category || undefined,
-    }),
+  const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+  const branchFilter = resolveBranchFilter(me, sp.branch)
+  const isAllBranches = branchFilter === null
+
+  // Admin cross-branch view: aggregate stock across every branch.
+  // Single-branch view (default): stock = qty at that branch; adjust buttons work.
+  const resultPromise = isAllBranches
+    ? productRepo.listWithStockByBranchPaginated(pageParams, {
+        categoryId: sp.category || undefined,
+      })
+    : branchFilter
+      ? productRepo.listWithStockForBranchPaginated(pageParams, {
+          branchId:   branchFilter,
+          categoryId: sp.category || undefined,
+        })
+      : Promise.resolve({ rows: [], totalCount: 0, page: 1, pageSize: pageParams.pageSize, totalPages: 1 })
+
+  const [result, categories, activeBranch] = await Promise.all([
+    resultPromise,
     categoryRepo.list(),
+    me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
   ])
 
   return (
     <>
-      <ProductTable products={result.rows} categories={categories} canAdjust={canAdjust} />
+      {isAdmin && (
+        <BranchScopeToggle
+          basePath="/inventory"
+          searchParams={sp}
+          isAllBranches={isAllBranches}
+          activeBranchLabel={activeBranch?.name ?? null}
+        />
+      )}
+      <ProductTable
+        products={result.rows}
+        categories={categories}
+        canAdjust={canAdjust && !isAllBranches}
+        isAllBranches={isAllBranches}
+      />
       <Pagination
         basePath="/inventory"
         searchParams={sp}

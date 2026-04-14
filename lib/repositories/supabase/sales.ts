@@ -7,25 +7,32 @@ import type {
 import { getDb } from './db'
 
 export const supabaseSaleRepo: SaleRepository = {
-  async listRecent(limit = 200): Promise<SaleListRow[]> {
+  async listRecent(limit = 200, opts: { branchId?: string | null } = {}): Promise<SaleListRow[]> {
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('sales')
-      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)')
+      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name), branch:branches(code, name)')
       .order('receipt_no', { ascending: false })
       .limit(limit)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
     return (data ?? []) as SaleListRow[]
   },
 
-  async listRecentPaginated(p: PageParams): Promise<Paginated<SaleListRow>> {
+  async listRecentPaginated(
+    p: PageParams,
+    opts: { branchId?: string | null } = {},
+  ): Promise<Paginated<SaleListRow>> {
     const db = await getDb()
     const { from, to } = toSupabaseRange(p)
-    const { data, count } = await db
+    let q = db
       .from('sales')
-      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)',
+      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name), branch:branches(code, name)',
         { count: 'exact' })
       .order('receipt_no', { ascending: false })
       .range(from, to)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data, count } = await q
     return packPaginated((data ?? []) as SaleListRow[], count ?? 0, p)
   },
 
@@ -33,10 +40,21 @@ export const supabaseSaleRepo: SaleRepository = {
     const db = await getDb()
     const { data } = await db
       .from('sales')
-      .select('id, receipt_no, created_at, total_amount, payment_method, status')
+      .select('id, receipt_no, created_at, total_amount, payment_method, status, branch:branches(code)')
       .eq('customer_id', customerId)
       .order('receipt_no', { ascending: false })
-    return data ?? []
+    return (data ?? []).map((s) => {
+      const b = Array.isArray(s.branch) ? s.branch[0] : s.branch
+      return {
+        id: s.id,
+        receipt_no: s.receipt_no,
+        created_at: s.created_at,
+        total_amount: Number(s.total_amount),
+        payment_method: s.payment_method,
+        status: s.status,
+        branch_code: (b as { code?: string } | null)?.code ?? null,
+      }
+    })
   },
 
   async listCompletedForStats(): Promise<SaleSummaryForStats[]> {
@@ -69,7 +87,14 @@ export const supabaseSaleRepo: SaleRepository = {
     const db = await getDb()
     const { data, error } = await db
       .from('sales')
-      .insert({ ...input, status: 'completed' as Sale['status'] })
+      .insert({
+        user_id:        input.user_id,
+        customer_id:    input.customer_id,
+        branch_id:      input.branch_id,
+        total_amount:   input.total_amount,
+        payment_method: input.payment_method,
+        status:         'completed' as Sale['status'],
+      })
       .select('id')
       .single()
     if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }

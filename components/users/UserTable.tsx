@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Pencil, Trash2, KeyRound, LogOut, X, Check } from 'lucide-react'
+import { MapPin, Pencil, Trash2, KeyRound, LogOut, X, Check, Star } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -9,9 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { deleteUser, forceSignOutUser, resetUserPassword, updateUser } from '@/lib/actions/users'
+import {
+  deleteUser, forceSignOutUser, resetUserPassword, updateUser, updateUserBranches,
+} from '@/lib/actions/users'
+import { BranchMultiSelect } from '@/components/users/BranchMultiSelect'
 import { ROLE_LABELS, ROLE_BADGE_VARIANT } from '@/lib/labels'
-import type { UserRole } from '@/types/database'
+import type { Branch, UserRole } from '@/types/database'
 
 export type UserRow = {
   id: string
@@ -19,19 +22,35 @@ export type UserRow = {
   full_name: string | null
   role: UserRole
   created_at: string
+  branches: Branch[]        // assigned branches, default first
+  default_branch_id: string | null
 }
 
 
 type UserTableProps = {
   users: UserRow[]
   currentUserId: string
+  allBranches: Branch[]     // every branch in the company (for the editor)
 }
 
-export function UserTable({ users, currentUserId }: UserTableProps) {
+export function UserTable({ users, currentUserId, allBranches }: UserTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
+  const [branchEditingId, setBranchEditingId] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+
+  function handleBranchSave(formData: FormData) {
+    setError(null)
+    startTransition(async () => {
+      try {
+        await updateUserBranches(formData)
+        setBranchEditingId(null)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'บันทึกสาขาไม่สำเร็จ')
+      }
+    })
+  }
 
   function handleDelete(id: string, email: string) {
     if (!confirm(`ยืนยันการลบผู้ใช้ "${email}"?`)) return
@@ -93,6 +112,7 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
             <TableHead>อีเมล</TableHead>
             <TableHead>ชื่อ-สกุล</TableHead>
             <TableHead>บทบาท</TableHead>
+            <TableHead>สาขา</TableHead>
             <TableHead className="text-right">จัดการ</TableHead>
           </TableRow>
         </TableHeader>
@@ -105,7 +125,7 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
             if (isEditing) {
               return (
                 <TableRow key={u.id}>
-                  <TableCell colSpan={4} className="p-0">
+                  <TableCell colSpan={5} className="p-0">
                     <form action={handleUpdate} className="flex flex-wrap items-end gap-3 bg-muted/30 p-3">
                       <input type="hidden" name="id" value={u.id} />
                       <div className="flex-1 min-w-[180px]">
@@ -155,10 +175,43 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
               )
             }
 
+            const isBranchEditing = branchEditingId === u.id
+            if (isBranchEditing) {
+              return (
+                <TableRow key={u.id}>
+                  <TableCell colSpan={5} className="p-0">
+                    <form action={handleBranchSave} className="flex flex-col gap-3 bg-muted/30 p-3">
+                      <input type="hidden" name="id" value={u.id} />
+                      <div>
+                        <Label className="text-xs">สาขาของ {u.email}</Label>
+                        <div className="mt-1.5">
+                          <BranchMultiSelect
+                            branches={allBranches}
+                            initialBranchIds={u.branches.map((b) => b.id)}
+                            initialDefaultId={u.default_branch_id}
+                            disabled={pending}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button type="submit" size="sm" disabled={pending}>บันทึก</Button>
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          onClick={() => setBranchEditingId(null)} disabled={pending}
+                        >
+                          ยกเลิก
+                        </Button>
+                      </div>
+                    </form>
+                  </TableCell>
+                </TableRow>
+              )
+            }
+
             if (isResetting) {
               return (
                 <TableRow key={u.id}>
-                  <TableCell colSpan={4} className="p-0">
+                  <TableCell colSpan={5} className="p-0">
                     <form action={handleReset} className="flex flex-wrap items-end gap-3 bg-muted/30 p-3">
                       <input type="hidden" name="id" value={u.id} />
                       <div className="flex-1 min-w-[200px]">
@@ -202,6 +255,25 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
                 <TableCell>
                   <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{ROLE_LABELS[u.role]}</Badge>
                 </TableCell>
+                <TableCell>
+                  {u.branches.length === 0 ? (
+                    <span className="text-xs text-destructive">— ไม่มี —</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {u.branches.map((b) => (
+                        <span
+                          key={b.id}
+                          className="inline-flex items-center gap-0.5 rounded-full border bg-muted/40 px-1.5 py-0.5 text-[10px]"
+                          title={b.name}
+                        >
+                          {b.id === u.default_branch_id && <Star className="h-2.5 w-2.5 fill-current text-primary" />}
+                          <MapPin className="h-2.5 w-2.5" />
+                          {b.code}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex gap-1.5">
                     <Button
@@ -212,6 +284,15 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
                       title="แก้ไข"
                     >
                       <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBranchEditingId(u.id)}
+                      disabled={pending}
+                      title="แก้ไขสาขา"
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="sm"

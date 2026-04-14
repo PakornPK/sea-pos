@@ -16,6 +16,7 @@ export type SaleListRow = {
   payment_method: string
   status: string
   customer: { name: string } | { name: string }[] | null
+  branch:   { code: string; name: string } | { code: string; name: string }[] | null
 }
 
 export type SaleDetail = {
@@ -23,6 +24,7 @@ export type SaleDetail = {
   receipt_no: number
   customer_id: string | null
   user_id: string
+  branch_id: string
   total_amount: number
   payment_method: string
   status: string
@@ -47,8 +49,11 @@ export type SaleItemWithProduct = {
 }
 
 export interface SaleRepository {
-  listRecent(limit?: number): Promise<SaleListRow[]>
-  listRecentPaginated(p: PageParams): Promise<Paginated<SaleListRow>>
+  listRecent(limit?: number, opts?: { branchId?: string | null }): Promise<SaleListRow[]>
+  listRecentPaginated(
+    p: PageParams,
+    opts?: { branchId?: string | null }
+  ): Promise<Paginated<SaleListRow>>
   listForCustomer(customerId: string): Promise<Array<{
     id: string
     receipt_no: number
@@ -56,6 +61,7 @@ export interface SaleRepository {
     total_amount: number
     payment_method: string
     status: string
+    branch_code: string | null
   }>>
   listCompletedForStats(): Promise<SaleSummaryForStats[]>
   getById(id: string): Promise<SaleDetail | null>
@@ -63,6 +69,7 @@ export interface SaleRepository {
   createHeader(input: {
     user_id: string
     customer_id: string | null
+    branch_id: string
     total_amount: number
     payment_method: Sale['payment_method']
   }): Promise<{ id: string } | { error: string }>

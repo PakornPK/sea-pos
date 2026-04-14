@@ -1,6 +1,6 @@
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
-import type { UserRole } from '@/types/database'
+import type { Branch, UserRole } from '@/types/database'
 
 type DashboardShellProps = {
   children: React.ReactNode
@@ -8,16 +8,24 @@ type DashboardShellProps = {
   fullName: string
   role: UserRole
   isPlatformAdmin: boolean
+  branches: Branch[]
+  activeBranch: Branch | null
 }
 
 export function DashboardShell({
-  children, email, fullName, role, isPlatformAdmin,
+  children, email, fullName, role, isPlatformAdmin, branches, activeBranch,
 }: DashboardShellProps) {
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar role={role} isPlatformAdmin={isPlatformAdmin} />
+      <Sidebar role={role} isPlatformAdmin={isPlatformAdmin} activeBranch={activeBranch} />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header email={email} fullName={fullName} role={role} />
+        <Header
+          email={email}
+          fullName={fullName}
+          role={role}
+          branches={branches}
+          activeBranch={activeBranch}
+        />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>

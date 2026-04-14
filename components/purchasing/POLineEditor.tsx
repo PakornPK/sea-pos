@@ -117,7 +117,6 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
         name:        res.name,
         price:       res.price,
         cost:        res.cost,
-        stock:       res.stock,
         min_stock:   res.min_stock,
         category_id: res.category_id,
         image_url:   imageUrl,

@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
 import {
-  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo,
+  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo, branchRepo,
 } from '@/lib/repositories'
 import { POForm } from '@/components/purchasing/POForm'
 import { POActions } from '@/components/purchasing/POActions'
@@ -38,6 +38,7 @@ export default async function PODetailPage({
 
   if (!po) notFound()
   const supplier = suppliers.find((s) => s.id === po.supplier_id)
+  const branch = po.branch_id ? await branchRepo.getById(po.branch_id) : null
 
   const isDraft    = po.status === 'draft'
   const isOrdered  = po.status === 'ordered'
@@ -79,9 +80,16 @@ export default async function PODetailPage({
               <Badge variant={PO_STATUS_VARIANT[po.status as PurchaseOrderStatus]}>
                 {PO_STATUS_LABEL[po.status as PurchaseOrderStatus]}
               </Badge>
+              {branch && (
+                <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-xs">
+                  📍 {branch.name}
+                  <span className="text-muted-foreground">({branch.code})</span>
+                </span>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               สร้างเมื่อ {formatDateTime(po.created_at)}
+              {branch && <> · สต๊อกจะเข้าที่สาขา <b>{branch.name}</b></>}
             </p>
           </div>
         </div>

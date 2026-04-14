@@ -93,6 +93,11 @@ export async function proxy(request: NextRequest) {
   if (user) {
     requestHeaders.set('x-sea-user-id', user.id)
     if (user.email) requestHeaders.set('x-sea-user-email', user.email)
+
+    // Active branch cookie — set by the header picker. lib/auth.ts validates
+    // this value against user_branches so a stale cookie can't leak access.
+    const branchCookie = request.cookies.get('sea-branch')?.value
+    if (branchCookie) requestHeaders.set('x-sea-branch', branchCookie)
   }
 
   // 6. Build the final response with the enriched request headers, and apply

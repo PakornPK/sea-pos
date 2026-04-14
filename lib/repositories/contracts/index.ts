@@ -15,7 +15,8 @@
 export type { CompanyRepository, CompanyListRow } from './company'
 export type { PlanRepository, PlanInput } from './plan'
 export type { StorageRepository, StorageBucket, UploadResult } from './storage'
-export type { ProductRepository }        from './product'
+export type { BranchRepository }         from './branch'
+export type { ProductRepository, ProductStockRepository } from './product'
 export type { CategoryRepository }       from './category'
 export type { CustomerRepository, CustomerInput } from './customer'
 export type { SupplierRepository, SupplierInput } from './supplier'
@@ -26,6 +27,10 @@ export type {
   PurchaseOrderRepository, POListRow, POLineInput, POItemWithProduct,
 } from './purchaseOrder'
 export type { StockLogRepository }       from './stockLog'
+export type {
+  StockTransferRepository, StockTransferLineInput, StockTransferListRow,
+  StockTransferDetail, StockTransferItemWithProduct, ReceiveOverride,
+} from './stockTransfer'
 export type { UserRepository, UserListRow } from './user'
 export type { AuthRepository }           from './auth'
 export type {
@@ -45,13 +50,15 @@ export type {
 import type { CompanyRepository }         from './company'
 import type { PlanRepository }            from './plan'
 import type { StorageRepository }         from './storage'
-import type { ProductRepository }         from './product'
+import type { BranchRepository }          from './branch'
+import type { ProductRepository, ProductStockRepository } from './product'
 import type { CategoryRepository }        from './category'
 import type { CustomerRepository }        from './customer'
 import type { SupplierRepository }        from './supplier'
 import type { SaleRepository }            from './sale'
 import type { PurchaseOrderRepository }   from './purchaseOrder'
 import type { StockLogRepository }        from './stockLog'
+import type { StockTransferRepository }   from './stockTransfer'
 import type { UserRepository }            from './user'
 import type { AuthRepository }            from './auth'
 import type { AnalyticsRepository }       from './analytics'
@@ -61,13 +68,16 @@ export interface Repositories {
   company:       CompanyRepository
   plan:          PlanRepository
   storage:       StorageRepository
+  branch:        BranchRepository
   product:       ProductRepository
+  productStock:  ProductStockRepository
   category:      CategoryRepository
   customer:      CustomerRepository
   supplier:      SupplierRepository
   sale:          SaleRepository
   purchaseOrder: PurchaseOrderRepository
   stockLog:      StockLogRepository
+  stockTransfer: StockTransferRepository
   user:          UserRepository
   auth:          AuthRepository
   analytics:     AnalyticsRepository

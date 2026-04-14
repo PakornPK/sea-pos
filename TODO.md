@@ -61,16 +61,277 @@ they belong to; ticks move up as they ship.
 - [ ] **Email verification** — turn on Supabase's `Confirm email` + build confirmation page
 - [ ] **Password reset flow** — `/forgot-password` + email link
 
-## Release 2 — Multi-branch (not started)
+## Release 2 — Multi-branch (detailed plan)
 
-- [ ] `branches` table (company_id, name, address, receipt_prefix, tax_id)
-- [ ] Move `products.stock` → `product_stock(product_id, branch_id, quantity)` pivot table
-- [ ] Add `branch_id` to `sales`, `purchase_orders`, `stock_logs`
-- [ ] `user_branches(user_id, branch_id, is_default)` — users scoped to branches
-- [ ] Branch picker in POS header (defaults to user's home branch)
-- [ ] Branch filter in reports + dashboard KPIs
-- [ ] Receipt-number sequence per branch (or per company — decide)
-- [ ] Inventory transfer between branches (new flow)
+Current tenancy is company-only. Release 2 adds a second scope level
+(branch) under each company. Every stock-bearing operation — sales,
+purchase orders, stock adjustments, stock logs — is now scoped to a
+single branch. Users are mapped many-to-many to branches so a single
+person can work at multiple locations.
+
+### Design decisions (pinned)
+
+| Decision                         | Chosen                                         | Why                                                                 |
+| -------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| Where stock lives                | Pivot table `product_stock(product_id, branch_id, quantity)` | One row per (product, branch) — queryable, transferable, reportable |
+| Product master scope             | Company (not branch)                           | SKU + pricing are company-wide; stock is per-branch                 |
+| Receipt number scheme            | Per-branch with branch prefix: `B01-00042`     | Cashiers recognize their branch; no cross-branch collisions         |
+| PO scope                         | Per-branch (stock lands in one branch)         | Avoids ambiguous receipts; matches how owners think about ordering  |
+| User ↔ branch mapping            | `user_branches(user_id, branch_id, is_default)` with many-to-many | Supports floating staff + a "home branch" fallback                  |
+| Admin scope                      | Company admin sees all branches; branch-scoped roles (manager, cashier, purchasing) see only their branches | Least privilege + owner visibility                                  |
+| Transfer between branches        | New `stock_transfers` + `stock_transfer_items` with `status` lifecycle | Two-step (create → receive) so stock in transit is visible          |
+| Cross-branch reports             | Company admin + platform admin can aggregate   | Needed for ownership; branch users only see their branch            |
+| Plan limit                       | Reuse existing `plans.max_branches`            | Already in schema; enforce on `createBranch`                        |
+
+### Schema changes (migration 014)
+
+```sql
+-- 1. Branches
+CREATE TABLE branches (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id      UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE DEFAULT get_current_company_id(),
+  name            TEXT NOT NULL,                          -- 'สาขาสุขุมวิท'
+  code            TEXT NOT NULL,                          -- 'B01' — used in receipt_no prefix
+  address         TEXT,
+  phone           TEXT,
+  tax_id          TEXT,
+  is_default      BOOLEAN NOT NULL DEFAULT false,         -- new users inherit this
+  created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  UNIQUE (company_id, code)
+);
+-- Exactly one default per company
+CREATE UNIQUE INDEX branches_one_default_per_company
+  ON branches (company_id) WHERE is_default;
+
+-- 2. Per-branch stock
+CREATE TABLE product_stock (
+  product_id      UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  branch_id       UUID NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  company_id      UUID NOT NULL,                          -- denormalized for RLS speed
+  quantity        INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+  updated_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (product_id, branch_id)
+);
+CREATE INDEX ON product_stock (branch_id);
+CREATE INDEX ON product_stock (company_id);
+
+-- 3. User ↔ branch mapping
+CREATE TABLE user_branches (
+  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  branch_id       UUID NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  company_id      UUID NOT NULL,                          -- denormalized for RLS
+  is_default      BOOLEAN NOT NULL DEFAULT false,
+  created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (user_id, branch_id)
+);
+CREATE UNIQUE INDEX user_branches_one_default_per_user
+  ON user_branches (user_id) WHERE is_default;
+
+-- 4. branch_id on every operational table
+ALTER TABLE sales            ADD COLUMN branch_id UUID NOT NULL REFERENCES branches(id);
+ALTER TABLE purchase_orders  ADD COLUMN branch_id UUID NOT NULL REFERENCES branches(id);
+ALTER TABLE stock_logs       ADD COLUMN branch_id UUID NOT NULL REFERENCES branches(id);
+
+-- 5. Per-branch receipt numbering
+ALTER TABLE sales
+  DROP CONSTRAINT sales_receipt_no_key,                   -- was company-wide unique
+  ADD CONSTRAINT  sales_receipt_no_branch_unique UNIQUE (branch_id, receipt_no);
+-- Keep the serial for numeric allocation; the UI formats as {branch.code}-{padded}
+
+-- 6. Inventory transfers (between branches of the same company)
+CREATE TABLE stock_transfers (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id      UUID NOT NULL DEFAULT get_current_company_id(),
+  from_branch_id  UUID NOT NULL REFERENCES branches(id),
+  to_branch_id    UUID NOT NULL REFERENCES branches(id),
+  user_id         UUID NOT NULL REFERENCES auth.users(id),
+  status          TEXT NOT NULL DEFAULT 'draft'
+                  CHECK (status IN ('draft', 'in_transit', 'received', 'cancelled')),
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  received_at     TIMESTAMPTZ,
+  CHECK (from_branch_id <> to_branch_id)
+);
+CREATE TABLE stock_transfer_items (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transfer_id       UUID NOT NULL REFERENCES stock_transfers(id) ON DELETE CASCADE,
+  product_id        UUID NOT NULL REFERENCES products(id),
+  quantity_sent     INTEGER NOT NULL CHECK (quantity_sent > 0),
+  quantity_received INTEGER NOT NULL DEFAULT 0
+);
+```
+
+### Data migration (one-time, inside migration 014)
+
+```sql
+-- A. Create a default "สาขาหลัก" branch for every existing company
+INSERT INTO branches (company_id, name, code, is_default)
+SELECT id, 'สาขาหลัก', 'B01', true FROM companies
+WHERE NOT EXISTS (SELECT 1 FROM branches WHERE branches.company_id = companies.id);
+
+-- B. Move products.stock → product_stock at the default branch
+INSERT INTO product_stock (product_id, branch_id, company_id, quantity)
+SELECT p.id, b.id, p.company_id, p.stock
+FROM   products p
+JOIN   branches b ON b.company_id = p.company_id AND b.is_default;
+
+ALTER TABLE products DROP COLUMN stock;
+
+-- C. Backfill branch_id on historical sales/POs/stock_logs
+UPDATE sales           SET branch_id = (SELECT id FROM branches WHERE company_id = sales.company_id           AND is_default);
+UPDATE purchase_orders SET branch_id = (SELECT id FROM branches WHERE company_id = purchase_orders.company_id AND is_default);
+UPDATE stock_logs      SET branch_id = (SELECT id FROM branches WHERE company_id = stock_logs.company_id      AND is_default);
+
+-- D. Assign every existing user to their company's default branch, as default
+INSERT INTO user_branches (user_id, branch_id, company_id, is_default)
+SELECT p.id, b.id, p.company_id, true
+FROM   profiles p
+JOIN   branches b ON b.company_id = p.company_id AND b.is_default
+WHERE  p.company_id IS NOT NULL;
+```
+
+### RLS updates
+
+Two new helpers:
+```sql
+CREATE FUNCTION get_current_branch_ids() RETURNS SETOF UUID
+  LANGUAGE sql SECURITY DEFINER STABLE AS $$
+    SELECT branch_id FROM user_branches WHERE user_id = auth.uid();
+  $$;
+
+CREATE FUNCTION is_company_admin() RETURNS BOOLEAN
+  LANGUAGE sql SECURITY DEFINER STABLE AS $$
+    SELECT role = 'admin' FROM profiles WHERE id = auth.uid();
+  $$;
+```
+
+Every operational table's SELECT/UPDATE/DELETE policy becomes:
+```
+USING ( company_id = get_current_company_id()
+        AND (is_company_admin()
+             OR is_platform_admin()
+             OR branch_id IN (SELECT get_current_branch_ids())) )
+```
+
+INSERT policies additionally `WITH CHECK` that `branch_id` is in the
+user's branch set (unless company admin).
+
+### Repository contract deltas
+
+New `BranchRepository`:
+```ts
+interface BranchRepository {
+  list(): Promise<Branch[]>                                // RLS: only user's branches
+  listForCompany(companyId): Promise<Branch[]>             // admin
+  getById(id): Promise<Branch | null>
+  getDefaultForCompany(companyId): Promise<Branch | null>
+  create(input: { name; code; address?; phone?; tax_id? }): Promise<{ id } | { error }>
+  update(id, input): Promise<string | null>
+  setDefault(id): Promise<string | null>                   // flips is_default; one per company
+  delete(id): Promise<string | null>                       // rejects if sales/POs/stock exist
+  assignUser(userId, branchId, isDefault?): Promise<string | null>
+  unassignUser(userId, branchId): Promise<string | null>
+  listBranchesForUser(userId): Promise<Branch[]>
+}
+```
+
+`ProductRepository` — `updateStock` / `getStock` / `decrementStock` all
+gain a `branchId` parameter and operate on `product_stock` instead of
+`products`. New methods:
+```ts
+listStockByBranch(branchId): Promise<Array<Product & { stock: number }>>
+adjustBranchStock({ productId, branchId, delta, reason, userId }): Promise<string | null>
+transferStock({ fromBranchId, toBranchId, items, userId }): Promise<{ id } | { error }>
+receiveTransfer(transferId, receipts): Promise<string | null>
+```
+
+`SaleRepository.createHeader` gains `branch_id`; `receipt_no` allocation
+moves per-branch (use `setval` per company+branch, or compute `MAX(receipt_no) + 1` in a locked TX).
+
+### Server actions (new / changed)
+
+| Action                           | Change                                                            |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `createBranch`                   | NEW — admin; `checkBranchLimit` against plan                      |
+| `updateBranch`, `deleteBranch`   | NEW — admin                                                       |
+| `setDefaultBranch`               | NEW — admin (per-company default)                                  |
+| `assignUserToBranches(userId, [branchIds], defaultBranchId)` | NEW — admin       |
+| `adjustStock`                    | Takes `branchId`; defaults to user's home branch                  |
+| `createSale`                     | Includes `branch_id` (from UI picker); `decrementStock` branch-aware |
+| `createPurchaseOrder` / `receivePurchaseOrder` | Per-branch; stock lands in PO's branch               |
+| `createStockTransfer`            | NEW — admin + manager; must have access to `fromBranch`           |
+| `receiveStockTransfer`           | NEW — admin + manager of target branch; moves qty across pivot    |
+
+### UI changes
+
+- [ ] **Branch picker** in header next to user menu — shows `user_branches`; selection persisted in a cookie + propagated via route middleware
+- [ ] **POS page** — filters products to the current branch's stock; `addToCart` uses that branch's `product_stock.quantity`
+- [ ] **Inventory page** — shows `stock` column for the active branch; admin sees a "Show all branches" toggle that expands rows into per-branch rows
+- [ ] **Purchase orders** — branch dropdown on create; existing POs display their branch on the list/detail
+- [ ] **Reports & dashboard** — branch filter (admin only). Default: current branch
+- [ ] **Transfers module** — new `/inventory/transfers` with list + create + receive flows
+- [ ] **Settings → branches** — admin CRUD for branches, set default, assign users
+- [ ] **Users page** — each user row shows their branches; edit dialog has a multi-select
+
+### Phased delivery
+
+**Phase A — schema + migration (1 week)**
+- [ ] Migration 014 with all DDL + backfill
+- [ ] Repository contract changes (Branch + Product + Sale + PO)
+- [ ] Supabase adapter implementations
+- [ ] Per-branch `decrement_stock` RPC update (locks `product_stock` row, not `products`)
+
+**Phase B — auth context + branch selector (3 days)**
+- [ ] `AuthedUser` extended: `branches: Branch[]`, `activeBranchId: string`
+- [ ] `proxy.ts` reads an `x-sea-branch-id` cookie, validates membership, injects as header
+- [ ] Branch picker UI component
+- [ ] Fallback: if cookie unset, pick `is_default` from `user_branches`
+
+**Phase C — POS + inventory (1 week)**
+- [ ] POS reads branch stock, decrements per branch
+- [ ] Inventory page shows branch stock, admin expand-to-all
+- [ ] `adjustStock` is branch-scoped
+- [ ] Receipt number formatted `{branch.code}-{padded}`
+
+**Phase D — purchasing + transfers (1 week)**
+- [ ] POs gain a branch field; receive increments `product_stock` of PO's branch
+- [ ] Transfers module (create, in-transit list, receive)
+- [ ] `stock_logs` records transfer events with both branches in `reason`
+
+**Phase E — reports + admin UI (3 days)**
+- [ ] Branch filter in reports; admin can cross-branch
+- [ ] Branch CRUD + user-branch assignment UI
+- [ ] Update `spec.md` + API spec for branch-aware endpoints
+
+**Phase F — hardening (2 days)**
+- [ ] Cross-branch leak tests (user of branch B01 cannot read B02 data)
+- [ ] `product_stock.quantity >= 0` CHECK stays non-bypassable
+- [ ] Concurrency test on transfers (same item transferred to two places at once)
+
+### Risks
+
+| Risk                                                | Mitigation                                                                       |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Analytics queries silently aggregate across all branches after schema change | Every analytics method takes an explicit `branchIds[]` param; default = caller's branch |
+| Receipt-number discontinuity after cut-over          | `SELECT setval` per branch to continue from current `MAX(receipt_no)`             |
+| Orphan `product_stock` rows when a product is deleted | `ON DELETE CASCADE` on the FK — already specified                                |
+| User loses branch assignment while logged in         | Proxy treats empty branch set as "redirect to /branches/select" instead of 500    |
+| Transfer deadlock (A↔B concurrent transfers of same product) | Always lock `product_stock` rows in `(product_id, branch_id)` ascending order     |
+| Existing integrations that assume single `products.stock` column | None today (spec audit done); future REST API must use `/branches/{id}/stock`     |
+
+### Plan-limit enforcement
+
+`checkBranchLimit(currentCount)` — already implemented in
+`lib/limits.ts`; wire into `createBranch` with `formatLimitError('branch', usage)`.
+
+### Non-goals for Release 2
+
+- Multi-company membership for a single user — a user still belongs to
+  exactly one company; they can be in many branches within it.
+  (Cross-company remains a Release-1-deferred item: `company_members` join table.)
+- Per-branch pricing — prices stay company-wide.
+- Warehouse / shelf / location hierarchy below branch — defer to R3/R4.
+- Real-time branch-to-branch stock sync events — batch receive is fine for MVP2.
 
 ## Release 3 — Promotions, coupons, loyalty (not started)
 

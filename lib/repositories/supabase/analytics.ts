@@ -141,26 +141,54 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
   },
 
   async lowStock(limit = 10): Promise<LowStockItem[]> {
+    // Aggregates pivot rows across every branch the caller can see (RLS filters).
+    // Sums quantity per product, compares to product.min_stock.
     const db = await getDb()
     const { data } = await db
-      .from('products')
-      .select('id, name, sku, stock, min_stock')
-      .order('stock', { ascending: true })
-      .limit(200)
-    return (data ?? [])
+      .from('product_stock')
+      .select('quantity, product:products(id, name, sku, min_stock)')
+      .limit(2000)
+
+    const byProduct = new Map<string, LowStockItem>()
+    for (const r of (data ?? []) as Array<{
+      quantity: number
+      product: { id?: string; name?: string; sku?: string | null; min_stock?: number }
+             | Array<{ id?: string; name?: string; sku?: string | null; min_stock?: number }>
+             | null
+    }>) {
+      const p = Array.isArray(r.product) ? r.product[0] : r.product
+      if (!p?.id) continue
+      const prev = byProduct.get(p.id)
+      if (prev) {
+        prev.stock += Number(r.quantity)
+      } else {
+        byProduct.set(p.id, {
+          id:        p.id,
+          name:      p.name ?? '—',
+          sku:       p.sku ?? null,
+          stock:     Number(r.quantity),
+          min_stock: Number(p.min_stock ?? 0),
+        })
+      }
+    }
+    return Array.from(byProduct.values())
       .filter((p) => p.stock <= p.min_stock)
-      .slice(0, limit) as LowStockItem[]
+      .sort((a, b) => a.stock - b.stock)
+      .slice(0, limit)
   },
 
-  async recentSales(limit = 10): Promise<RecentSale[]> {
+  async recentSales(limit = 10, opts: { branchId?: string | null } = {}): Promise<RecentSale[]> {
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('sales')
-      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)')
+      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name), branch:branches(code)')
       .order('created_at', { ascending: false })
       .limit(limit)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
     return (data ?? []).map((s) => {
       const c = Array.isArray(s.customer) ? s.customer[0] : s.customer
+      const b = Array.isArray(s.branch)   ? s.branch[0]   : s.branch
       return {
         id: s.id,
         receipt_no: s.receipt_no,
@@ -169,35 +197,56 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
         payment_method: s.payment_method,
         status: s.status,
         customer_name: (c as { name?: string } | null)?.name ?? null,
+        branch_code:   (b as { code?: string } | null)?.code ?? null,
       }
     })
   },
 
   async inventoryValueByCategory(): Promise<InventoryValueByCategory[]> {
+    // Walk product_stock and join back to product + category so we include
+    // stock at every branch the caller can see (RLS filters).
     const db = await getDb()
     const { data } = await db
-      .from('products')
-      .select('category_id, stock, cost, category:categories(id, name)')
+      .from('product_stock')
+      .select('quantity, product:products(id, cost, category_id, category:categories(id, name))')
 
     const buckets = new Map<string, InventoryValueByCategory>()
-    for (const r of (data ?? []) as Array<{
-      category_id: string | null
-      stock: number
-      cost: number
-      category: { id?: string; name?: string } | Array<{ id?: string; name?: string }> | null
-    }>) {
-      const cat = Array.isArray(r.category) ? r.category[0] : r.category
-      const key = r.category_id ?? '__uncat__'
-      const existing = buckets.get(key) ?? {
-        category_id: r.category_id,
-        category_name: cat?.name ?? 'ไม่ระบุหมวดหมู่',
-        item_count: 0,
-        stock_value: 0,
-      }
-      existing.item_count += 1
-      existing.stock_value += Number(r.stock) * Number(r.cost)
-      buckets.set(key, existing)
+    const seen = new Map<string, Set<string>>()   // categoryKey → productIds for item_count
+
+    type ProdShape = {
+      id?: string
+      cost?: number
+      category_id?: string | null
+      category?: { id?: string; name?: string } | Array<{ id?: string; name?: string }> | null
     }
+    for (const r of (data ?? []) as Array<{
+      quantity: number
+      product: ProdShape | ProdShape[] | null
+    }>) {
+      const p: ProdShape | null = Array.isArray(r.product) ? (r.product[0] ?? null) : r.product
+      if (!p || !p.id) continue
+      const cat = Array.isArray(p.category) ? p.category[0] : p.category
+      const key = p.category_id ?? '__uncat__'
+
+      const existing = buckets.get(key) ?? {
+        category_id:   p.category_id ?? null,
+        category_name: cat?.name ?? 'ไม่ระบุหมวดหมู่',
+        item_count:    0,
+        stock_value:   0,
+      }
+      existing.stock_value += Number(r.quantity) * Number(p.cost ?? 0)
+      buckets.set(key, existing)
+
+      const ids = seen.get(key) ?? new Set<string>()
+      ids.add(p.id)
+      seen.set(key, ids)
+    }
+
+    for (const [key, ids] of seen) {
+      const b = buckets.get(key)
+      if (b) b.item_count = ids.size
+    }
+
     return Array.from(buckets.values()).sort((a, b) => b.stock_value - a.stock_value)
   },
 
@@ -211,6 +260,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     if (opts.start)     q = q.gte('created_at', opts.start)
     if (opts.end)       q = q.lte('created_at', opts.end)
     if (opts.productId) q = q.eq('product_id', opts.productId)
+    if (opts.branchId)  q = q.eq('branch_id',  opts.branchId)
 
     const { data } = await q
     return (data ?? []).map((r) => {

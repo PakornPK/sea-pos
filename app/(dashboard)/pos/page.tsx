@@ -9,10 +9,17 @@ export const metadata: Metadata = {
 }
 
 export default async function POSPage() {
-  await requirePageRole(['admin', 'manager', 'cashier'])
+  const { me } = await requirePageRole(['admin', 'manager', 'cashier'])
+
+  const initialPagePromise = me.activeBranchId
+    ? productRepo.listInStockForBranchPaginated(
+        { page: 1, pageSize: DEFAULT_PAGE_SIZE },
+        { branchId: me.activeBranchId },
+      )
+    : Promise.resolve({ rows: [], totalCount: 0, page: 1, pageSize: DEFAULT_PAGE_SIZE, totalPages: 1 })
 
   const [initialPage, customers] = await Promise.all([
-    productRepo.listInStockPaginated({ page: 1, pageSize: DEFAULT_PAGE_SIZE }),
+    initialPagePromise,
     customerRepo.listForPicker(),
   ])
 

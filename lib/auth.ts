@@ -11,6 +11,15 @@ export type AuthedUser = {
   fullName: string | null
   companyId: string | null
   isPlatformAdmin: boolean
+  /**
+   * The branch the user is currently operating in. Resolved per request:
+   * read from `x-sea-branch` cookie if set and the user has access to
+   * that branch; otherwise falls back to their `user_branches.is_default`.
+   * Null for platform admins (no company).
+   */
+  activeBranchId: string | null
+  /** All branches this user is assigned to. Empty for platform admins. */
+  branchIds: string[]
 }
 
 /**
@@ -46,10 +55,30 @@ const loadUser = cache(async (): Promise<AuthedUser | null> => {
   if (!userId) return null
 
   const supabase = await createClient()
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, full_name, company_id, is_platform_admin')
-    .eq('id', userId).single()
+  const [{ data: profile }, { data: branchRows }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('role, full_name, company_id, is_platform_admin')
+      .eq('id', userId).single(),
+    supabase
+      .from('user_branches')
+      .select('branch_id, is_default')
+      .eq('user_id', userId),
+  ])
+
+  const branchIds = (branchRows ?? []).map((r) => r.branch_id as string)
+  const defaultBranchId =
+    (branchRows ?? []).find((r) => r.is_default)?.branch_id as string | undefined
+
+  // Branch override via cookie. Validated against the user's set so a
+  // stale cookie can't leak access. Read from the header the proxy
+  // injects (mirrors how x-sea-user-id works) — see proxy.ts.
+  const cookieBranch = hdrs.get('x-sea-branch')
+  const activeBranchId =
+    (cookieBranch && branchIds.includes(cookieBranch) ? cookieBranch : null)
+    ?? defaultBranchId
+    ?? branchIds[0]
+    ?? null
 
   return {
     id: userId,
@@ -58,6 +87,8 @@ const loadUser = cache(async (): Promise<AuthedUser | null> => {
     fullName: (profile?.full_name as string | null) ?? null,
     companyId: (profile?.company_id as string | null) ?? null,
     isPlatformAdmin: Boolean(profile?.is_platform_admin),
+    activeBranchId,
+    branchIds,
   }
 })
 

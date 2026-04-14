@@ -41,6 +41,7 @@ export type RecentSale = {
   payment_method: string
   status:         string
   customer_name:  string | null
+  branch_code:    string | null
 }
 
 export type InventoryValueByCategory = {
@@ -83,12 +84,13 @@ export interface AnalyticsRepository {
   paymentMix(days: number): Promise<PaymentMixPoint[]>
   topProducts(days: number, limit: number): Promise<TopProduct[]>
   lowStock(limit?: number): Promise<LowStockItem[]>
-  recentSales(limit?: number): Promise<RecentSale[]>
+  recentSales(limit?: number, opts?: { branchId?: string | null }): Promise<RecentSale[]>
   inventoryValueByCategory(): Promise<InventoryValueByCategory[]>
   stockMovements(opts?: {
     start?: string
     end?: string
     productId?: string
+    branchId?: string | null
     limit?: number
   }): Promise<StockMovement[]>
   salesByRange(start: string, end: string): Promise<SalesByRangeSummary>

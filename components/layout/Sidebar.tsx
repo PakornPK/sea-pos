@@ -5,7 +5,9 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users,
   BarChart2, LogOut, UserCog, Settings, Building2, Shield, PackageOpen,
+  MapPin, ArrowLeftRight,
 } from 'lucide-react'
+import type { Branch } from '@/types/database'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -20,14 +22,16 @@ type NavItem = {
 
 const CUSTOMER_NAV: NavItem[] = [
   { href: '/dashboard',  label: 'ภาพรวมร้าน',   icon: LayoutDashboard, roles: ['admin', 'manager'] },
-  { href: '/inventory',  label: 'คลังสินค้า',  icon: Package,      roles: ['admin', 'manager', 'purchasing'] },
+  { href: '/inventory',            label: 'คลังสินค้า', icon: Package,         roles: ['admin', 'manager', 'purchasing'] },
+  { href: '/inventory/transfers',  label: 'โอนสต๊อก',   icon: ArrowLeftRight,  roles: ['admin', 'manager', 'purchasing'] },
   { href: '/pos',        label: 'ขายสินค้า',   icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
   { href: '/pos/sales',  label: 'รายการขาย',   icon: ScrollText,   roles: ['admin', 'manager'] },
   { href: '/purchasing', label: 'จัดซื้อ',     icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
   { href: '/customers',  label: 'ลูกค้า',      icon: Users,        roles: ['admin', 'manager', 'cashier'] },
   { href: '/reports',    label: 'รายงาน',      icon: BarChart2,    roles: ['admin', 'manager'] },
   { href: '/users',            label: 'ผู้ใช้งาน',   icon: UserCog,  roles: ['admin'] },
-  { href: '/settings/company', label: 'ตั้งค่าบริษัท', icon: Settings, roles: ['admin'] },
+  { href: '/settings/branches', label: 'สาขา',        icon: MapPin,   roles: ['admin'] },
+  { href: '/settings/company',  label: 'ตั้งค่าบริษัท', icon: Settings, roles: ['admin'] },
 ]
 
 const PLATFORM_NAV: Array<{ href: string; label: string; icon: React.ElementType }> = [
@@ -38,16 +42,29 @@ const PLATFORM_NAV: Array<{ href: string; label: string; icon: React.ElementType
 type SidebarProps = {
   role: UserRole
   isPlatformAdmin: boolean
+  activeBranch: Branch | null
 }
 
-export function Sidebar({ role, isPlatformAdmin }: SidebarProps) {
+export function Sidebar({ role, isPlatformAdmin, activeBranch }: SidebarProps) {
   const pathname = usePathname()
-  const isActive = (href: string) =>
-    pathname === href || (href !== '/pos' && pathname.startsWith(href))
 
   const items = isPlatformAdmin
     ? PLATFORM_NAV
     : CUSTOMER_NAV.filter((item) => item.roles.includes(role))
+
+  // Highlight only the longest matching nav href for the current path.
+  // Fixes the `/inventory` + `/inventory/transfers` double-highlight:
+  // both match via startsWith, but only the deeper one should be active.
+  const activeHref = items.reduce<string | null>((best, item) => {
+    if (item.href === '/pos' ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + '/')) {
+      if (!best || item.href.length > best.length) return item.href
+    }
+    // Exact match always wins regardless of length (edge case: nav item = current path)
+    if (pathname === item.href && (!best || item.href.length > best.length)) return item.href
+    return best
+  }, null)
+
+  const isActive = (href: string) => href === activeHref
 
   return (
     <aside className="flex h-full w-60 flex-col border-r bg-background">
@@ -78,6 +95,16 @@ export function Sidebar({ role, isPlatformAdmin }: SidebarProps) {
           </Link>
         ))}
       </nav>
+
+      {activeBranch && !isPlatformAdmin && (
+        <div className="border-t px-3 py-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <MapPin className="h-3 w-3" />
+            {activeBranch.name}
+            <span className="text-muted-foreground/60">({activeBranch.code})</span>
+          </span>
+        </div>
+      )}
 
       <div className="border-t p-3">
         <form action={signOut}>

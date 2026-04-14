@@ -102,8 +102,8 @@ async function LowStockWidget() {
 }
 
 async function RecentSalesWidget() {
-  await requirePageRole(ALLOWED)
-  const sales = await analyticsRepo.recentSales(10)
+  const { me } = await requirePageRole(ALLOWED)
+  const sales = await analyticsRepo.recentSales(10, { branchId: me.activeBranchId })
   return <RecentSalesList sales={sales} />
 }
 

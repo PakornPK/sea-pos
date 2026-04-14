@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, stockLogRepo, storageRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, storageRepo } from '@/lib/repositories'
 import { checkProductLimit, formatLimitError } from '@/lib/limits'
 import { validateImageUpload, uniqueAssetName } from '@/lib/storage-validation'
 
@@ -13,22 +13,16 @@ const CREATE_ROLES = ['admin', 'manager', 'purchasing'] as const
 export async function adjustStock(productId: string, delta: number) {
   try {
     const { me } = await requireActionRole([...ADJUST_ROLES])
+    if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
 
-    const current = await productRepo.getStock(productId)
-    if (current === null) throw new Error('Product not found')
-
-    const newStock = current + delta
-    if (newStock < 0) return { error: 'สต๊อกไม่เพียงพอ' }
-
-    const updateErr = await productRepo.updateStock(productId, newStock)
-    if (updateErr) return { error: updateErr }
-
-    await stockLogRepo.insert({
-      product_id: productId,
-      change: delta,
+    const err = await productStockRepo.adjust({
+      productId,
+      branchId: me.activeBranchId,
+      delta,
       reason: delta > 0 ? 'ปรับเพิ่มสต๊อก (ผู้จัดการ)' : 'ปรับลดสต๊อก (ผู้จัดการ)',
-      user_id: me.id,
+      userId: me.id,
     })
+    if (err) return { error: err }
 
     revalidatePath('/inventory')
   } catch (e) {
@@ -75,9 +69,15 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     price,
     cost,
     category_id: categoryId,
-    stock: 0,
   })
   if ('error' in res) return { error: res.error }
+
+  // Seed a pivot row at 0 for the user's current branch so the product is
+  // queryable from the POS immediately. Stock is raised via PO receive or
+  // manual adjust.
+  if (me.activeBranchId) {
+    await productStockRepo.seed(res.id, me.activeBranchId)
+  }
 
   if (imageFile && imageExt && me.companyId) {
     const relativePath = `${res.id}/${uniqueAssetName(imageExt)}`
@@ -133,9 +133,12 @@ export async function quickCreateProduct(input: {
       price: Number.isFinite(input.price) ? input.price : 0,
       cost: Number.isFinite(input.cost) ? input.cost : 0,
       min_stock: Number.isFinite(input.minStock) ? input.minStock : 0,
-      stock: 0,
     })
     if ('error' in res) return res
+
+    if (me.activeBranchId) {
+      await productStockRepo.seed(res.id, me.activeBranchId)
+    }
 
     revalidatePath('/inventory')
     return {
@@ -145,7 +148,7 @@ export async function quickCreateProduct(input: {
       price: res.price,
       cost: res.cost,
       category_id: res.category_id,
-      stock: res.stock,
+      stock: 0,
       min_stock: res.min_stock,
     }
   } catch (e) {

@@ -16,7 +16,7 @@ import { createSale, searchInStockProducts } from '@/lib/actions/pos'
 import { formatBaht } from '@/lib/format'
 import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
-import type { Product } from '@/types/database'
+import type { ProductWithStock } from '@/types/database'
 
 type CartItem = {
   productId: string
@@ -26,7 +26,7 @@ type CartItem = {
 }
 
 type POSTerminalProps = {
-  initialProducts: Product[]
+  initialProducts: ProductWithStock[]
   initialTotal:    number
   initialPage:     number
   pageSize:        number
@@ -59,11 +59,11 @@ export function POSTerminal({
   const [cart, setCart] = useState<CartItem[]>([])
   const [payment, setPayment] = useState('cash')
   const [customer, setCustomer] = useState<PickerCustomer | null>(null)
-  const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+  const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(null)
   const [state, formAction, isPending] = useActionState(createSale, undefined)
 
   // ── Server-driven product grid ─────────────────────────────────
-  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [products, setProducts] = useState<ProductWithStock[]>(initialProducts)
   const [total, setTotal]       = useState(initialTotal)
   const [page, setPage]         = useState(initialPage)
   const [search, setSearch]     = useState('')
@@ -93,7 +93,7 @@ export function POSTerminal({
   }
 
   // ── Cart handlers ──────────────────────────────────────────────
-  function addToCart(product: Product) {
+  function addToCart(product: ProductWithStock) {
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
       if (existing) {

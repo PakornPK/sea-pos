@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Eye } from 'lucide-react'
+import { Eye, MapPin } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -14,6 +14,8 @@ export type POListRow = {
   id: string
   po_no: number
   supplier_name: string
+  branch_code: string | null
+  branch_name: string | null
   status: PurchaseOrderStatus
   total_amount: number
   ordered_at: string | null
@@ -68,6 +70,7 @@ export function POList({ orders, currentStatus }: Props) {
           <TableHeader>
             <TableRow>
               <TableHead>เลขที่ PO</TableHead>
+              <TableHead>สาขา</TableHead>
               <TableHead>ผู้จำหน่าย</TableHead>
               <TableHead>วันที่สร้าง</TableHead>
               <TableHead>สั่งซื้อเมื่อ</TableHead>
@@ -82,6 +85,19 @@ export function POList({ orders, currentStatus }: Props) {
               <TableRow key={o.id}>
                 <TableCell className="font-mono font-medium">
                   {formatPoNo(o.po_no)}
+                </TableCell>
+                <TableCell>
+                  {o.branch_code ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-[10px]"
+                      title={o.branch_name ?? undefined}
+                    >
+                      <MapPin className="h-2.5 w-2.5" />
+                      {o.branch_code}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>{o.supplier_name}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">

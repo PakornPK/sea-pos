@@ -57,13 +57,17 @@ export type CategoryInsert = {
   sku_prefix?: string | null
 }
 
+/**
+ * Master product record. Stock no longer lives here — see `product_stock`
+ * (per-branch pivot, migration 014). Use `ProductWithStock` for views that
+ * need a stock number resolved for a specific branch.
+ */
 export type Product = {
   id: string
   sku: string
   name: string
   price: number
   cost: number
-  stock: number
   min_stock: number
   category_id: string | null
   image_url: string | null
@@ -72,6 +76,82 @@ export type Product = {
 
 export type ProductWithCategory = Product & {
   category: Pick<Category, 'id' | 'name'> | null
+}
+
+/** Product joined with its stock at a specific branch. */
+export type ProductWithStock = Product & {
+  stock: number                // resolved from product_stock.quantity
+}
+
+export type ProductWithStockAndCategory = ProductWithStock & {
+  category: Pick<Category, 'id' | 'name'> | null
+  /**
+   * Per-branch stock breakdown. Populated by admin "ทุกสาขา" view; undefined
+   * in single-branch views. `stock` in that view equals the sum.
+   */
+  stock_by_branch?: Array<{ branch_id: string; branch_code: string; branch_name: string; quantity: number }>
+}
+
+// ─── Branches (multi-branch, Release 2) ──────────────────────────────────────
+
+export type Branch = {
+  id:          string
+  company_id:  string
+  name:        string
+  code:        string          // receipt-number prefix, e.g. 'B01'
+  address:     string | null
+  phone:       string | null
+  tax_id:      string | null
+  is_default:  boolean
+  created_at:  string
+}
+
+export type BranchInsert = {
+  name:        string
+  code:        string
+  address?:    string | null
+  phone?:      string | null
+  tax_id?:     string | null
+  is_default?: boolean
+}
+
+export type UserBranch = {
+  user_id:     string
+  branch_id:   string
+  company_id:  string
+  is_default:  boolean
+  created_at:  string
+}
+
+export type ProductStock = {
+  product_id:  string
+  branch_id:   string
+  company_id:  string
+  quantity:    number
+  updated_at:  string
+}
+
+export type StockTransferStatus = 'draft' | 'in_transit' | 'received' | 'cancelled'
+
+export type StockTransfer = {
+  id:              string
+  company_id:      string
+  from_branch_id:  string
+  to_branch_id:    string
+  user_id:         string
+  status:          StockTransferStatus
+  notes:           string | null
+  created_at:      string
+  received_at:     string | null
+}
+
+export type StockTransferItem = {
+  id:                 string
+  transfer_id:        string
+  product_id:         string
+  quantity_sent:      number
+  quantity_received:  number
+  receive_note:       string | null
 }
 
 export type StockLog = {
@@ -128,6 +208,7 @@ export type PurchaseOrder = {
   po_no: number
   supplier_id: string
   user_id: string
+  branch_id: string
   status: PurchaseOrderStatus
   total_amount: number
   notes: string | null
@@ -158,10 +239,11 @@ export type ProductInsert = {
   sku?: string | null
   price?: number
   cost?: number
-  stock?: number
   min_stock?: number
   category_id?: string | null
   image_url?: string | null
+  // Note: stock is seeded via productStockRepo.set(productId, branchId, qty)
+  // in a follow-up call; it is no longer a column on products.
 }
 
 export type StockLogInsert = {

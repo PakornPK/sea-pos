@@ -3,9 +3,9 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, saleRepo, stockLogRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, saleRepo } from '@/lib/repositories'
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
-import type { Product } from '@/types/database'
+import type { ProductWithStock } from '@/types/database'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
@@ -13,11 +13,14 @@ export type VoidState = { error?: string } | undefined
 export async function searchInStockProducts(input: {
   page:   number
   search: string
-}): Promise<Paginated<Product>> {
-  await getActionUser()
-  return productRepo.listInStockPaginated(
+}): Promise<Paginated<ProductWithStock>> {
+  const { me } = await getActionUser()
+  if (!me.activeBranchId) {
+    return { rows: [], totalCount: 0, page: 1, pageSize: DEFAULT_PAGE_SIZE, totalPages: 1 }
+  }
+  return productRepo.listInStockForBranchPaginated(
     { page: Math.max(1, input.page), pageSize: DEFAULT_PAGE_SIZE },
-    { search: input.search },
+    { branchId: me.activeBranchId, search: input.search },
   )
 }
 
@@ -36,6 +39,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   if (!(SELL_ROLES as readonly string[]).includes(me.role)) {
     return { error: 'ไม่มีสิทธิ์ขายสินค้า' }
   }
+  if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
 
   const cartJson = formData.get('cart') as string
   const paymentMethod = formData.get('paymentMethod') as string
@@ -55,6 +59,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   const header = await saleRepo.createHeader({
     user_id: me.id,
     customer_id: customerId,
+    branch_id: me.activeBranchId,
     total_amount: totalAmount,
     payment_method: paymentMethod as 'cash' | 'card' | 'transfer',
   })
@@ -72,8 +77,9 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   if (itemsError) return { error: itemsError }
 
   for (const item of cart) {
-    const stockErr = await productRepo.decrementStock({
+    const stockErr = await productStockRepo.decrement({
       productId: item.productId,
+      branchId:  me.activeBranchId,
       quantity:  item.quantity,
       saleId:    header.id,
       userId:    me.id,
@@ -97,6 +103,11 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (!saleId) return { error: 'ไม่พบรายการขาย' }
     if (!reason) return { error: 'กรุณาระบุเหตุผลการยกเลิก' }
 
+    const sale = await saleRepo.getById(saleId)
+    if (!sale) return { error: 'ไม่พบรายการขาย' }
+    const saleBranchId = (sale as unknown as { branch_id?: string }).branch_id
+    if (!saleBranchId) return { error: 'ไม่พบสาขาของรายการขายนี้' }
+
     const items = await saleRepo.listItems(saleId)
 
     const voidResult = await saleRepo.markVoided(saleId)
@@ -104,15 +115,12 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (!voidResult) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
 
     for (const item of items) {
-      const current = await productRepo.getStock(item.product_id)
-      if (current === null) continue
-
-      await productRepo.updateStock(item.product_id, current + item.quantity)
-      await stockLogRepo.insert({
-        product_id: item.product_id,
-        change: item.quantity,
-        reason: `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`,
-        user_id: me.id,
+      await productStockRepo.adjust({
+        productId: item.product_id,
+        branchId:  saleBranchId,
+        delta:     item.quantity,
+        reason:    `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`,
+        userId:    me.id,
       })
     }
 

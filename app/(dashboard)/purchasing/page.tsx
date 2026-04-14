@@ -3,9 +3,11 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, Truck } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { purchaseOrderRepo } from '@/lib/repositories'
+import { purchaseOrderRepo, branchRepo } from '@/lib/repositories'
 import { parsePageParams } from '@/lib/pagination'
+import { resolveBranchFilter } from '@/lib/branch-filter'
 import { POList, type POListRow } from '@/components/purchasing/POList'
+import { BranchScopeToggle } from '@/components/layout/BranchScopeToggle'
 import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
 
 const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
 
-type Search = { page?: string; pageSize?: string; status?: string }
+type Search = { page?: string; pageSize?: string; status?: string; branch?: string }
 
 const VALID_STATUSES: PurchaseOrderStatus[] = ['draft', 'ordered', 'received', 'cancelled']
 
@@ -63,21 +65,31 @@ export default async function PurchasingPage({
 }
 
 async function POListContent({ sp }: { sp: Search }) {
-  await requirePageRole(ALLOWED)
+  const { me } = await requirePageRole(ALLOWED)
   const p = parsePageParams(sp)
 
   const statusFilter = sp.status && VALID_STATUSES.includes(sp.status as PurchaseOrderStatus)
     ? (sp.status as PurchaseOrderStatus)
     : undefined
 
-  const result = await purchaseOrderRepo.listRecentPaginated(p, { status: statusFilter })
+  const branchFilter = resolveBranchFilter(me, sp.branch)
+  const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+  const activeBranch = me.activeBranchId ? await branchRepo.getById(me.activeBranchId) : null
+
+  const result = await purchaseOrderRepo.listRecentPaginated(p, {
+    status:   statusFilter,
+    branchId: branchFilter,
+  })
 
   const orders: POListRow[] = result.rows.map((o) => {
     const supplier = Array.isArray(o.supplier) ? o.supplier[0] : o.supplier
+    const branch = Array.isArray(o.branch) ? o.branch[0] : o.branch
     return {
       id: o.id,
       po_no: o.po_no,
       supplier_name: supplier?.name ?? '—',
+      branch_code: branch?.code ?? null,
+      branch_name: branch?.name ?? null,
       status: o.status as PurchaseOrderStatus,
       total_amount: Number(o.total_amount),
       ordered_at: o.ordered_at,
@@ -88,6 +100,14 @@ async function POListContent({ sp }: { sp: Search }) {
 
   return (
     <>
+      {isAdmin && (
+        <BranchScopeToggle
+          basePath="/purchasing"
+          searchParams={sp}
+          isAllBranches={branchFilter === null}
+          activeBranchLabel={activeBranch?.name ?? null}
+        />
+      )}
       <POList orders={orders} currentStatus={statusFilter ?? 'all'} />
       <Pagination
         basePath="/purchasing"

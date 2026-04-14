@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { ChevronLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { saleRepo, companyRepo } from '@/lib/repositories'
+import { saleRepo, companyRepo, branchRepo } from '@/lib/repositories'
 import { PrintButton } from '@/components/pos/PrintButton'
 import { VoidSaleForm } from '@/components/pos/VoidSaleForm'
 import { Separator } from '@/components/ui/separator'
@@ -33,6 +33,8 @@ export default async function ReceiptPage({
   ])
 
   if (!sale) notFound()
+
+  const branch = sale.branch_id ? await branchRepo.getById(sale.branch_id) : null
 
   const companySettings = (company?.settings ?? {}) as {
     receipt_header?: string
@@ -94,14 +96,22 @@ export default async function ReceiptPage({
             </div>
           )}
           <p className="text-2xl font-bold tracking-tight">{company?.name ?? 'SEA-POS'}</p>
-          {companySettings.address && (
-            <p className="text-xs text-muted-foreground">{companySettings.address}</p>
+          {branch && (
+            <p className="text-sm font-medium text-foreground/80">
+              {branch.name}
+              <span className="ml-1 text-xs text-muted-foreground">({branch.code})</span>
+            </p>
           )}
-          {(companySettings.phone || companySettings.tax_id) && (
+          {(branch?.address ?? companySettings.address) && (
             <p className="text-xs text-muted-foreground">
-              {companySettings.phone && `โทร ${companySettings.phone}`}
-              {companySettings.phone && companySettings.tax_id && ' · '}
-              {companySettings.tax_id && `เลขผู้เสียภาษี ${companySettings.tax_id}`}
+              {branch?.address ?? companySettings.address}
+            </p>
+          )}
+          {((branch?.phone ?? companySettings.phone) || (branch?.tax_id ?? companySettings.tax_id)) && (
+            <p className="text-xs text-muted-foreground">
+              {(branch?.phone ?? companySettings.phone) && `โทร ${branch?.phone ?? companySettings.phone}`}
+              {(branch?.phone ?? companySettings.phone) && (branch?.tax_id ?? companySettings.tax_id) && ' · '}
+              {(branch?.tax_id ?? companySettings.tax_id) && `เลขผู้เสียภาษี ${branch?.tax_id ?? companySettings.tax_id}`}
             </p>
           )}
           <p className="text-sm text-muted-foreground pt-1">ใบเสร็จรับเงิน / Receipt</p>
@@ -117,7 +127,7 @@ export default async function ReceiptPage({
 
         {/* Sale meta */}
         <div className="space-y-1 text-sm">
-          <Row label="เลขที่ใบเสร็จ" value={formatReceiptNo(sale.receipt_no)} mono />
+          <Row label="เลขที่ใบเสร็จ" value={formatReceiptNo(sale.receipt_no, branch?.code)} mono />
           <Row label="วันที่"         value={createdAt} />
           <Row label="ชำระด้วย"      value={PAYMENT_LABEL[sale.payment_method as PaymentMethod] ?? sale.payment_method} />
           {customer && <Row label="ลูกค้า" value={customer.name} />}

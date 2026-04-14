@@ -120,7 +120,7 @@ export default async function CustomerDetailPage({
               {sales.map((s) => (
                 <TableRow key={s.id} className={s.status === 'voided' ? 'opacity-50' : ''}>
                   <TableCell className="font-mono font-medium">
-                    {formatReceiptNo(s.receipt_no)}
+                    {formatReceiptNo(s.receipt_no, s.branch_code)}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {formatDateTime(s.created_at)}
