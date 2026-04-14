@@ -11,6 +11,7 @@ import { quickCreateProduct } from '@/lib/actions/inventory'
 import { uploadProductImage } from '@/lib/actions/storage'
 import { formatBaht } from '@/lib/format'
 import { lineTotal, sumBy } from '@/lib/money'
+import { computeVat, type VatConfig } from '@/lib/vat'
 import type { Category, Product } from '@/types/database'
 
 export type POLine = {
@@ -22,11 +23,13 @@ export type POLine = {
 type Props = {
   products: Product[]
   categories?: Category[]
+  /** Company VAT config. When mode != 'none', the footer shows net/VAT/gross. */
+  vatConfig?: VatConfig
   initial?: POLine[]
   onChange?: (lines: POLine[]) => void
 }
 
-export function POLineEditor({ products, categories = [], initial, onChange }: Props) {
+export function POLineEditor({ products, categories = [], vatConfig, initial, onChange }: Props) {
   const [localProducts, setLocalProducts] = useState<Product[]>(products)
   const [lines, setLines] = useState<POLine[]>(initial ?? [])
   const [selectedProductId, setSelectedProductId] = useState('')
@@ -137,6 +140,25 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
   }
 
   const total = sumBy(lines, (l) => lineTotal(l.unitCost, l.quantity))
+
+  // Live VAT preview — server recomputes authoritatively on submit. Effective
+  // exemption considers product.vat_exempt OR its category.vat_exempt.
+  const categoryExemptById = new Map(categories.map((c) => [c.id, c.vat_exempt]))
+  const breakdown = vatConfig
+    ? computeVat(
+        lines.map((l) => {
+          const p = localProducts.find((lp) => lp.id === l.productId)
+          const catExempt = p?.category_id ? categoryExemptById.get(p.category_id) ?? false : false
+          return {
+            price:     l.unitCost,
+            quantity:  l.quantity,
+            vatExempt: Boolean(p?.vat_exempt) || catExempt,
+          }
+        }),
+        vatConfig,
+      )
+    : null
+  const showVat = !!breakdown && vatConfig!.mode !== 'none' && breakdown.vatAmount > 0
 
   return (
     <div className="space-y-3">
@@ -388,13 +410,39 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
               })}
             </tbody>
             <tfoot className="border-t bg-muted/30">
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-right font-medium">ยอดรวม</td>
-                <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                  {formatBaht(total)}
-                </td>
-                <td></td>
-              </tr>
+              {showVat ? (
+                <>
+                  <tr className="text-muted-foreground">
+                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs">ยอดก่อน VAT</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-xs">
+                      {formatBaht(breakdown!.subtotalExVat)}
+                    </td>
+                    <td></td>
+                  </tr>
+                  <tr className="text-muted-foreground">
+                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs">VAT {vatConfig!.rate}%</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-xs">
+                      {formatBaht(breakdown!.vatAmount)}
+                    </td>
+                    <td></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td colSpan={3} className="px-3 py-2 text-right font-medium">รวมทั้งสิ้น</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                      {formatBaht(breakdown!.total)}
+                    </td>
+                    <td></td>
+                  </tr>
+                </>
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-3 py-2 text-right font-medium">ยอดรวม</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                    {formatBaht(total)}
+                  </td>
+                  <td></td>
+                </tr>
+              )}
             </tfoot>
           </table>
         </div>

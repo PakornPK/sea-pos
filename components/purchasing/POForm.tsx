@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { POLineEditor, type POLine } from '@/components/purchasing/POLineEditor'
 import type { Branch, Category, Product, Supplier } from '@/types/database'
+import type { VatConfig } from '@/lib/vat'
 
 type Props = {
   suppliers: Supplier[]
@@ -17,6 +18,8 @@ type Props = {
   branches?: Branch[]
   /** User's active branch — preselected in the picker. Create flow only. */
   activeBranchId?: string | null
+  /** Company VAT config for the live breakdown in the line editor. */
+  vatConfig?: VatConfig
   initial?: {
     id: string
     supplierId: string
@@ -26,7 +29,7 @@ type Props = {
 }
 
 export function POForm({
-  suppliers, products, categories, branches, activeBranchId, initial,
+  suppliers, products, categories, branches, activeBranchId, vatConfig, initial,
 }: Props) {
   const isEdit = Boolean(initial)
   const action = isEdit ? updatePurchaseOrder : createPurchaseOrder
@@ -107,6 +110,7 @@ export function POForm({
         <POLineEditor
           products={products}
           categories={categories}
+          vatConfig={vatConfig}
           initial={initial?.lines}
           onChange={setLines}
         />

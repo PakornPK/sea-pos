@@ -72,12 +72,14 @@ export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
     const { data, error } = await db
       .from('purchase_orders')
       .insert({
-        supplier_id:  input.supplier_id,
-        user_id:      input.user_id,
-        branch_id:    input.branch_id,
-        total_amount: input.total_amount,
-        notes:        input.notes,
-        status:       'draft',
+        supplier_id:     input.supplier_id,
+        user_id:         input.user_id,
+        branch_id:       input.branch_id,
+        total_amount:    input.total_amount,
+        subtotal_ex_vat: input.subtotal_ex_vat,
+        vat_amount:      input.vat_amount,
+        notes:           input.notes,
+        status:          'draft',
       })
       .select('id')
       .single()

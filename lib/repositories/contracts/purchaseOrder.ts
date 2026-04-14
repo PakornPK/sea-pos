@@ -45,12 +45,20 @@ export interface PurchaseOrderRepository {
     user_id: string
     branch_id: string
     total_amount: number
+    subtotal_ex_vat: number
+    vat_amount: number
     notes: string | null
   }): Promise<{ id: string } | { error: string }>
   replaceItems(poId: string, items: POLineInput[]): Promise<string | null>
   updateHeader(
     id: string,
-    input: { supplier_id: string; notes: string | null; total_amount: number }
+    input: {
+      supplier_id: string
+      notes: string | null
+      total_amount: number
+      subtotal_ex_vat: number
+      vat_amount: number
+    }
   ): Promise<string | null>
   confirm(id: string): Promise<string | null>
   cancel(id: string): Promise<string | null>

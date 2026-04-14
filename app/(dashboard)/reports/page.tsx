@@ -5,7 +5,7 @@ import { analyticsRepo, companyRepo } from '@/lib/repositories'
 import { resolveBranchFilter } from '@/lib/branch-filter'
 import { getVatConfig } from '@/lib/vat'
 import { formatBaht, formatDateTime } from '@/lib/format'
-import { sumBy } from '@/lib/money'
+import { sumBy, sub } from '@/lib/money'
 import { parseDateRange, type DateRange } from '@/lib/daterange'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { DateRangePicker } from '@/components/reports/DateRangePicker'
@@ -215,12 +215,16 @@ async function StockMovementReport({ range, branchId }: { range: DateRange; bran
 
 async function VatReport({ range, branchId }: { range: DateRange; branchId: string | null }) {
   const { me } = await requirePageRole(ALLOWED)
-  const [summary, company] = await Promise.all([
+  const [sales, purchases, company] = await Promise.all([
     analyticsRepo.vatSummary(range.startIso, range.endIso, { branchId }),
+    analyticsRepo.purchaseVatSummary(range.startIso, range.endIso, { branchId }),
     me.companyId ? companyRepo.getById(me.companyId) : Promise.resolve(null),
   ])
   const vat = getVatConfig(company)
   if (vat.mode === 'none') return null
+
+  // Net VAT liability: what you owe the RD (or get refunded if negative).
+  const netVat = sub(sales.vatOutput, purchases.vatInput)
 
   return (
     <div className="space-y-3">
@@ -236,14 +240,40 @@ async function VatReport({ range, branchId }: { range: DateRange; branchId: stri
           label="ดาวน์โหลดรายการ VAT"
         />
       </div>
+
+      {/* Output VAT (sales) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="ยอดขายก่อน VAT" value={formatBaht(summary.netSales)} />
-        <KpiCard label="VAT ขาย" value={formatBaht(summary.vatOutput)} />
-        <KpiCard label="ยอดขายรวม VAT" value={formatBaht(summary.grossSales)} />
+        <KpiCard label="ยอดขายก่อน VAT" value={formatBaht(sales.netSales)} />
+        <KpiCard label="VAT ขาย (Output)" value={formatBaht(sales.vatOutput)} />
+        <KpiCard label="ยอดขายรวม VAT" value={formatBaht(sales.grossSales)} />
         <KpiCard
           label="บิลที่มี VAT / ยกเว้น"
-          value={`${summary.vatBills.toLocaleString('th-TH')} / ${summary.zeroBills.toLocaleString('th-TH')}`}
+          value={`${sales.vatBills.toLocaleString('th-TH')} / ${sales.zeroBills.toLocaleString('th-TH')}`}
         />
+      </div>
+
+      {/* Input VAT (received POs) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="ยอดซื้อก่อน VAT" value={formatBaht(purchases.netPurchases)} />
+        <KpiCard label="VAT ซื้อ (Input)" value={formatBaht(purchases.vatInput)} />
+        <KpiCard label="ยอดซื้อรวม VAT" value={formatBaht(purchases.grossPurchases)} />
+        <KpiCard
+          label="PO ที่มี VAT / ยกเว้น"
+          value={`${purchases.vatPos.toLocaleString('th-TH')} / ${purchases.zeroPos.toLocaleString('th-TH')}`}
+        />
+      </div>
+
+      {/* Net liability for ภ.พ.30 */}
+      <div className="rounded-lg border bg-card p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">VAT สุทธิ (ขาย − ซื้อ)</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {netVat >= 0 ? 'ยอดที่ต้องชำระให้กรมสรรพากร' : 'ยอดภาษีซื้อมากกว่าภาษีขาย — ยกยอดหรือขอคืน'}
+          </p>
+        </div>
+        <p className={`text-2xl font-bold tabular-nums ${netVat < 0 ? 'text-emerald-600' : ''}`}>
+          {formatBaht(netVat)}
+        </p>
       </div>
     </div>
   )

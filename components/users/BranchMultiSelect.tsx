@@ -53,7 +53,7 @@ export function BranchMultiSelect({
       <div className="flex flex-col gap-1.5">
         {branches.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            ยังไม่มีสาขา กรุณาสร้างสาขาก่อนที่หน้า "สาขา"
+            ยังไม่มีสาขา กรุณาสร้างสาขาก่อนที่หน้า &quot;สาขา&quot;
           </p>
         )}
         {branches.map((b) => {

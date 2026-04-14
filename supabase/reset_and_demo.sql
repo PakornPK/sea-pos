@@ -423,6 +423,66 @@ END $$;
 
 UPDATE stock_logs SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
 
+-- ── 9b. Demo purchase orders (received) — populates ภาษีซื้อ ──
+-- Two POs from different suppliers, received in the last week so the
+-- VAT report has non-zero input VAT. Demo company runs mode='excluded' @ 7%,
+-- so unit_cost is NET and we derive vat / total from it.
+DO $$
+DECLARE
+  v_purchasing UUID;
+  v_branch     UUID := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_supplier1  UUID;
+  v_supplier2  UUID;
+  v_po         UUID;
+  v_net        NUMERIC(12, 2);
+  v_vat        NUMERIC(12, 2);
+  v_total      NUMERIC(12, 2);
+BEGIN
+  SELECT id INTO v_purchasing FROM auth.users WHERE email = 'purchasing@sea-pos.test';
+  SELECT id INTO v_supplier1 FROM suppliers WHERE name = 'บริษัท สยามฟู้ด จำกัด' LIMIT 1;
+  SELECT id INTO v_supplier2 FROM suppliers WHERE name = 'บริษัท เครื่องดื่มไทย จำกัด' LIMIT 1;
+
+  -- ── PO 1 — สยามฟู้ด · 7 days ago, received 5 days ago ─────────
+  v_net   := 50 * 3.50 + 20 * 18.00;   -- 175 + 360 = 535
+  v_vat   := ROUND(v_net * 0.07, 2);   -- 37.45
+  v_total := v_net + v_vat;            -- 572.45
+  v_po    := gen_random_uuid();
+
+  INSERT INTO purchase_orders (
+    id, supplier_id, user_id, branch_id, status,
+    total_amount, subtotal_ex_vat, vat_amount, notes,
+    ordered_at, received_at, created_at
+  ) VALUES (
+    v_po, v_supplier1, v_purchasing, v_branch, 'received',
+    v_total, v_net, v_vat, 'ล็อตมาม่า + ข้าวกล่อง (demo seed)',
+    NOW() - INTERVAL '7 days', NOW() - INTERVAL '5 days', NOW() - INTERVAL '7 days'
+  );
+  INSERT INTO purchase_order_items (po_id, product_id, quantity_ordered, quantity_received, unit_cost) VALUES
+    (v_po, '22222222-0000-0000-0000-000000000007', 50, 50,  3.50),
+    (v_po, '22222222-0000-0000-0000-000000000008', 20, 20, 18.00);
+
+  -- ── PO 2 — เครื่องดื่มไทย · 4 days ago, received 2 days ago ──
+  v_net   := 100 * 4.50 + 40 * 8.00;   -- 450 + 320 = 770
+  v_vat   := ROUND(v_net * 0.07, 2);   -- 53.90
+  v_total := v_net + v_vat;            -- 823.90
+  v_po    := gen_random_uuid();
+
+  INSERT INTO purchase_orders (
+    id, supplier_id, user_id, branch_id, status,
+    total_amount, subtotal_ex_vat, vat_amount, notes,
+    ordered_at, received_at, created_at
+  ) VALUES (
+    v_po, v_supplier2, v_purchasing, v_branch, 'received',
+    v_total, v_net, v_vat, 'ล็อตน้ำดื่ม (demo seed)',
+    NOW() - INTERVAL '4 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '4 days'
+  );
+  INSERT INTO purchase_order_items (po_id, product_id, quantity_ordered, quantity_received, unit_cost) VALUES
+    (v_po, '22222222-0000-0000-0000-000000000001', 100, 100, 4.50),
+    (v_po, '22222222-0000-0000-0000-000000000002',  40,  40, 8.00);
+END $$;
+
+UPDATE purchase_orders SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
+
 -- ── 10. Demo stock transfer B01 → B02 (received) ──────────────
 -- Showcases cross-branch stock movement in /reports + /inventory/transfers.
 DO $$
@@ -515,4 +575,7 @@ SELECT
   (SELECT COUNT(*) FROM sales WHERE status = 'voided')    AS voided_sales,
   (SELECT COUNT(*) FROM stock_transfers)   AS transfers,
   (SELECT COUNT(*) FROM stock_logs)        AS stock_logs,
-  (SELECT SUM(total_amount) FROM sales WHERE status = 'completed') AS total_revenue;
+  (SELECT COUNT(*) FROM purchase_orders)   AS pos,
+  (SELECT SUM(total_amount) FROM sales WHERE status = 'completed') AS total_revenue,
+  (SELECT SUM(vat_amount) FROM sales WHERE status = 'completed')   AS vat_output,
+  (SELECT SUM(vat_amount) FROM purchase_orders WHERE status = 'received') AS vat_input;

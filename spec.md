@@ -145,6 +145,7 @@ Roles are set in `raw_user_meta_data` at signup and synced to `profiles` via a D
 erDiagram
   auth_users ||--o| profiles            : "1:1 account"
   companies  ||--o{ profiles            : "tenant has many users"
+  companies  ||--o{ branches            : "tenant has many locations"
   companies  ||--o{ categories          : owns
   companies  ||--o{ products            : owns
   companies  ||--o{ customers           : owns
@@ -153,20 +154,32 @@ erDiagram
   companies  ||--o{ purchase_orders     : owns
   companies  ||--o{ stock_logs          : owns
 
+  branches   ||--o{ product_stock       : "stocks"
+  branches   ||--o{ sales               : "sold at"
+  branches   ||--o{ purchase_orders     : "delivered to"
+  branches   ||--o{ stock_logs          : "affected branch"
+  branches   ||--o{ user_branches       : "staff assignment"
+  branches   ||--o{ stock_transfers     : "from/to branch"
+
   categories ||--o{ products            : categorizes
+  products   ||--o{ product_stock       : "has stock rows"
   products   ||--o{ sale_items          : "sold as"
   products   ||--o{ purchase_order_items : "ordered as"
   products   ||--o{ stock_logs          : "audits"
+  products   ||--o{ stock_transfer_items : "moved as"
 
   customers  ||--o{ sales               : "buyer of"
   suppliers  ||--o{ purchase_orders     : "vendor of"
 
   sales             ||--o{ sale_items             : contains
   purchase_orders   ||--o{ purchase_order_items   : contains
+  stock_transfers   ||--o{ stock_transfer_items   : contains
 
+  auth_users ||--o{ user_branches       : "branch access"
   auth_users ||--o{ sales               : "cashier_id"
   auth_users ||--o{ purchase_orders     : "created_by"
   auth_users ||--o{ stock_logs          : "actor"
+  auth_users ||--o{ stock_transfers     : "initiated_by"
   auth_users ||--o| companies           : "owner_id"
 
   companies {
@@ -192,6 +205,7 @@ erDiagram
     uuid company_id FK
     text name
     text sku_prefix
+    bool vat_exempt
     timestamptz created_at
   }
 
@@ -203,15 +217,44 @@ erDiagram
     text    name
     numeric price
     numeric cost
-    int     stock
     int     min_stock
     text    image_url
+    bool    vat_exempt
+    timestamptz created_at
+  }
+
+  product_stock {
+    uuid    product_id PK_FK
+    uuid    branch_id  PK_FK
+    uuid    company_id FK
+    int     quantity
+    timestamptz updated_at
+  }
+
+  branches {
+    uuid    id PK
+    uuid    company_id FK
+    text    name
+    text    code "receipt prefix, e.g. B01"
+    text    address
+    text    phone
+    text    tax_id
+    bool    is_default
+    timestamptz created_at
+  }
+
+  user_branches {
+    uuid    user_id PK_FK
+    uuid    branch_id PK_FK
+    uuid    company_id FK
+    bool    is_default
     timestamptz created_at
   }
 
   stock_logs {
     uuid id PK
     uuid company_id FK
+    uuid branch_id FK
     uuid product_id FK
     uuid user_id FK
     int  change
@@ -241,11 +284,14 @@ erDiagram
 
   sales {
     uuid    id PK
-    int     receipt_no UK
+    int     receipt_no "unique per branch"
     uuid    company_id FK
+    uuid    branch_id FK
     uuid    customer_id FK
     uuid    user_id FK
     numeric total_amount
+    numeric subtotal_ex_vat
+    numeric vat_amount
     text    payment_method "cash or card or transfer"
     text    status "completed or voided"
     timestamptz created_at
@@ -264,10 +310,13 @@ erDiagram
     uuid    id PK
     int     po_no UK
     uuid    company_id FK
+    uuid    branch_id FK
     uuid    supplier_id FK
     uuid    user_id FK
     text    status "draft or ordered or received or cancelled"
     numeric total_amount
+    numeric subtotal_ex_vat
+    numeric vat_amount
     text    notes
     timestamptz ordered_at
     timestamptz received_at
@@ -282,13 +331,36 @@ erDiagram
     int     quantity_received
     numeric unit_cost
   }
+
+  stock_transfers {
+    uuid    id PK
+    uuid    company_id FK
+    uuid    from_branch_id FK
+    uuid    to_branch_id FK
+    uuid    user_id FK
+    text    status "draft or in_transit or received or cancelled"
+    text    notes
+    timestamptz created_at
+    timestamptz received_at
+  }
+
+  stock_transfer_items {
+    uuid    id PK
+    uuid    transfer_id FK
+    uuid    product_id FK
+    int     quantity_sent
+    int     quantity_received
+    text    receive_note
+  }
 ```
 
 **Conventions:**
-- Every row has a `company_id` except `sale_items` and `purchase_order_items`, which inherit tenancy through their parent's `company_id` (cheaper than duplicating + enforced by RLS EXISTS joins).
+- Every row has a `company_id` except `sale_items`, `purchase_order_items`, and `stock_transfer_items`, which inherit tenancy through their parent's `company_id` (cheaper than duplicating + enforced by RLS EXISTS joins).
 - `auth_users` in the diagram is Supabase's built-in `auth.users` table (outside our `public` schema).
-- Soft-foreign-keys like `stock_logs.reason` (freeform text that may reference `PO-00042` or `sale_id[:8]`) are not shown.
-- Receipt numbers (`receipt_no`) come from a single sequence; PO numbers (`po_no`) from another. Both are currently company-wide; per-branch numbering is [planned for Release 2](TODO.md).
+- Soft-foreign-keys like `stock_logs.reason` (freeform text referencing `PO-00042`, `sale_id[:8]`, or `โอน #<id>`) are not shown.
+- Stock lives in `product_stock` (per-branch pivot, PK `(product_id, branch_id)`) — `products.stock` was dropped in migration 014.
+- **Receipt numbering is per-branch** (R2): `UNIQUE (branch_id, receipt_no)`. Display format: `{branch.code}-{padded}` e.g. `B01-00042`. PO numbers stay company-wide.
+- **VAT breakdown** on `sales`: `total_amount = subtotal_ex_vat + vat_amount`; historical rows have `vat_amount = 0`. Effective exemption per line is `product.vat_exempt OR category.vat_exempt`.
 
 
 ### `profiles`
@@ -309,10 +381,24 @@ erDiagram
 | name | text | Product display name |
 | price | numeric(12,2) | Selling price (default 0) |
 | cost | numeric(12,2) | Purchase cost (default 0) |
-| stock | integer | Current stock quantity (default 0) |
 | min_stock | integer | Low-stock warning threshold (default 0) |
 | image_url | text \| null | Optional product image URL |
+| vat_exempt | boolean | ยกเว้น VAT override for this product (R2) |
 | created_at | timestamptz | Record creation time |
+
+> Stock is **not** on this table — see [`product_stock`](#product_stock).
+
+### `product_stock`
+
+Per-branch stock pivot (migration 014). PK `(product_id, branch_id)` — one row per product/branch combination.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| product_id | uuid | FK → products.id |
+| branch_id | uuid | FK → branches.id |
+| company_id | uuid | FK → companies.id |
+| quantity | integer | `>= 0` CHECK; updated atomically via RPCs |
+| updated_at | timestamptz | |
 
 ### `stock_logs`
 
@@ -320,10 +406,13 @@ erDiagram
 |--------|------|-------|
 | id | uuid | Primary key |
 | product_id | uuid | FK → products.id |
+| branch_id | uuid | FK → branches.id — NOT NULL after migration 014 |
 | change | integer | Stock delta (positive = added, negative = removed) |
-| reason | text \| null | Optional note |
-| user_id | uuid \| null | FK → auth.users.id (cashier) |
+| reason | text \| null | e.g. `'ขาย #<id>'`, `'รับของจาก PO'`, `'โอนออก (โอน #<id>)'` |
+| user_id | uuid \| null | FK → auth.users.id |
 | created_at | timestamptz | Log entry time |
+
+Ledger invariant: `Σ stock_logs.change == product_stock.quantity` per `(product, branch)`. Transfer shortfalls are NOT logged here — they live on `stock_transfer_items.receive_note` to preserve reconciliation.
 
 ### `customers`
 
@@ -352,9 +441,13 @@ erDiagram
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid | Primary key |
+| receipt_no | integer | Per-branch counter — `UNIQUE (branch_id, receipt_no)` after R2 |
 | customer_id | uuid \| null | FK → customers.id (nullable for walk-in) |
 | user_id | uuid | FK → auth.users.id (cashier) |
-| total_amount | numeric(12,2) | |
+| branch_id | uuid | FK → branches.id (R2 — NOT NULL) |
+| total_amount | numeric(12,2) | Gross total shown to the customer |
+| subtotal_ex_vat | numeric(12,2) | Net (pre-VAT) portion (R2) |
+| vat_amount | numeric(12,2) | VAT portion; 0 for mode=none or exempt-only carts (R2) |
 | payment_method | text | `'cash'` \| `'card'` \| `'transfer'` |
 | status | text | `'completed'` \| `'voided'` |
 | created_at | timestamptz | |
@@ -375,12 +468,17 @@ erDiagram
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid | Primary key |
+| po_no | integer | Company-wide counter |
 | supplier_id | uuid | FK → suppliers.id |
 | user_id | uuid | FK → auth.users.id |
+| branch_id | uuid | FK → branches.id — destination for the received stock (R2) |
 | status | text | `'draft'` \| `'ordered'` \| `'received'` \| `'cancelled'` |
-| total_amount | numeric(12,2) | |
+| total_amount | numeric(12,2) | Gross paid to supplier |
+| subtotal_ex_vat | numeric(12,2) | Net (pre-VAT) portion — input VAT claim base (migration 019) |
+| vat_amount | numeric(12,2) | Input VAT (ภาษีซื้อ); 0 for mode=none or fully exempt POs |
+| notes | text \| null | |
 | ordered_at | timestamptz \| null | |
-| received_at | timestamptz \| null | |
+| received_at | timestamptz \| null | Drives the VAT report's input-VAT date filter |
 | created_at | timestamptz | |
 
 ### `purchase_order_items`
@@ -394,7 +492,51 @@ erDiagram
 | quantity_received | integer | default 0 |
 | unit_cost | numeric(12,2) | |
 
-**RLS:** Fine-grained per-role policies are defined in `supabase/001_schema.sql`. See the User Roles section above for the permission matrix.
+### `branches` (R2)
+
+Physical store locations. One row per branch. `UNIQUE (company_id, code)` and `is_default` is unique per company.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| code | text | Receipt prefix (e.g. `B01`) |
+| name | text | Display name |
+| address, phone, tax_id | text \| null | Printed on the per-branch receipt block |
+| is_default | boolean | Exactly one `true` per company |
+
+### `user_branches` (R2)
+
+Many-to-many mapping between `auth.users` and `branches`. PK `(user_id, branch_id)`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | uuid | FK → auth.users.id |
+| branch_id | uuid | FK → branches.id |
+| is_default | boolean | One default per user — drives the initial `activeBranchId` |
+
+### `stock_transfers` (R2)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| from_branch_id | uuid | FK → branches.id |
+| to_branch_id | uuid | FK → branches.id — `CHECK (from_branch_id <> to_branch_id)` |
+| user_id | uuid | FK → auth.users.id (initiator) |
+| status | text | `'draft'` \| `'in_transit'` \| `'received'` \| `'cancelled'` |
+| notes | text \| null | |
+| received_at | timestamptz \| null | |
+
+### `stock_transfer_items` (R2)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| transfer_id | uuid | FK → stock_transfers.id ON DELETE CASCADE |
+| product_id | uuid | FK → products.id |
+| quantity_sent | integer | `> 0` |
+| quantity_received | integer | `0..quantity_sent` — populated on receive |
+| receive_note | text \| null | Discrepancy note when `quantity_received < quantity_sent` |
+
+**RLS:** company-scoped baseline from [009_multitenancy.sql](supabase/009_multitenancy.sql), branch-aware tightening in [017_branch_rls.sql](supabase/017_branch_rls.sql). Non-admins can only read/write rows at branches listed in their `user_branches`; `is_company_admin()` and `is_platform_admin()` bypass for cross-branch reporting. See the User Roles section for the role matrix.
 
 ---
 
@@ -465,6 +607,7 @@ WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...')
 - [supabase/016_transfer_partial_receive.sql](supabase/016_transfer_partial_receive.sql) — partial-receive + discrepancy notes
 - [supabase/017_branch_rls.sql](supabase/017_branch_rls.sql) — tightens `sales`/`purchase_orders`/`stock_logs` + child tables to branch scope. Non-admins can only see/mutate rows at a branch they're assigned to; `is_company_admin()` and `is_platform_admin()` bypass the branch check for cross-branch reporting.
 - [supabase/018_vat.sql](supabase/018_vat.sql) — VAT: `categories.vat_exempt`, `products.vat_exempt`, `sales.subtotal_ex_vat` + `sales.vat_amount`. Company-level VAT mode/rate live in `companies.settings` JSONB (`vat_mode`: `none`/`included`/`excluded`, `vat_rate`: percent).
+- [supabase/019_purchase_vat.sql](supabase/019_purchase_vat.sql) — Purchase VAT: `purchase_orders.subtotal_ex_vat` + `purchase_orders.vat_amount`. Mirror of 018 on the input (ภาษีซื้อ) side.
 
 ### Money & decimal precision
 
@@ -481,6 +624,15 @@ Covered sites: [lib/vat.ts](lib/vat.ts) (VAT inclusive/exclusive split), [lib/ac
 Three-level model. Company sets default (`/settings/company` → "ภาษีมูลค่าเพิ่ม"): `none` disables VAT everywhere; `excluded` adds VAT on top of listed prices at checkout; `included` keeps listed prices gross and breaks VAT out for reporting. Per-category ยกเว้น VAT checkbox at [/inventory/categories](app/(dashboard)/inventory/categories/page.tsx) covers an entire category; per-product override on [AddProductForm](components/inventory/AddProductForm.tsx) wins when set.
 
 Effective exemption per line = `product.vat_exempt OR category.vat_exempt`. Pure helper lives in [lib/vat.ts](lib/vat.ts) (`getVatConfig`, `computeVat`). POS recomputes the breakdown from the authoritative server state in [createSale](lib/actions/pos.ts) via `productRepo.vatExemptMap(ids)` — a client-supplied flag is not trusted. Receipts display the breakdown only when `sale.vat_amount > 0`.
+
+**Purchase side (ภาษีซื้อ / input VAT).** [purchasing.ts](lib/actions/purchasing.ts) mirrors the POS flow: `createPurchaseOrder` and `updatePurchaseOrder` call `computePoBreakdown()` which re-resolves each product's effective exemption server-side and stores `subtotal_ex_vat` + `vat_amount` on `purchase_orders`. The PO line editor ([POLineEditor](components/purchasing/POLineEditor.tsx)) shows a live net/VAT/gross preview using the current company config. The PO detail page ([app/(dashboard)/purchasing/[id]/page.tsx](app/(dashboard)/purchasing/%5Bid%5D/page.tsx)) auto-recomputes `draft` POs silently on read when the company VAT config has drifted from what was stored — `ordered` / `received` / `cancelled` POs stay frozen for audit integrity.
+
+**VAT report** ([app/(dashboard)/reports/page.tsx](app/(dashboard)/reports/page.tsx)) — visible only when `vat_mode ≠ 'none'`. Three cards:
+- Output row — completed sales: `netSales`, `vatOutput`, `grossSales`, vat/exempt bill counts
+- Input row — `received` POs (date-filtered by `received_at`): `netPurchases`, `vatInput`, `grossPurchases`, vat/exempt PO counts. Draft/ordered POs are excluded until goods are in-hand (tax invoice realized).
+- Net liability — `vatOutput − vatInput` via `sub()` in [lib/money.ts](lib/money.ts); negative means carry-forward / refund claim.
+
+CSV export (`kind=vat`) produces a single sheet with OUTPUT rows, an OUTPUT TOTAL, INPUT rows, an INPUT TOTAL, and a final `NET VAT_PAYABLE` row — ready for ภ.พ.30 prep.
 
 ### Plans & limits
 
@@ -608,10 +760,38 @@ Each paginated table is wrapped in `<Suspense key={…}>` with a `TableSkeleton`
   - On success: redirects to `/inventory`
   - Inline error display via `useActionState`
 
-### Sales / POS *(stub)*
+### Sales / POS
 
-- **Routes/Files:** `/pos` → [app/(dashboard)/pos/page.tsx](app/(dashboard)/pos/page.tsx), [lib/actions/pos.ts](lib/actions/pos.ts)
-- **Planned:** Cart UI, checkout, receipt generation, sales history
+- **Purpose:** Touch-friendly cart + checkout at the counter. Cashier picks items from a paginated, branch-scoped grid, adds a customer (optional), picks a payment method, and lands on a printable receipt.
+- **Routes/Files:**
+  - `/pos` → [app/(dashboard)/pos/page.tsx](app/(dashboard)/pos/page.tsx) + [POSTerminal](components/pos/POSTerminal.tsx)
+  - `/pos/sales` → [app/(dashboard)/pos/sales/page.tsx](app/(dashboard)/pos/sales/page.tsx) — recent sales list with branch scope toggle
+  - `/pos/receipt/[saleId]` → printable receipt with per-branch header block + VAT breakdown
+  - Actions: [lib/actions/pos.ts](lib/actions/pos.ts) (`createSale`, `voidSale`, `searchInStockProducts`)
+- **Stock flow:** `createSale` inserts header + items, then calls the `decrement_stock` RPC once per line. The RPC is SECURITY DEFINER, locks the `product_stock` row for `(product, activeBranch)`, validates `qty <= stock`, decrements, and writes a `stock_logs` row (reason `'ขาย #<id>'`). Void reverses stock via `productStockRepo.adjust` with reason `'ยกเลิกออเดอร์ #...'` — on the sale's original branch.
+- **Receipt numbering (R2):** `sales.receipt_no` is unique per branch. Display is `{branch.code}-{padded}` (e.g. `B01-00042`) via [formatReceiptNo](lib/format.ts).
+- **VAT (R2):** server recomputes VAT from company settings + `productRepo.vatExemptMap(ids)` (never trusts client). Stores `subtotal_ex_vat` + `vat_amount` on the sale; receipt shows the breakdown only when `vat_amount > 0`. See the VAT section for the modes and rules.
+- **Money safety:** every line subtotal, cart total, and VAT computation routes through [lib/money.ts](lib/money.ts) (decimal.js). See "Money & decimal precision".
+
+### Branches (R2)
+
+- **Purpose:** Let one company operate multiple physical stores with isolated stock, sales, and numbering.
+- **Routes/Files:**
+  - `/settings/branches` — branch CRUD (admin only)
+  - [components/layout/BranchPicker.tsx](components/layout/BranchPicker.tsx) — top-bar switch
+  - [components/layout/BranchScopeToggle.tsx](components/layout/BranchScopeToggle.tsx) — admin-only "สาขาของฉัน / ทุกสาขา" pill on list views (uses `?branch=all`)
+  - [lib/branch-filter.ts](lib/branch-filter.ts) — resolves the effective `branchId` per caller + URL param
+  - [components/users/BranchMultiSelect.tsx](components/users/BranchMultiSelect.tsx) — multi-branch assignment on `/users`
+- **Data model:** branches sit under `companies`; each user ↔ branch via `user_branches`. Active branch is selected via the `sea-branch` cookie, injected as `x-sea-branch` header by [proxy.ts](proxy.ts), validated in [lib/auth.ts](lib/auth.ts) against the user's assigned set.
+- **UX rules:** cashiers with one branch see no picker. Admins default to their last-used branch. A user with zero branches is sent to `/no-branch`. List views are branch-scoped; admin toggle unlocks cross-branch aggregation.
+
+### Stock Transfers (R2)
+
+- **Purpose:** Move stock between branches with an auditable paper trail.
+- **Routes/Files:** `/inventory/transfers` (list) · `/inventory/transfers/new` (create) · `/inventory/transfers/[id]` (detail + receive/cancel). Components: [TransferCreateForm](components/inventory/TransferCreateForm.tsx), [TransferLineEditor](components/inventory/TransferLineEditor.tsx), [TransferActions](components/inventory/TransferActions.tsx), [TransferReceiveForm](components/inventory/TransferReceiveForm.tsx). Actions: [lib/actions/stockTransfers.ts](lib/actions/stockTransfers.ts).
+- **Lifecycle:** `draft → in_transit → received | cancelled`. Create action immediately calls `send_stock_transfer`; a failed send rolls back the header.
+- **Partial receive:** destination manager can enter per-item `quantity_received` + a discrepancy `receive_note`. Shortfalls are tracked on `stock_transfer_items.receive_note` only — **not** written to `stock_logs` (preserves the ledger reconciliation invariant).
+- **Atomicity:** RPCs in [015_stock_transfers.sql](supabase/015_stock_transfers.sql) / [016_transfer_partial_receive.sql](supabase/016_transfer_partial_receive.sql) use `FOR UPDATE` locks and write `stock_logs` rows (`'โอนออก #...'`, `'รับโอน #...'`) at the affected branches.
 
 ### Purchasing
 
@@ -629,7 +809,8 @@ Each paginated table is wrapped in `<Suspense key={…}>` with a `TableSkeleton`
 - **Document numbering:** `purchase_orders.po_no` is an auto-incremented `INTEGER` via `po_number_seq`, formatted `PO-00001` in the UI (same pattern as `receipt_no`).
 - **Receiving flow (partial):** on an `ordered` PO, [ReceiveForm](components/purchasing/ReceiveForm.tsx) lets the user enter a qty per line (≤ remaining). On submit, the action calls the SECURITY DEFINER RPC `receive_po_item(item_id, qty, user_id)` which: (1) locks the PO line, (2) validates qty against outstanding, (3) increments `products.stock`, (4) updates `quantity_received`, (5) writes a `stock_logs` row (`รับของจาก PO-XXXXX`), (6) auto-flips PO status to `received` and stamps `received_at` when every line is complete.
 - **Why SECURITY DEFINER:** the purchasing role is not allowed to UPDATE `products` directly via RLS — the RPC bypasses this safely with validated inputs, mirroring the `decrement_stock` pattern used by POS.
-- **Schema migration:** [supabase/006_purchasing.sql](supabase/006_purchasing.sql) adds `po_number_seq`, `purchase_orders.po_no`, `purchase_orders.notes`, the `receive_po_item` function, and a `purchase_order_items_delete` RLS policy (needed so drafts can be re-edited by replacing their line items).
+- **Schema migration:** [supabase/006_purchasing.sql](supabase/006_purchasing.sql) adds `po_number_seq`, `purchase_orders.po_no`, `purchase_orders.notes`, the `receive_po_item` function, and a `purchase_order_items_delete` RLS policy (needed so drafts can be re-edited by replacing their line items). [019_purchase_vat.sql](supabase/019_purchase_vat.sql) adds VAT breakdown columns (`subtotal_ex_vat`, `vat_amount`) for input-VAT reporting.
+- **Purchase VAT:** create/update actions re-resolve each product's effective exemption server-side and store the breakdown. Draft POs auto-recompute on detail-page read if the company VAT config has drifted. See the VAT section for the full flow.
 
 ### Customers
 

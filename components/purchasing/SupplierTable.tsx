@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Pencil, Trash2, UserPlus, X } from 'lucide-react'
+import { Pencil, Trash2, UserPlus } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'

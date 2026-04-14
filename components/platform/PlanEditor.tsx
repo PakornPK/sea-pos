@@ -24,6 +24,8 @@ export function PlanEditor({ plan }: { plan: Plan }) {
   const [state, formAction, pending] = useActionState(updatePlan, undefined)
 
   useEffect(() => {
+    // Collapse the editor back to read-only after a successful save.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (state?.success) setEditing(false)
   }, [state])
 

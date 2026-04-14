@@ -11,6 +11,8 @@ import type {
   SalesByRangeSummary,
   SalesRowForExport,
   VatSummary,
+  PurchaseVatSummary,
+  PurchaseRowForExport,
 } from '@/lib/repositories/contracts'
 import { getDb } from './db'
 import { average, sumBy, add, mul } from '@/lib/money'
@@ -344,6 +346,58 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
       else         zeroBills += 1
     }
     return { netSales, vatOutput, grossSales, vatBills, zeroBills }
+  },
+
+  async purchaseRowsByRange(start: string, end: string, opts = {}): Promise<PurchaseRowForExport[]> {
+    const db = await getDb()
+    let q = db
+      .from('purchase_orders')
+      .select('id, po_no, received_at, total_amount, subtotal_ex_vat, vat_amount, supplier:suppliers(name)')
+      .gte('received_at', start)
+      .lte('received_at', end)
+      .eq('status', 'received')
+      .order('po_no', { ascending: false })
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
+
+    return (data ?? []).map((p) => {
+      const s = Array.isArray(p.supplier) ? p.supplier[0] : p.supplier
+      return {
+        id: p.id,
+        po_no: p.po_no,
+        received_at: p.received_at,
+        subtotal_ex_vat: Number(p.subtotal_ex_vat ?? p.total_amount),
+        vat_amount:      Number(p.vat_amount ?? 0),
+        total_amount:    Number(p.total_amount),
+        supplier_name:   (s as { name?: string } | null)?.name ?? null,
+      }
+    })
+  },
+
+  async purchaseVatSummary(start: string, end: string, opts = {}): Promise<PurchaseVatSummary> {
+    const db = await getDb()
+    // Only realized VAT claims — filter by received_at + status='received'.
+    let q = db
+      .from('purchase_orders')
+      .select('total_amount, subtotal_ex_vat, vat_amount, status')
+      .gte('received_at', start)
+      .lte('received_at', end)
+      .eq('status', 'received')
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+
+    const { data } = await q
+    let netPurchases = 0, vatInput = 0, grossPurchases = 0, vatPos = 0, zeroPos = 0
+    for (const r of data ?? []) {
+      const gross = Number(r.total_amount)
+      const vat   = Number(r.vat_amount ?? 0)
+      const net   = Number(r.subtotal_ex_vat ?? gross)
+      grossPurchases = add(grossPurchases, gross)
+      vatInput       = add(vatInput,       vat)
+      netPurchases   = add(netPurchases,   net)
+      if (vat > 0) vatPos += 1
+      else         zeroPos += 1
+    }
+    return { netPurchases, vatInput, grossPurchases, vatPos, zeroPos }
   },
 
   async salesRowsByRange(start: string, end: string, opts = {}): Promise<SalesRowForExport[]> {

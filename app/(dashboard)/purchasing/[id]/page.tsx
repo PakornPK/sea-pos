@@ -4,8 +4,9 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
 import {
-  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo, branchRepo,
+  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo, branchRepo, companyRepo,
 } from '@/lib/repositories'
+import { getVatConfig, computeVat } from '@/lib/vat'
 import { POForm } from '@/components/purchasing/POForm'
 import { POActions } from '@/components/purchasing/POActions'
 import { ReceiveForm, type ReceiveLine } from '@/components/purchasing/ReceiveForm'
@@ -29,13 +30,15 @@ export default async function PODetailPage({
   const { id } = await params
   await requirePageRole(['admin', 'manager', 'purchasing'])
 
-  const [po, items, suppliers, products, categories] = await Promise.all([
+  const [po, items, suppliers, products, categories, company] = await Promise.all([
     purchaseOrderRepo.getById(id),
     purchaseOrderRepo.listItemsWithProduct(id),
     supplierRepo.list(),
     productRepo.listAll(),
     categoryRepo.list(),
+    companyRepo.getCurrent(),
   ])
+  const vatConfig = getVatConfig(company)
 
   if (!po) notFound()
   const supplier = suppliers.find((s) => s.id === po.supplier_id)
@@ -43,6 +46,40 @@ export default async function PODetailPage({
 
   const isDraft    = po.status === 'draft'
   const isOrdered  = po.status === 'ordered'
+
+  // Auto-recalc on VAT config drift for drafts. When a company flips vat_mode
+  // or vat_rate after a PO was drafted, the stored breakdown goes stale. Rather
+  // than a manual button, we silently recompute with the current config on
+  // read and persist if the numbers moved. Ordered/received/cancelled POs are
+  // frozen — historical accuracy trumps live recompute.
+  if (isDraft && items.length > 0) {
+    const exemptMap = await productRepo.vatExemptMap(items.map((i) => i.product_id))
+    const expected = computeVat(
+      items.map((i) => ({
+        price:     Number(i.unit_cost),
+        quantity:  i.quantity_ordered,
+        vatExempt: Boolean(exemptMap[i.product_id]),
+      })),
+      vatConfig,
+    )
+    const drifted =
+      Math.abs(expected.total         - Number(po.total_amount))    > 0.005 ||
+      Math.abs(expected.subtotalExVat - Number(po.subtotal_ex_vat)) > 0.005 ||
+      Math.abs(expected.vatAmount     - Number(po.vat_amount))      > 0.005
+    if (drifted) {
+      await purchaseOrderRepo.updateHeader(po.id, {
+        supplier_id:     po.supplier_id,
+        notes:           po.notes,
+        total_amount:    expected.total,
+        subtotal_ex_vat: expected.subtotalExVat,
+        vat_amount:      expected.vatAmount,
+      })
+      // Reflect the persisted values in this render without a round-trip.
+      po.total_amount    = expected.total
+      po.subtotal_ex_vat = expected.subtotalExVat
+      po.vat_amount      = expected.vatAmount
+    }
+  }
 
   // Initial lines for edit form
   const initialLines = items.map((i) => ({
@@ -119,6 +156,11 @@ export default async function PODetailPage({
           <p className="text-xl font-bold tabular-nums mt-1">
             {formatBaht(po.total_amount)}
           </p>
+          {po.vat_amount > 0 && (
+            <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+              (ก่อน VAT {formatBaht(po.subtotal_ex_vat)} · VAT ซื้อ {formatBaht(po.vat_amount)})
+            </p>
+          )}
         </div>
       </div>
 
@@ -136,6 +178,7 @@ export default async function PODetailPage({
             suppliers={suppliers}
             products={products}
             categories={categories}
+            vatConfig={vatConfig}
             initial={{
               id: po.id,
               supplierId: po.supplier_id,
@@ -188,6 +231,37 @@ export default async function PODetailPage({
                   )
                 })}
               </tbody>
+              <tfoot className="border-t bg-muted/30 text-sm">
+                {po.vat_amount > 0 ? (
+                  <>
+                    <tr className="text-muted-foreground">
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-xs">ยอดก่อน VAT</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-xs">
+                        {formatBaht(po.subtotal_ex_vat)}
+                      </td>
+                    </tr>
+                    <tr className="text-muted-foreground">
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-xs">VAT ซื้อ</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-xs">
+                        {formatBaht(po.vat_amount)}
+                      </td>
+                    </tr>
+                    <tr className="border-t">
+                      <td colSpan={3} className="px-3 py-2 text-right font-medium">รวมทั้งสิ้น</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                        {formatBaht(po.total_amount)}
+                      </td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-2 text-right font-medium">ยอดรวม</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                      {formatBaht(po.total_amount)}
+                    </td>
+                  </tr>
+                )}
+              </tfoot>
             </table>
           </div>
         </div>

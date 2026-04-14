@@ -3,8 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActionRole } from '@/lib/auth'
-import { purchaseOrderRepo, type POLineInput } from '@/lib/repositories'
-import { sumBy, lineTotal } from '@/lib/money'
+import { purchaseOrderRepo, productRepo, companyRepo, type POLineInput } from '@/lib/repositories'
+import { computeVat, getVatConfig } from '@/lib/vat'
 
 export type POState = { error?: string; success?: boolean } | undefined
 
@@ -44,8 +44,24 @@ function toRepoLines(lines: POLineFormInput[]): POLineInput[] {
   }))
 }
 
-function sumTotal(lines: POLineFormInput[]): number {
-  return sumBy(lines, (l) => lineTotal(l.unitCost, l.quantity))
+/**
+ * Compute the VAT breakdown for a PO. Resolves each product's effective VAT
+ * exemption server-side (product.vat_exempt OR category.vat_exempt) so a
+ * tampered client payload can't mis-state input VAT.
+ */
+async function computePoBreakdown(lines: POLineFormInput[]) {
+  const [company, exemptMap] = await Promise.all([
+    companyRepo.getCurrent(),
+    productRepo.vatExemptMap(lines.map((l) => l.productId)),
+  ])
+  return computeVat(
+    lines.map((l) => ({
+      price:     l.unitCost,
+      quantity:  l.quantity,
+      vatExempt: Boolean(exemptMap[l.productId]),
+    })),
+    getVatConfig(company),
+  )
 }
 
 export async function createPurchaseOrder(
@@ -73,11 +89,15 @@ export async function createPurchaseOrder(
       return { error: 'ไม่มีสิทธิ์สร้างใบสั่งซื้อที่สาขานี้' }
     }
 
+    const breakdown = await computePoBreakdown(lines)
+
     const header = await purchaseOrderRepo.createHeader({
-      supplier_id:  supplierId,
-      user_id:      me.id,
-      branch_id:    branchId,
-      total_amount: sumTotal(lines),
+      supplier_id:     supplierId,
+      user_id:         me.id,
+      branch_id:       branchId,
+      total_amount:    breakdown.total,
+      subtotal_ex_vat: breakdown.subtotalExVat,
+      vat_amount:      breakdown.vatAmount,
       notes,
     })
     if ('error' in header) return { error: header.error }
@@ -117,10 +137,13 @@ export async function updatePurchaseOrder(
     const itemsErr = await purchaseOrderRepo.replaceItems(id, toRepoLines(lines))
     if (itemsErr) return { error: itemsErr }
 
+    const breakdown = await computePoBreakdown(lines)
     const updateErr = await purchaseOrderRepo.updateHeader(id, {
-      supplier_id:  supplierId,
+      supplier_id:     supplierId,
       notes,
-      total_amount: sumTotal(lines),
+      total_amount:    breakdown.total,
+      subtotal_ex_vat: breakdown.subtotalExVat,
+      vat_amount:      breakdown.vatAmount,
     })
     if (updateErr) return { error: updateErr }
 

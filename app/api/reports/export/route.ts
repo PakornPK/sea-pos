@@ -61,18 +61,27 @@ export async function GET(request: NextRequest) {
           start: searchParams.get('start') ?? undefined,
           end: searchParams.get('end') ?? undefined,
         })
-        // One row per completed sale, plus a trailing totals row the accountant
-        // can paste straight into ภ.พ.30.
-        const rows = await analyticsRepo.salesRowsByRange(r.startIso, r.endIso, { branchId })
-        const completed = rows.filter((s) => s.status === 'completed')
-        const totalNet   = sumBy(completed, (r) => r.subtotal_ex_vat)
-        const totalVat   = sumBy(completed, (r) => r.vat_amount)
-        const totalGross = sumBy(completed, (r) => r.total_amount)
+        // Two sections in one sheet: output (sales) and input (received POs),
+        // plus a summary row with the net VAT liability. Columns align so the
+        // accountant can paste the whole thing into ภ.พ.30 prep.
+        const [salesRows, poRows] = await Promise.all([
+          analyticsRepo.salesRowsByRange(r.startIso, r.endIso, { branchId }),
+          analyticsRepo.purchaseRowsByRange(r.startIso, r.endIso, { branchId }),
+        ])
+        const completedSales = salesRows.filter((s) => s.status === 'completed')
+        const outNet   = sumBy(completedSales, (r) => r.subtotal_ex_vat)
+        const outVat   = sumBy(completedSales, (r) => r.vat_amount)
+        const outGross = sumBy(completedSales, (r) => r.total_amount)
+        const inNet    = sumBy(poRows, (r) => r.subtotal_ex_vat)
+        const inVat    = sumBy(poRows, (r) => r.vat_amount)
+        const inGross  = sumBy(poRows, (r) => r.total_amount)
+        const netVat   = Number((outVat - inVat).toFixed(2))
 
         const body = toCsv(
-          ['receipt_no', 'created_at', 'customer', 'net_sales', 'vat_output', 'gross_sales'],
+          ['section', 'doc_no', 'date', 'party', 'net', 'vat', 'gross'],
           [
-            ...completed.map((s) => [
+            ...completedSales.map((s) => [
+              'OUTPUT',
               `REC-${String(s.receipt_no).padStart(5, '0')}`,
               s.created_at,
               s.customer_name ?? 'walk-in',
@@ -80,7 +89,18 @@ export async function GET(request: NextRequest) {
               moneyStr(s.vat_amount),
               moneyStr(s.total_amount),
             ]),
-            ['TOTAL', '', '', moneyStr(totalNet), moneyStr(totalVat), moneyStr(totalGross)],
+            ['OUTPUT', 'TOTAL', '', '', moneyStr(outNet), moneyStr(outVat), moneyStr(outGross)],
+            ...poRows.map((p) => [
+              'INPUT',
+              `PO-${String(p.po_no).padStart(5, '0')}`,
+              p.received_at ?? '',
+              p.supplier_name ?? '',
+              moneyStr(p.subtotal_ex_vat),
+              moneyStr(p.vat_amount),
+              moneyStr(p.total_amount),
+            ]),
+            ['INPUT', 'TOTAL', '', '', moneyStr(inNet), moneyStr(inVat), moneyStr(inGross)],
+            ['NET', 'VAT_PAYABLE', '', '', '', moneyStr(netVat), ''],
           ]
         )
         return csvResponse(body, csvFilename('vat', r.startDate, r.endDate))

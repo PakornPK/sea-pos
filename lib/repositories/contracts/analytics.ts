@@ -81,6 +81,19 @@ export type VatSummary = {
   zeroBills:   number
 }
 
+export type PurchaseVatSummary = {
+  /** Sum of subtotal_ex_vat on received POs in the range. */
+  netPurchases: number
+  /** Sum of vat_amount on received POs (VAT input / ภาษีซื้อ). */
+  vatInput:     number
+  /** Sum of total_amount — equals netPurchases + vatInput for the same rows. */
+  grossPurchases: number
+  /** Number of received POs that carried any VAT. */
+  vatPos:       number
+  /** Number of received POs with vat_amount = 0. */
+  zeroPos:      number
+}
+
 export type SalesRowForExport = {
   id:              string
   receipt_no:      number
@@ -91,6 +104,16 @@ export type SalesRowForExport = {
   payment_method:  string
   status:          string
   customer_name:   string | null
+}
+
+export type PurchaseRowForExport = {
+  id:              string
+  po_no:           number
+  received_at:     string | null
+  subtotal_ex_vat: number
+  vat_amount:      number
+  total_amount:    number
+  supplier_name:   string | null
 }
 
 export type BranchScope = { branchId?: string | null }
@@ -112,6 +135,14 @@ export interface AnalyticsRepository {
   }): Promise<StockMovement[]>
   salesByRange(start: string, end: string, opts?: BranchScope): Promise<SalesByRangeSummary>
   salesRowsByRange(start: string, end: string, opts?: BranchScope): Promise<SalesRowForExport[]>
-  /** Tax summary for a period. Only completed sales contribute. */
+  /** Output VAT summary for a period. Only completed sales contribute. */
   vatSummary(start: string, end: string, opts?: BranchScope): Promise<VatSummary>
+  /**
+   * Input VAT summary for a period. Only `received` POs contribute —
+   * until goods are received the claim isn't realized.
+   * Date range is matched against `received_at`.
+   */
+  purchaseVatSummary(start: string, end: string, opts?: BranchScope): Promise<PurchaseVatSummary>
+  /** Per-PO rows for the VAT CSV (input side). Filtered to status='received'. */
+  purchaseRowsByRange(start: string, end: string, opts?: BranchScope): Promise<PurchaseRowForExport[]>
 }

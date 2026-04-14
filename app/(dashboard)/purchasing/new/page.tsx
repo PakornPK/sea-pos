@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { supplierRepo, productRepo, categoryRepo, branchRepo } from '@/lib/repositories'
+import { supplierRepo, productRepo, categoryRepo, branchRepo, companyRepo } from '@/lib/repositories'
 import { POForm } from '@/components/purchasing/POForm'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getVatConfig } from '@/lib/vat'
 
 export const metadata: Metadata = {
   title: 'สร้างใบสั่งซื้อ | SEA-POS',
@@ -14,12 +15,14 @@ export const metadata: Metadata = {
 export default async function NewPOPage() {
   const { me } = await requirePageRole(['admin', 'manager', 'purchasing'])
 
-  const [suppliers, products, categories, branches] = await Promise.all([
+  const [suppliers, products, categories, branches, company] = await Promise.all([
     supplierRepo.list(),
     productRepo.listAll(),
     categoryRepo.list(),
     branchRepo.list(),
+    companyRepo.getCurrent(),
   ])
+  const vatConfig = getVatConfig(company)
 
   return (
     <div className="flex flex-col gap-6">
@@ -49,6 +52,7 @@ export default async function NewPOPage() {
           categories={categories}
           branches={branches}
           activeBranchId={me.activeBranchId}
+          vatConfig={vatConfig}
         />
       )}
     </div>

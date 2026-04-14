@@ -24,8 +24,10 @@ export function AddUserForm({ branches }: Props) {
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
+    // Collapse form + reset fields after a successful createUser submission.
     if (state?.success) {
       formRef.current?.reset()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(false)
     }
   }, [state])

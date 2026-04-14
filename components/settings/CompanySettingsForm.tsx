@@ -18,7 +18,9 @@ export function CompanySettingsForm({ company }: Props) {
   const [showSaved, setShowSaved] = useState(false)
 
   useEffect(() => {
+    // Show "saved" toast for 3s after each successful submit.
     if (state?.success) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowSaved(true)
       const t = setTimeout(() => setShowSaved(false), 3000)
       return () => clearTimeout(t)

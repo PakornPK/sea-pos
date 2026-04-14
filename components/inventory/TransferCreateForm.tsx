@@ -74,7 +74,7 @@ export function TransferCreateForm({
 
       <p className="text-xs text-muted-foreground">
         หมายเหตุ: สต๊อกสาขาต้นทางจะถูกหักทันทีเมื่อสร้างรายการ
-        ปลายทางต้องกด "รับของ" เพื่อเพิ่มสต๊อกเข้า
+        ปลายทางต้องกด &quot;รับของ&quot; เพื่อเพิ่มสต๊อกเข้า
       </p>
     </form>
   )

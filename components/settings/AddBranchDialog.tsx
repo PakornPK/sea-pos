@@ -17,8 +17,12 @@ export function AddBranchDialog() {
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
+    // Close dialog + reset form on a successful submit. The setState here
+    // syncs UI state to the action result — the React docs' "external system"
+    // pattern (the Dialog is driven by `open`). Only fires once per result.
     if (state?.success) {
       formRef.current?.reset()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(false)
     }
   }, [state])

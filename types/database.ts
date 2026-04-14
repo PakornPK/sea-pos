@@ -216,6 +216,8 @@ export type PurchaseOrder = {
   branch_id: string
   status: PurchaseOrderStatus
   total_amount: number
+  subtotal_ex_vat: number
+  vat_amount: number
   notes: string | null
   ordered_at: string | null
   received_at: string | null
