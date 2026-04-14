@@ -4,6 +4,7 @@ import { analyticsRepo } from '@/lib/repositories'
 import { resolveBranchFilter } from '@/lib/branch-filter'
 import { parseDateRange } from '@/lib/daterange'
 import { toCsv, csvFilename } from '@/lib/csv'
+import { sumBy, moneyStr } from '@/lib/money'
 
 /**
  * CSV export endpoint for reports.
@@ -39,17 +40,50 @@ export async function GET(request: NextRequest) {
         })
         const rows = await analyticsRepo.salesRowsByRange(r.startIso, r.endIso, { branchId })
         const body = toCsv(
-          ['receipt_no', 'created_at', 'customer', 'payment_method', 'status', 'total_amount'],
+          ['receipt_no', 'created_at', 'customer', 'payment_method', 'status',
+           'subtotal_ex_vat', 'vat_amount', 'total_amount'],
           rows.map((s) => [
             `REC-${String(s.receipt_no).padStart(5, '0')}`,
             s.created_at,
             s.customer_name ?? 'walk-in',
             s.payment_method,
             s.status,
-            s.total_amount.toFixed(2),
+            moneyStr(s.subtotal_ex_vat),
+            moneyStr(s.vat_amount),
+            moneyStr(s.total_amount),
           ])
         )
         return csvResponse(body, csvFilename('sales', r.startDate, r.endDate))
+      }
+
+      case 'vat': {
+        const r = parseDateRange({
+          start: searchParams.get('start') ?? undefined,
+          end: searchParams.get('end') ?? undefined,
+        })
+        // One row per completed sale, plus a trailing totals row the accountant
+        // can paste straight into ภ.พ.30.
+        const rows = await analyticsRepo.salesRowsByRange(r.startIso, r.endIso, { branchId })
+        const completed = rows.filter((s) => s.status === 'completed')
+        const totalNet   = sumBy(completed, (r) => r.subtotal_ex_vat)
+        const totalVat   = sumBy(completed, (r) => r.vat_amount)
+        const totalGross = sumBy(completed, (r) => r.total_amount)
+
+        const body = toCsv(
+          ['receipt_no', 'created_at', 'customer', 'net_sales', 'vat_output', 'gross_sales'],
+          [
+            ...completed.map((s) => [
+              `REC-${String(s.receipt_no).padStart(5, '0')}`,
+              s.created_at,
+              s.customer_name ?? 'walk-in',
+              moneyStr(s.subtotal_ex_vat),
+              moneyStr(s.vat_amount),
+              moneyStr(s.total_amount),
+            ]),
+            ['TOTAL', '', '', moneyStr(totalNet), moneyStr(totalVat), moneyStr(totalGross)],
+          ]
+        )
+        return csvResponse(body, csvFilename('vat', r.startDate, r.endDate))
       }
 
       case 'stock-movements': {
@@ -80,7 +114,7 @@ export async function GET(request: NextRequest) {
         const rows = await analyticsRepo.inventoryValueByCategory({ branchId })
         const body = toCsv(
           ['category', 'item_count', 'stock_value'],
-          rows.map((r) => [r.category_name, r.item_count, r.stock_value.toFixed(2)])
+          rows.map((r) => [r.category_name, r.item_count, moneyStr(r.stock_value)])
         )
         const today = new Date().toISOString().slice(0, 10)
         return csvResponse(body, csvFilename('inventory-value', today))

@@ -18,6 +18,7 @@ import { CustomerPicker, type PickerCustomer } from '@/components/customers/Cust
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
 import type { ProductWithStock } from '@/types/database'
 import { computeVat, type VatConfig } from '@/lib/vat'
+import { lineTotal } from '@/lib/money'
 
 type CartItem = {
   productId:  string
@@ -318,7 +319,7 @@ export function POSTerminal({
                     </button>
                   </div>
                   <span className="text-sm font-medium tabular-nums">
-                    {formatBaht(item.price * item.quantity)}
+                    {formatBaht(lineTotal(item.price, item.quantity))}
                   </span>
                 </div>
               </div>

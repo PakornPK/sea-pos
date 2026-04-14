@@ -68,14 +68,29 @@ export type SalesByRangeSummary = {
   avgBill:      number
 }
 
+export type VatSummary = {
+  /** Sum of subtotal_ex_vat across completed sales in the range. */
+  netSales:    number
+  /** Sum of vat_amount across completed sales in the range (VAT output / ภาษีขาย). */
+  vatOutput:   number
+  /** Sum of total_amount — equals netSales + vatOutput for the same rows. */
+  grossSales:  number
+  /** Number of completed sales that carried any VAT. */
+  vatBills:    number
+  /** Number of completed sales with vat_amount = 0 (zero-rated / exempt). */
+  zeroBills:   number
+}
+
 export type SalesRowForExport = {
-  id:             string
-  receipt_no:     number
-  created_at:     string
-  total_amount:   number
-  payment_method: string
-  status:         string
-  customer_name:  string | null
+  id:              string
+  receipt_no:      number
+  created_at:      string
+  subtotal_ex_vat: number
+  vat_amount:      number
+  total_amount:    number
+  payment_method:  string
+  status:          string
+  customer_name:   string | null
 }
 
 export type BranchScope = { branchId?: string | null }
@@ -97,4 +112,6 @@ export interface AnalyticsRepository {
   }): Promise<StockMovement[]>
   salesByRange(start: string, end: string, opts?: BranchScope): Promise<SalesByRangeSummary>
   salesRowsByRange(start: string, end: string, opts?: BranchScope): Promise<SalesRowForExport[]>
+  /** Tax summary for a period. Only completed sales contribute. */
+  vatSummary(start: string, end: string, opts?: BranchScope): Promise<VatSummary>
 }

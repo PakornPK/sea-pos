@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { quickCreateProduct } from '@/lib/actions/inventory'
 import { uploadProductImage } from '@/lib/actions/storage'
 import { formatBaht } from '@/lib/format'
+import { lineTotal, sumBy } from '@/lib/money'
 import type { Category, Product } from '@/types/database'
 
 export type POLine = {
@@ -135,7 +136,7 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
     })
   }
 
-  const total = lines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+  const total = sumBy(lines, (l) => lineTotal(l.unitCost, l.quantity))
 
   return (
     <div className="space-y-3">
@@ -371,7 +372,7 @@ export function POLineEditor({ products, categories = [], initial, onChange }: P
                       />
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {formatBaht(l.quantity * l.unitCost)}
+                      {formatBaht(lineTotal(l.unitCost, l.quantity))}
                     </td>
                     <td className="px-3 py-2">
                       <Button

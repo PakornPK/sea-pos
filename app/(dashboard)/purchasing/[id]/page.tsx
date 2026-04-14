@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatPoNo, formatDateTime, formatBaht } from '@/lib/format'
+import { lineTotal } from '@/lib/money'
 import { PO_STATUS_LABEL, PO_STATUS_VARIANT } from '@/lib/labels'
 import type { PurchaseOrderStatus } from '@/types/database'
 
@@ -181,7 +182,7 @@ export default async function PODetailPage({
                         {formatBaht(i.unit_cost)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBaht(i.quantity_ordered * Number(i.unit_cost))}
+                        {formatBaht(lineTotal(i.unit_cost, i.quantity_ordered))}
                       </td>
                     </tr>
                   )

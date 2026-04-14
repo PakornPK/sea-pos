@@ -7,6 +7,7 @@ import { productRepo, productStockRepo, saleRepo, companyRepo } from '@/lib/repo
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
 import type { ProductWithStock } from '@/types/database'
 import { computeVat, getVatConfig } from '@/lib/vat'
+import { lineTotal } from '@/lib/money'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
@@ -88,7 +89,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
       product_id: i.productId,
       quantity: i.quantity,
       unit_price: i.price,
-      subtotal: i.price * i.quantity,
+      subtotal: lineTotal(i.price, i.quantity),
     }))
   )
   if (itemsError) return { error: itemsError }

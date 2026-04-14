@@ -45,6 +45,7 @@ export type {
   StockMovement,
   SalesByRangeSummary,
   SalesRowForExport,
+  VatSummary,
 } from './analytics'
 
 import type { CompanyRepository }         from './company'

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActionRole } from '@/lib/auth'
 import { purchaseOrderRepo, type POLineInput } from '@/lib/repositories'
+import { sumBy, lineTotal } from '@/lib/money'
 
 export type POState = { error?: string; success?: boolean } | undefined
 
@@ -44,7 +45,7 @@ function toRepoLines(lines: POLineFormInput[]): POLineInput[] {
 }
 
 function sumTotal(lines: POLineFormInput[]): number {
-  return lines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+  return sumBy(lines, (l) => lineTotal(l.unitCost, l.quantity))
 }
 
 export async function createPurchaseOrder(

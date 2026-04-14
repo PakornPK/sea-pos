@@ -10,8 +10,10 @@ import type {
   StockMovement,
   SalesByRangeSummary,
   SalesRowForExport,
+  VatSummary,
 } from '@/lib/repositories/contracts'
 import { getDb } from './db'
+import { average, sumBy, add, mul } from '@/lib/money'
 
 function startOfDay(d: Date): Date {
   const x = new Date(d); x.setHours(0, 0, 0, 0); return x
@@ -45,13 +47,13 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     const [{ data: sales }, { data: items }] = await Promise.all([salesQ, itemsQ])
 
     const billCount = sales?.length ?? 0
-    const revenue = (sales ?? []).reduce((s, r) => s + Number(r.total_amount), 0)
+    const revenue   = sumBy(sales ?? [], (r) => r.total_amount)
     const itemsSold = (items ?? []).reduce((s, r) => s + Number(r.quantity), 0)
 
     return {
       revenue,
       billCount,
-      avgBill: billCount > 0 ? revenue / billCount : 0,
+      avgBill: average(revenue, billCount),
       itemsSold,
     }
   },
@@ -77,7 +79,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
       const key = isoDate(r.created_at)
       const b = buckets.get(key)
       if (b) {
-        b.revenue += Number(r.total_amount)
+        b.revenue = add(b.revenue, r.total_amount)
         b.count += 1
       }
     }
@@ -101,7 +103,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     for (const r of data ?? []) {
       const key = r.payment_method as string
       const b = buckets.get(key) ?? { total: 0, count: 0 }
-      b.total += Number(r.total_amount)
+      b.total = add(b.total, r.total_amount)
       b.count += 1
       buckets.set(key, b)
     }
@@ -132,7 +134,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
       const prod = Array.isArray(r.product) ? r.product[0] : r.product
       const existing = buckets.get(r.product_id)
       if (existing) {
-        existing.revenue += Number(r.subtotal)
+        existing.revenue  = add(existing.revenue, r.subtotal)
         existing.quantity += Number(r.quantity)
       } else {
         buckets.set(r.product_id, {
@@ -247,7 +249,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
         item_count:    0,
         stock_value:   0,
       }
-      existing.stock_value += Number(r.quantity) * Number(p.cost ?? 0)
+      existing.stock_value = add(existing.stock_value, mul(r.quantity, p.cost ?? 0))
       buckets.set(key, existing)
 
       const ids = seen.get(key) ?? new Set<string>()
@@ -306,7 +308,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     for (const s of data ?? []) {
       if (s.status === 'completed') {
         billCount += 1
-        totalRevenue += Number(s.total_amount)
+        totalRevenue = add(totalRevenue, s.total_amount)
       } else if (s.status === 'voided') {
         voidedCount += 1
       }
@@ -315,15 +317,40 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
       totalRevenue,
       billCount,
       voidedCount,
-      avgBill: billCount > 0 ? totalRevenue / billCount : 0,
+      avgBill: average(totalRevenue, billCount),
     }
+  },
+
+  async vatSummary(start: string, end: string, opts = {}): Promise<VatSummary> {
+    const db = await getDb()
+    let q = db
+      .from('sales')
+      .select('total_amount, subtotal_ex_vat, vat_amount, status')
+      .gte('created_at', start)
+      .lte('created_at', end)
+      .eq('status', 'completed')
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+
+    const { data } = await q
+    let netSales = 0, vatOutput = 0, grossSales = 0, vatBills = 0, zeroBills = 0
+    for (const r of data ?? []) {
+      const gross = Number(r.total_amount)
+      const vat   = Number(r.vat_amount ?? 0)
+      const net   = Number(r.subtotal_ex_vat ?? gross)
+      grossSales = add(grossSales, gross)
+      vatOutput  = add(vatOutput,  vat)
+      netSales   = add(netSales,   net)
+      if (vat > 0) vatBills += 1
+      else         zeroBills += 1
+    }
+    return { netSales, vatOutput, grossSales, vatBills, zeroBills }
   },
 
   async salesRowsByRange(start: string, end: string, opts = {}): Promise<SalesRowForExport[]> {
     const db = await getDb()
     let q = db
       .from('sales')
-      .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)')
+      .select('id, receipt_no, created_at, total_amount, subtotal_ex_vat, vat_amount, payment_method, status, customer:customers(name)')
       .gte('created_at', start)
       .lte('created_at', end)
       .order('receipt_no', { ascending: false })
@@ -336,7 +363,9 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
         id: s.id,
         receipt_no: s.receipt_no,
         created_at: s.created_at,
-        total_amount: Number(s.total_amount),
+        subtotal_ex_vat: Number(s.subtotal_ex_vat ?? s.total_amount),
+        vat_amount:      Number(s.vat_amount ?? 0),
+        total_amount:    Number(s.total_amount),
         payment_method: s.payment_method,
         status: s.status,
         customer_name: (c as { name?: string } | null)?.name ?? null,

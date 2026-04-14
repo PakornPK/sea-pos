@@ -4,7 +4,7 @@ import { Download } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type Kind = 'sales' | 'stock-movements' | 'inventory'
+type Kind = 'sales' | 'stock-movements' | 'inventory' | 'vat'
 
 type Props = {
   kind: Kind

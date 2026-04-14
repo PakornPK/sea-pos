@@ -1,4 +1,6 @@
+import Decimal from 'decimal.js'
 import type { Company } from '@/types/database'
+import { chain, money } from '@/lib/money'
 
 /**
  * VAT configuration lives on `companies.settings` (JSONB). This helper reads
@@ -47,44 +49,46 @@ export type VatBreakdown = {
   total:         number
 }
 
-/** Round to 2 decimal places in a cash-safe way (no floating-point drift). */
-function money(n: number): number {
-  return Math.round(n * 100) / 100
-}
-
 export function computeVat(lines: VatLine[], config: VatConfig): VatBreakdown {
-  const gross = lines.reduce((s, l) => s + l.price * l.quantity, 0)
+  // All intermediate math runs on Decimal; rounding happens only at the
+  // boundary via `money()`. Avoids IEEE-754 drift on 7% VAT divisions.
+  const ZERO = chain(0)
+  const grossAll = lines.reduce(
+    (acc, l) => acc.plus(chain(l.price).times(l.quantity)),
+    ZERO,
+  )
 
   if (config.mode === 'none' || config.rate <= 0) {
-    return { subtotalExVat: money(gross), vatAmount: 0, total: money(gross) }
+    const g = money(grossAll)
+    return { subtotalExVat: g, vatAmount: 0, total: g }
   }
 
-  const rate = config.rate / 100
-  let vatableGross = 0
-  let exemptGross  = 0
+  const rate = chain(config.rate).div(100)
+  let vatableGross = ZERO
+  let exemptGross  = ZERO
   for (const l of lines) {
-    const sub = l.price * l.quantity
-    if (l.vatExempt) exemptGross += sub
-    else             vatableGross += sub
+    const sub = chain(l.price).times(l.quantity)
+    if (l.vatExempt) exemptGross = exemptGross.plus(sub)
+    else             vatableGross = vatableGross.plus(sub)
   }
 
   if (config.mode === 'excluded') {
     // Prices are net. VAT is added on top of vatable lines.
-    const vat = vatableGross * rate
-    const total = vatableGross + exemptGross + vat
+    const vat   = vatableGross.times(rate)
+    const total = vatableGross.plus(exemptGross).plus(vat)
     return {
-      subtotalExVat: money(vatableGross + exemptGross),
+      subtotalExVat: money(vatableGross.plus(exemptGross)),
       vatAmount:     money(vat),
       total:         money(total),
     }
   }
 
   // 'included' — prices contain VAT. Split vatable lines; exempt ones pass through.
-  const vatableNet = vatableGross / (1 + rate)
-  const vat        = vatableGross - vatableNet
+  const vatableNet = vatableGross.div(new Decimal(1).plus(rate))
+  const vat        = vatableGross.minus(vatableNet)
   return {
-    subtotalExVat: money(vatableNet + exemptGross),
+    subtotalExVat: money(vatableNet.plus(exemptGross)),
     vatAmount:     money(vat),
-    total:         money(vatableGross + exemptGross),
+    total:         money(vatableGross.plus(exemptGross)),
   }
 }

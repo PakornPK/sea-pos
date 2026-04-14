@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import { requirePageRole } from '@/lib/auth'
 import { customerRepo, saleRepo } from '@/lib/repositories'
 import { parsePageParams } from '@/lib/pagination'
+import { add } from '@/lib/money'
 import { CustomerTable, type CustomerRow } from '@/components/customers/CustomerTable'
 import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
@@ -62,7 +63,7 @@ async function CustomersList({
   for (const s of completedSales) {
     if (!s.customer_id) continue
     const cur = stats.get(s.customer_id) ?? { total: 0, count: 0, last: '' }
-    cur.total += Number(s.total_amount)
+    cur.total = add(cur.total, s.total_amount)
     cur.count += 1
     if (s.created_at > cur.last) cur.last = s.created_at
     stats.set(s.customer_id, cur)

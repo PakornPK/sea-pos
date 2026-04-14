@@ -14,6 +14,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatReceiptNo, formatDateTime, formatBaht } from '@/lib/format'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
+import { sumBy, average } from '@/lib/money'
 
 export const metadata: Metadata = {
   title: 'รายละเอียดลูกค้า | SEA-POS',
@@ -36,8 +37,8 @@ export default async function CustomerDetailPage({
   if (!customer) notFound()
 
   const completed = sales.filter((s) => s.status === 'completed')
-  const totalSpent = completed.reduce((sum, s) => sum + Number(s.total_amount), 0)
-  const avgPerOrder = completed.length > 0 ? totalSpent / completed.length : 0
+  const totalSpent = sumBy(completed, (s) => s.total_amount)
+  const avgPerOrder = average(totalSpent, completed.length)
 
   const canManage = role === 'admin' || role === 'manager'
   const canDelete = role === 'admin'

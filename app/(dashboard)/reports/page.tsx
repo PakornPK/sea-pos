@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { requirePageRole } from '@/lib/auth'
-import { analyticsRepo } from '@/lib/repositories'
+import { analyticsRepo, companyRepo } from '@/lib/repositories'
 import { resolveBranchFilter } from '@/lib/branch-filter'
+import { getVatConfig } from '@/lib/vat'
 import { formatBaht, formatDateTime } from '@/lib/format'
+import { sumBy } from '@/lib/money'
 import { parseDateRange, type DateRange } from '@/lib/daterange'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { DateRangePicker } from '@/components/reports/DateRangePicker'
@@ -68,6 +70,10 @@ export default async function ReportsPage({
         <SalesSummary range={range} branchId={branchId} />
       </Suspense>
 
+      <Suspense key={`vat-${key}`} fallback={<KpiSkeleton />}>
+        <VatReport range={range} branchId={branchId} />
+      </Suspense>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Suspense key={`iv-${branchId ?? 'all'}`} fallback={<BlockSkeleton />}>
           <InventoryValueReport branchId={branchId} />
@@ -109,7 +115,7 @@ async function SalesSummary({ range, branchId }: { range: DateRange; branchId: s
 async function InventoryValueReport({ branchId }: { branchId: string | null }) {
   await requirePageRole(ALLOWED)
   const rows = await analyticsRepo.inventoryValueByCategory({ branchId })
-  const grandTotal = rows.reduce((s, r) => s + r.stock_value, 0)
+  const grandTotal = sumBy(rows, (r) => r.stock_value)
 
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -203,6 +209,42 @@ async function StockMovementReport({ range, branchId }: { range: DateRange; bran
           </Table>
         </div>
       )}
+    </div>
+  )
+}
+
+async function VatReport({ range, branchId }: { range: DateRange; branchId: string | null }) {
+  const { me } = await requirePageRole(ALLOWED)
+  const [summary, company] = await Promise.all([
+    analyticsRepo.vatSummary(range.startIso, range.endIso, { branchId }),
+    me.companyId ? companyRepo.getById(me.companyId) : Promise.resolve(null),
+  ])
+  const vat = getVatConfig(company)
+  if (vat.mode === 'none') return null
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          ภาษีมูลค่าเพิ่ม ({vat.rate}% · {vat.mode === 'included' ? 'รวม VAT แล้ว' : 'ไม่รวม VAT'})
+        </h2>
+        <ExportButton
+          kind="vat"
+          start={range.startDate}
+          end={range.endDate}
+          branchId={branchId}
+          label="ดาวน์โหลดรายการ VAT"
+        />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="ยอดขายก่อน VAT" value={formatBaht(summary.netSales)} />
+        <KpiCard label="VAT ขาย" value={formatBaht(summary.vatOutput)} />
+        <KpiCard label="ยอดขายรวม VAT" value={formatBaht(summary.grossSales)} />
+        <KpiCard
+          label="บิลที่มี VAT / ยกเว้น"
+          value={`${summary.vatBills.toLocaleString('th-TH')} / ${summary.zeroBills.toLocaleString('th-TH')}`}
+        />
+      </div>
     </div>
   )
 }

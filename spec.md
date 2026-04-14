@@ -466,6 +466,16 @@ WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...')
 - [supabase/017_branch_rls.sql](supabase/017_branch_rls.sql) — tightens `sales`/`purchase_orders`/`stock_logs` + child tables to branch scope. Non-admins can only see/mutate rows at a branch they're assigned to; `is_company_admin()` and `is_platform_admin()` bypass the branch check for cross-branch reporting.
 - [supabase/018_vat.sql](supabase/018_vat.sql) — VAT: `categories.vat_exempt`, `products.vat_exempt`, `sales.subtotal_ex_vat` + `sales.vat_amount`. Company-level VAT mode/rate live in `companies.settings` JSONB (`vat_mode`: `none`/`included`/`excluded`, `vat_rate`: percent).
 
+### Money & decimal precision
+
+All monetary arithmetic in the app **must** go through [lib/money.ts](lib/money.ts) (`money`, `moneyStr`, `add`, `sub`, `mul`, `div`, `sum`, `sumBy`, `lineTotal`, `average`, `chain`). The helpers are thin wrappers over [decimal.js](https://github.com/MikeMcl/decimal.js) with `ROUND_HALF_UP` and a 2-decimal-place boundary — matching Thai baht convention (satang is 0.01).
+
+**Why:** JavaScript's IEEE-754 floats produce silent drift on common POS expressions — `0.1 + 0.2 = 0.30000000000000004`, `2.39 * 3 = 7.170000000000001`. At a 7% VAT rate those errors compound, and since sales and POs are persisted to `NUMERIC(12,2)`, a drifted client value can cause receipt / DB mismatch or mis-filed ภ.พ.30 returns.
+
+**Rule of thumb:** never write `a + b`, `price * qty`, `/`, or `.toFixed(2)` on a money value in app code. Use `add(a, b)`, `lineTotal(price, qty)`, `div(x, y)`, `moneyStr(x)`. Stock quantities, counts, and pagination math remain plain `number` — only money runs through Decimal.
+
+Covered sites: [lib/vat.ts](lib/vat.ts) (VAT inclusive/exclusive split), [lib/actions/pos.ts](lib/actions/pos.ts) (sale line subtotals), [lib/actions/purchasing.ts](lib/actions/purchasing.ts) (PO totals), [lib/repositories/supabase/analytics.ts](lib/repositories/supabase/analytics.ts) (revenue sums, averages, stock value, VAT summary), [components/pos/POSTerminal.tsx](components/pos/POSTerminal.tsx) (cart line), [components/purchasing/POLineEditor.tsx](components/purchasing/POLineEditor.tsx) (line editor total), [app/(dashboard)/customers/*](app/(dashboard)/customers), [app/(dashboard)/purchasing/[id]/page.tsx](app/(dashboard)/purchasing/%5Bid%5D/page.tsx), [app/api/reports/export/route.ts](app/api/reports/export/route.ts) (CSV amounts).
+
 ### VAT
 
 Three-level model. Company sets default (`/settings/company` → "ภาษีมูลค่าเพิ่ม"): `none` disables VAT everywhere; `excluded` adds VAT on top of listed prices at checkout; `included` keeps listed prices gross and breaks VAT out for reporting. Per-category ยกเว้น VAT checkbox at [/inventory/categories](app/(dashboard)/inventory/categories/page.tsx) covers an entire category; per-product override on [AddProductForm](components/inventory/AddProductForm.tsx) wins when set.
