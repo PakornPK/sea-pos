@@ -35,6 +35,7 @@ export const stockTransferRepo = repos.stockTransfer
 export const userRepo          = repos.user
 export const authRepo          = repos.auth
 export const analyticsRepo     = repos.analytics
+export const heldSaleRepo      = repos.heldSale
 
 // Also re-export contract types so callers never need to reach into contracts/
 export type {
@@ -56,4 +57,5 @@ export type {
   RecentSale,
   InventoryValueByCategory,
   StockMovement,
+  HeldSaleListRow,
 } from './contracts'

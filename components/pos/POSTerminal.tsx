@@ -12,10 +12,12 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { createSale, searchInStockProducts, findProductByCode } from '@/lib/actions/pos'
+import { holdSale } from '@/lib/actions/heldSales'
 import { formatBaht } from '@/lib/format'
 import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
+import { HeldSalesDrawer } from '@/components/pos/HeldSalesDrawer'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
-import type { ProductWithStock } from '@/types/database'
+import type { HeldSale, ProductWithStock } from '@/types/database'
 import { computeVat, type VatConfig } from '@/lib/vat'
 import { lineTotal } from '@/lib/money'
 
@@ -106,6 +108,51 @@ export function POSTerminal({
   function onSearchChange(v: string) {
     setSearch(v)
     setPage(1)
+  }
+
+  // ── Held sales ─────────────────────────────────────────────────
+  const [holding, setHolding] = useState(false)
+  const [heldRefresh, setHeldRefresh] = useState(0)
+  async function handleHold() {
+    if (cart.length === 0 || holding) return
+    const note = window.prompt('ใส่ชื่อบิล (ถ้ามี) — เช่น "คุณสมชาย" หรือ "โต๊ะ 3"', '')
+    if (note === null) return  // cancelled
+    setHolding(true)
+    try {
+      const fd = new FormData()
+      fd.append('items',      JSON.stringify(cart))
+      fd.append('customerId', customer?.id ?? '')
+      fd.append('note',       note.trim())
+      const res = await holdSale(undefined, fd)
+      if (res?.error) {
+        alert(res.error)
+        return
+      }
+      // Success — blank the live cart so the cashier can serve the next
+      // customer, and tell the drawer to refetch its list + count.
+      setCart([])
+      setCustomer(null)
+      setHeldRefresh((n) => n + 1)
+    } finally {
+      setHolding(false)
+    }
+  }
+
+  function handleResume(snapshot: HeldSale) {
+    setCart(
+      snapshot.items.map((i) => ({
+        productId: i.productId,
+        name:      i.name,
+        price:     i.price,
+        quantity:  i.quantity,
+        vatExempt: Boolean(i.vatExempt),
+      })),
+    )
+    // Customer on the held bill is re-selected from the picker list if present.
+    const c = snapshot.customer_id
+      ? customers.find((x) => x.id === snapshot.customer_id) ?? null
+      : null
+    setCustomer(c)
   }
 
   // Enter in search = scan commit. Look up exact SKU at the active branch;
@@ -332,7 +379,14 @@ export function POSTerminal({
         <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
           <ShoppingCart className="h-4 w-4" />
           <span className="font-semibold">รายการสั่ง</span>
-          {totalQty > 0 && <Badge className="ml-auto text-xs">{totalQty} รายการ</Badge>}
+          {totalQty > 0 && <Badge className="text-xs">{totalQty} รายการ</Badge>}
+          <div className="ml-auto">
+            <HeldSalesDrawer
+              onResume={handleResume}
+              currentCartHasItems={cart.length > 0}
+              refreshKey={heldRefresh}
+            />
+          </div>
         </div>
 
         {/* Items */}
@@ -438,6 +492,16 @@ export function POSTerminal({
               disabled={cart.length === 0 || isPending}
             >
               {isPending ? 'กำลังบันทึก...' : 'ชำระเงิน'}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={cart.length === 0 || isPending || holding}
+              onClick={handleHold}
+            >
+              {holding ? 'กำลังพัก...' : 'พักบิล'}
             </Button>
 
             {cart.length > 0 && (

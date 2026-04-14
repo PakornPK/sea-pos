@@ -234,6 +234,25 @@ export type PurchaseOrderItem = {
   unit_cost: number
 }
 
+/** One item in a parked (held) bill — stored inline as JSONB on held_sales. */
+export type HeldSaleItem = {
+  productId:  string
+  name:       string
+  price:      number
+  quantity:   number
+  vatExempt:  boolean
+}
+
+export type HeldSale = {
+  id:          string
+  branch_id:   string
+  user_id:     string
+  customer_id: string | null
+  items:       HeldSaleItem[]
+  note:        string | null
+  created_at:  string
+}
+
 // ─── Insert types (omit server-generated fields) ──────────────────────────────
 
 export type ProfileInsert = {

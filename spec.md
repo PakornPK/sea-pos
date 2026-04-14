@@ -352,6 +352,17 @@ erDiagram
     int     quantity_received
     text    receive_note
   }
+
+  held_sales {
+    uuid    id PK
+    uuid    company_id FK
+    uuid    branch_id FK
+    uuid    user_id FK "cashier who parked it"
+    uuid    customer_id FK
+    jsonb   items
+    text    note
+    timestamptz created_at
+  }
 ```
 
 **Conventions:**
@@ -526,6 +537,22 @@ Many-to-many mapping between `auth.users` and `branches`. PK `(user_id, branch_i
 | notes | text \| null | |
 | received_at | timestamptz \| null | |
 
+### `held_sales`
+
+Parked cart for พักบิล. One row = one in-progress sale that a cashier paused.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| branch_id | uuid | FK → branches.id — bill can only be resumed at the same branch |
+| user_id | uuid | FK → auth.users.id — cashier who parked it |
+| customer_id | uuid \| null | FK → customers.id (nullable for walk-in) |
+| items | jsonb | `[{ productId, name, price, quantity, vatExempt }]` — full cart snapshot |
+| note | text \| null | Optional label ("คุณสมชาย", "โต๊ะ 3") |
+| created_at | timestamptz | |
+
+Lifecycle: INSERT on hold, DELETE on resume or explicit trash — UPDATE is blocked by RLS (resume = delete + re-hydrate).
+
 ### `stock_transfer_items` (R2)
 
 | Column | Type | Notes |
@@ -608,6 +635,8 @@ WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...')
 - [supabase/017_branch_rls.sql](supabase/017_branch_rls.sql) — tightens `sales`/`purchase_orders`/`stock_logs` + child tables to branch scope. Non-admins can only see/mutate rows at a branch they're assigned to; `is_company_admin()` and `is_platform_admin()` bypass the branch check for cross-branch reporting.
 - [supabase/018_vat.sql](supabase/018_vat.sql) — VAT: `categories.vat_exempt`, `products.vat_exempt`, `sales.subtotal_ex_vat` + `sales.vat_amount`. Company-level VAT mode/rate live in `companies.settings` JSONB (`vat_mode`: `none`/`included`/`excluded`, `vat_rate`: percent).
 - [supabase/019_purchase_vat.sql](supabase/019_purchase_vat.sql) — Purchase VAT: `purchase_orders.subtotal_ex_vat` + `purchase_orders.vat_amount`. Mirror of 018 on the input (ภาษีซื้อ) side.
+- [supabase/020_product_barcode.sql](supabase/020_product_barcode.sql) — `products.barcode` + partial unique index per company. Separate from `sku` (SKU is internal, barcode is the printed EAN/UPC).
+- [supabase/021_held_sales.sql](supabase/021_held_sales.sql) — `held_sales` (พักบิล) table + branch-aware RLS. Parks an in-progress cart as JSONB; resume deletes the row and re-hydrates the live cart. Not a `status='held'` on `sales` so the sales ledger, receipt numbering, and VAT reports stay clean.
 
 ### Money & decimal precision
 
@@ -772,6 +801,25 @@ Each paginated table is wrapped in `<Suspense key={…}>` with a `TableSkeleton`
 - **Receipt numbering (R2):** `sales.receipt_no` is unique per branch. Display is `{branch.code}-{padded}` (e.g. `B01-00042`) via [formatReceiptNo](lib/format.ts).
 - **VAT (R2):** server recomputes VAT from company settings + `productRepo.vatExemptMap(ids)` (never trusts client). Stores `subtotal_ex_vat` + `vat_amount` on the sale; receipt shows the breakdown only when `vat_amount > 0`. See the VAT section for the modes and rules.
 - **Money safety:** every line subtotal, cart total, and VAT computation routes through [lib/money.ts](lib/money.ts) (decimal.js). See "Money & decimal precision".
+- **Barcode / SKU scan:** Enter in the search input = scan commit — `findProductByCode` matches `barcode` exactly first, falls back to case-insensitive SKU. Native `<input>` is used (not the shadcn wrapper) because the base-ui primitive eats Enter before it bubbles to our handler. Auto-focus on mount + after each add so keyboard-wedge scanners chain scans.
+- **พักบิล / hold:** "พักบิล" button in the cart footer saves the cart + customer + optional note to `held_sales`; "บิลที่พักไว้" drawer in the cart header lists parked bills for the active branch. See the Held Sales section for details.
+
+### Held Sales (พักบิล)
+
+- **Purpose:** Let a cashier park an in-progress cart to serve the next customer, then resume it later. Classic busy-lane Thai-shop need.
+- **Routes/Files:**
+  - [components/pos/HeldSalesDrawer.tsx](components/pos/HeldSalesDrawer.tsx) — "บิลที่พักไว้" button + slide-in list
+  - Hold + resume wired inside [components/pos/POSTerminal.tsx](components/pos/POSTerminal.tsx) — "พักบิล" button in the cart footer, "บิลที่พักไว้" badge in the cart header
+  - [lib/actions/heldSales.ts](lib/actions/heldSales.ts) — `holdSale`, `listHeldSales`, `resumeHeldSale`, `deleteHeldSale`
+  - [supabase/021_held_sales.sql](supabase/021_held_sales.sql) — schema + branch-aware RLS
+- **Roles:** admin, manager, cashier — anyone who can ring a sale.
+- **Data model:** `held_sales` is a standalone table (not a status on `sales`). The cart is stored as JSONB (`[{ productId, name, price, quantity, vatExempt }]`). Stock hasn't moved, no receipt number has been issued — parking a bill is purely an intent record.
+- **Flow:**
+  - **Hold** — cashier clicks พักบิล → optional note prompt ("คุณสมชาย", "โต๊ะ 3") → row inserted with the cart snapshot + customer + note → live cart blanked
+  - **Resume** — cashier opens the drawer → taps a bill → row is deleted and the cart re-hydrated on the POS. Refuses resume if the bill's branch ≠ cashier's active branch. Confirms before replacing a non-empty current cart.
+  - **Delete** — trash icon on each drawer row hard-deletes.
+- **Safety:** stock is re-validated at checkout via the usual `decrement_stock` RPC — if another cashier sold the last unit while the bill was parked, checkout errors cleanly instead of going negative. UPDATE is intentionally not allowed by RLS (resume = delete + re-hydrate), so there's no "edit parked bill" drift.
+- **Out of scope (future):** auto-expiry cleanup (nightly job), printing a placeholder slip, cross-branch holds.
 
 ### Branches (R2)
 

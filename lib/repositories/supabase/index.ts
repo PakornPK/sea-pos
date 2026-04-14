@@ -26,6 +26,7 @@ import { supabaseStockTransferRepo } from './stockTransfers'
 import { supabaseUserRepo }          from './users'
 import { supabaseAuthRepo }          from './auth'
 import { supabaseAnalyticsRepo }     from './analytics'
+import { supabaseHeldSaleRepo }      from './heldSales'
 
 export const supabaseRepos: Repositories = {
   company:       supabaseCompanyRepo,
@@ -44,4 +45,5 @@ export const supabaseRepos: Repositories = {
   user:          supabaseUserRepo,
   auth:          supabaseAuthRepo,
   analytics:     supabaseAnalyticsRepo,
+  heldSale:      supabaseHeldSaleRepo,
 }

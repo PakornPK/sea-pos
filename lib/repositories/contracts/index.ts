@@ -32,6 +32,7 @@ export type {
   StockTransferDetail, StockTransferItemWithProduct, ReceiveOverride,
 } from './stockTransfer'
 export type { UserRepository, UserListRow } from './user'
+export type { HeldSaleRepository, HeldSaleListRow } from './heldSale'
 export type { AuthRepository }           from './auth'
 export type {
   AnalyticsRepository,
@@ -65,6 +66,7 @@ import type { StockTransferRepository }   from './stockTransfer'
 import type { UserRepository }            from './user'
 import type { AuthRepository }            from './auth'
 import type { AnalyticsRepository }       from './analytics'
+import type { HeldSaleRepository }        from './heldSale'
 
 /** Aggregate type — an adapter implements all of these to be a valid backend. */
 export interface Repositories {
@@ -84,4 +86,5 @@ export interface Repositories {
   user:          UserRepository
   auth:          AuthRepository
   analytics:     AnalyticsRepository
+  heldSale:      HeldSaleRepository
 }
