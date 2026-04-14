@@ -90,6 +90,8 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   }
 
   revalidatePath('/inventory')
+  revalidatePath('/reports')
+  revalidatePath('/dashboard')
   redirect(`/pos/receipt/${header.id}`)
 }
 
@@ -126,6 +128,8 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
 
     revalidatePath('/inventory')
     revalidatePath(`/pos/receipt/${saleId}`)
+    revalidatePath('/reports')
+    revalidatePath('/dashboard')
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }

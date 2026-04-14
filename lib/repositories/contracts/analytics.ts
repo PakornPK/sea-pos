@@ -78,14 +78,16 @@ export type SalesRowForExport = {
   customer_name:  string | null
 }
 
+export type BranchScope = { branchId?: string | null }
+
 export interface AnalyticsRepository {
-  todaySummary(): Promise<TodaySummary>
-  dailySeries(days: number): Promise<DailySeriesPoint[]>
-  paymentMix(days: number): Promise<PaymentMixPoint[]>
-  topProducts(days: number, limit: number): Promise<TopProduct[]>
-  lowStock(limit?: number): Promise<LowStockItem[]>
-  recentSales(limit?: number, opts?: { branchId?: string | null }): Promise<RecentSale[]>
-  inventoryValueByCategory(): Promise<InventoryValueByCategory[]>
+  todaySummary(opts?: BranchScope): Promise<TodaySummary>
+  dailySeries(days: number, opts?: BranchScope): Promise<DailySeriesPoint[]>
+  paymentMix(days: number, opts?: BranchScope): Promise<PaymentMixPoint[]>
+  topProducts(days: number, limit: number, opts?: BranchScope): Promise<TopProduct[]>
+  lowStock(limit?: number, opts?: BranchScope): Promise<LowStockItem[]>
+  recentSales(limit?: number, opts?: BranchScope): Promise<RecentSale[]>
+  inventoryValueByCategory(opts?: BranchScope): Promise<InventoryValueByCategory[]>
   stockMovements(opts?: {
     start?: string
     end?: string
@@ -93,6 +95,6 @@ export interface AnalyticsRepository {
     branchId?: string | null
     limit?: number
   }): Promise<StockMovement[]>
-  salesByRange(start: string, end: string): Promise<SalesByRangeSummary>
-  salesRowsByRange(start: string, end: string): Promise<SalesRowForExport[]>
+  salesByRange(start: string, end: string, opts?: BranchScope): Promise<SalesByRangeSummary>
+  salesRowsByRange(start: string, end: string, opts?: BranchScope): Promise<SalesRowForExport[]>
 }

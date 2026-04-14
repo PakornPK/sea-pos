@@ -18,7 +18,13 @@ export type DateRange = {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  // Local-TZ YYYY-MM-DD. Must NOT use .toISOString() — it converts to UTC and
+  // shifts the date backward for users east of UTC (e.g. Bangkok = UTC+7),
+  // making "today" resolve to yesterday in the date picker and filter range.
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function startOfDay(isoDay: string): Date {

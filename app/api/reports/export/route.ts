@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePageRole } from '@/lib/auth'
 import { analyticsRepo } from '@/lib/repositories'
+import { resolveBranchFilter } from '@/lib/branch-filter'
 import { parseDateRange } from '@/lib/daterange'
 import { toCsv, csvFilename } from '@/lib/csv'
 
@@ -18,14 +19,16 @@ function jsonError(status: number, message: string) {
 }
 
 export async function GET(request: NextRequest) {
+  let me
   try {
-    await requirePageRole(['admin', 'manager'])
+    ({ me } = await requirePageRole(['admin', 'manager']))
   } catch {
     return jsonError(401, 'Unauthorized')
   }
 
   const { searchParams } = new URL(request.url)
   const kind = searchParams.get('kind') ?? 'sales'
+  const branchId = resolveBranchFilter(me, searchParams.get('branch') ?? undefined)
 
   try {
     switch (kind) {
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
           start: searchParams.get('start') ?? undefined,
           end: searchParams.get('end') ?? undefined,
         })
-        const rows = await analyticsRepo.salesRowsByRange(r.startIso, r.endIso)
+        const rows = await analyticsRepo.salesRowsByRange(r.startIso, r.endIso, { branchId })
         const body = toCsv(
           ['receipt_no', 'created_at', 'customer', 'payment_method', 'status', 'total_amount'],
           rows.map((s) => [
@@ -57,6 +60,7 @@ export async function GET(request: NextRequest) {
         const rows = await analyticsRepo.stockMovements({
           start: r.startIso,
           end: r.endIso,
+          branchId,
           limit: 5000,
         })
         const body = toCsv(
@@ -73,7 +77,7 @@ export async function GET(request: NextRequest) {
       }
 
       case 'inventory': {
-        const rows = await analyticsRepo.inventoryValueByCategory()
+        const rows = await analyticsRepo.inventoryValueByCategory({ branchId })
         const body = toCsv(
           ['category', 'item_count', 'stock_value'],
           rows.map((r) => [r.category_name, r.item_count, r.stock_value.toFixed(2)])

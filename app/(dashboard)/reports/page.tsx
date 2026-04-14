@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { requirePageRole } from '@/lib/auth'
 import { analyticsRepo } from '@/lib/repositories'
+import { resolveBranchFilter } from '@/lib/branch-filter'
 import { formatBaht, formatDateTime } from '@/lib/format'
 import { parseDateRange, type DateRange } from '@/lib/daterange'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { DateRangePicker } from '@/components/reports/DateRangePicker'
 import { ExportButton } from '@/components/reports/ExportButton'
+import { BranchScopeToggle } from '@/components/layout/BranchScopeToggle'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -28,11 +30,15 @@ function humanRange(r: DateRange): string {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ start?: string; end?: string }>
+  searchParams: Promise<{ start?: string; end?: string; branch?: string }>
 }) {
-  await requirePageRole(ALLOWED)
+  const { me } = await requirePageRole(ALLOWED)
   const sp = await searchParams
   const range = parseDateRange(sp)
+  const branchId = resolveBranchFilter(me, sp.branch)
+  const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+  const isAllBranches = branchId === null
+  const key = `${range.startIso}-${range.endIso}-${branchId ?? 'all'}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,32 +47,42 @@ export default async function ReportsPage({
           <h1 className="text-2xl font-semibold">รายงาน</h1>
           <p className="text-sm text-muted-foreground mt-1">{humanRange(range)}</p>
         </div>
-        <DateRangePicker
-          currentStart={range.startDate}
-          currentEnd={range.endDate}
-          activePreset={range.matchingPreset}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <BranchScopeToggle
+              basePath="/reports"
+              searchParams={sp}
+              isAllBranches={isAllBranches}
+              activeBranchLabel={null}
+            />
+          )}
+          <DateRangePicker
+            currentStart={range.startDate}
+            currentEnd={range.endDate}
+            activePreset={range.matchingPreset}
+          />
+        </div>
       </div>
 
-      <Suspense key={range.startIso + range.endIso} fallback={<KpiSkeleton />}>
-        <SalesSummary range={range} />
+      <Suspense key={`sum-${key}`} fallback={<KpiSkeleton />}>
+        <SalesSummary range={range} branchId={branchId} />
       </Suspense>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Suspense key={'iv-' + range.startIso} fallback={<BlockSkeleton />}>
-          <InventoryValueReport />
+        <Suspense key={`iv-${branchId ?? 'all'}`} fallback={<BlockSkeleton />}>
+          <InventoryValueReport branchId={branchId} />
         </Suspense>
-        <Suspense key={'mv-' + range.startIso + range.endIso} fallback={<BlockSkeleton />}>
-          <StockMovementReport range={range} />
+        <Suspense key={`mv-${key}`} fallback={<BlockSkeleton />}>
+          <StockMovementReport range={range} branchId={branchId} />
         </Suspense>
       </div>
     </div>
   )
 }
 
-async function SalesSummary({ range }: { range: DateRange }) {
+async function SalesSummary({ range, branchId }: { range: DateRange; branchId: string | null }) {
   await requirePageRole(ALLOWED)
-  const s = await analyticsRepo.salesByRange(range.startIso, range.endIso)
+  const s = await analyticsRepo.salesByRange(range.startIso, range.endIso, { branchId })
 
   return (
     <div className="space-y-3">
@@ -76,6 +92,7 @@ async function SalesSummary({ range }: { range: DateRange }) {
           kind="sales"
           start={range.startDate}
           end={range.endDate}
+          branchId={branchId}
           label="ดาวน์โหลดรายการขาย"
         />
       </div>
@@ -89,9 +106,9 @@ async function SalesSummary({ range }: { range: DateRange }) {
   )
 }
 
-async function InventoryValueReport() {
+async function InventoryValueReport({ branchId }: { branchId: string | null }) {
   await requirePageRole(ALLOWED)
-  const rows = await analyticsRepo.inventoryValueByCategory()
+  const rows = await analyticsRepo.inventoryValueByCategory({ branchId })
   const grandTotal = rows.reduce((s, r) => s + r.stock_value, 0)
 
   return (
@@ -100,7 +117,7 @@ async function InventoryValueReport() {
         <h3 className="font-semibold text-sm">มูลค่าสต๊อกตามหมวดหมู่</h3>
         <div className="flex items-center gap-2">
           <p className="text-xs text-muted-foreground">รวม {formatBaht(grandTotal)}</p>
-          <ExportButton kind="inventory" />
+          <ExportButton kind="inventory" branchId={branchId} />
         </div>
       </div>
       {rows.length === 0 ? (
@@ -129,12 +146,12 @@ async function InventoryValueReport() {
   )
 }
 
-async function StockMovementReport({ range }: { range: DateRange }) {
-  const { me } = await requirePageRole(ALLOWED)
+async function StockMovementReport({ range, branchId }: { range: DateRange; branchId: string | null }) {
+  await requirePageRole(ALLOWED)
   const rows = await analyticsRepo.stockMovements({
     start: range.startIso,
     end: range.endIso,
-    branchId: me.activeBranchId,
+    branchId,
     limit: 200,
   })
 
@@ -148,6 +165,7 @@ async function StockMovementReport({ range }: { range: DateRange }) {
             kind="stock-movements"
             start={range.startDate}
             end={range.endDate}
+            branchId={branchId}
           />
         </div>
       </div>

@@ -26,20 +26,23 @@ function daysAgo(n: number): Date {
 }
 
 export const supabaseAnalyticsRepo: AnalyticsRepository = {
-  async todaySummary(): Promise<TodaySummary> {
+  async todaySummary(opts = {}): Promise<TodaySummary> {
     const db = await getDb()
     const sinceIso = startOfDay(new Date()).toISOString()
 
-    const [{ data: sales }, { data: items }] = await Promise.all([
-      db.from('sales')
-        .select('id, total_amount, status')
-        .gte('created_at', sinceIso)
-        .eq('status', 'completed'),
-      db.from('sale_items')
-        .select('quantity, sale:sales!inner(status, created_at)')
-        .gte('sale.created_at', sinceIso)
-        .eq('sale.status', 'completed'),
-    ])
+    let salesQ = db.from('sales')
+      .select('id, total_amount, status')
+      .gte('created_at', sinceIso)
+      .eq('status', 'completed')
+    let itemsQ = db.from('sale_items')
+      .select('quantity, sale:sales!inner(status, created_at, branch_id)')
+      .gte('sale.created_at', sinceIso)
+      .eq('sale.status', 'completed')
+    if (opts.branchId) {
+      salesQ = salesQ.eq('branch_id', opts.branchId)
+      itemsQ = itemsQ.eq('sale.branch_id', opts.branchId)
+    }
+    const [{ data: sales }, { data: items }] = await Promise.all([salesQ, itemsQ])
 
     const billCount = sales?.length ?? 0
     const revenue = (sales ?? []).reduce((s, r) => s + Number(r.total_amount), 0)
@@ -53,14 +56,16 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     }
   },
 
-  async dailySeries(days: number): Promise<DailySeriesPoint[]> {
+  async dailySeries(days: number, opts = {}): Promise<DailySeriesPoint[]> {
     const db = await getDb()
     const since = daysAgo(days - 1)
-    const { data } = await db
+    let q = db
       .from('sales')
       .select('created_at, total_amount, status')
       .gte('created_at', since.toISOString())
       .eq('status', 'completed')
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
 
     const buckets = new Map<string, { revenue: number; count: number }>()
     for (let i = 0; i < days; i++) {
@@ -81,14 +86,16 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     }))
   },
 
-  async paymentMix(days: number): Promise<PaymentMixPoint[]> {
+  async paymentMix(days: number, opts = {}): Promise<PaymentMixPoint[]> {
     const db = await getDb()
     const since = daysAgo(days - 1).toISOString()
-    const { data } = await db
+    let q = db
       .from('sales')
       .select('payment_method, total_amount, status')
       .gte('created_at', since)
       .eq('status', 'completed')
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
 
     const buckets = new Map<string, { total: number; count: number }>()
     for (const r of data ?? []) {
@@ -104,14 +111,16 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     })
   },
 
-  async topProducts(days: number, limit: number): Promise<TopProduct[]> {
+  async topProducts(days: number, limit: number, opts = {}): Promise<TopProduct[]> {
     const db = await getDb()
     const since = daysAgo(days - 1).toISOString()
-    const { data } = await db
+    let q = db
       .from('sale_items')
-      .select('product_id, quantity, subtotal, product:products(name, sku), sale:sales!inner(status, created_at)')
+      .select('product_id, quantity, subtotal, product:products(name, sku), sale:sales!inner(status, created_at, branch_id)')
       .gte('sale.created_at', since)
       .eq('sale.status', 'completed')
+    if (opts.branchId) q = q.eq('sale.branch_id', opts.branchId)
+    const { data } = await q
 
     const buckets = new Map<string, TopProduct>()
     for (const r of (data ?? []) as Array<{
@@ -140,14 +149,16 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
       .slice(0, limit)
   },
 
-  async lowStock(limit = 10): Promise<LowStockItem[]> {
+  async lowStock(limit = 10, opts = {}): Promise<LowStockItem[]> {
     // Aggregates pivot rows across every branch the caller can see (RLS filters).
     // Sums quantity per product, compares to product.min_stock.
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('product_stock')
       .select('quantity, product:products(id, name, sku, min_stock)')
       .limit(2000)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
 
     const byProduct = new Map<string, LowStockItem>()
     for (const r of (data ?? []) as Array<{
@@ -202,13 +213,15 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     })
   },
 
-  async inventoryValueByCategory(): Promise<InventoryValueByCategory[]> {
+  async inventoryValueByCategory(opts = {}): Promise<InventoryValueByCategory[]> {
     // Walk product_stock and join back to product + category so we include
     // stock at every branch the caller can see (RLS filters).
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('product_stock')
       .select('quantity, product:products(id, cost, category_id, category:categories(id, name))')
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
 
     const buckets = new Map<string, InventoryValueByCategory>()
     const seen = new Map<string, Set<string>>()   // categoryKey → productIds for item_count
@@ -277,13 +290,15 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     })
   },
 
-  async salesByRange(start: string, end: string): Promise<SalesByRangeSummary> {
+  async salesByRange(start: string, end: string, opts = {}): Promise<SalesByRangeSummary> {
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('sales')
       .select('total_amount, status')
       .gte('created_at', start)
       .lte('created_at', end)
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
 
     let totalRevenue = 0
     let billCount = 0
@@ -304,14 +319,16 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     }
   },
 
-  async salesRowsByRange(start: string, end: string): Promise<SalesRowForExport[]> {
+  async salesRowsByRange(start: string, end: string, opts = {}): Promise<SalesRowForExport[]> {
     const db = await getDb()
-    const { data } = await db
+    let q = db
       .from('sales')
       .select('id, receipt_no, created_at, total_amount, payment_method, status, customer:customers(name)')
       .gte('created_at', start)
       .lte('created_at', end)
       .order('receipt_no', { ascending: false })
+    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
+    const { data } = await q
 
     return (data ?? []).map((s) => {
       const c = Array.isArray(s.customer) ? s.customer[0] : s.customer

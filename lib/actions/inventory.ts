@@ -25,6 +25,8 @@ export async function adjustStock(productId: string, delta: number) {
     if (err) return { error: err }
 
     revalidatePath('/inventory')
+    revalidatePath('/reports')
+    revalidatePath('/dashboard')
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'ไม่มีสิทธิ์' }
   }

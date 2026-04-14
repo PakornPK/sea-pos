@@ -186,6 +186,8 @@ export async function receivePurchaseOrder(
     revalidatePath('/inventory')
     revalidatePath('/purchasing')
     revalidatePath(`/purchasing/${id}`)
+    revalidatePath('/reports')
+    revalidatePath('/dashboard')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }

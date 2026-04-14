@@ -627,10 +627,16 @@ Each paginated table is wrapped in `<Suspense key={…}>` with a `TableSkeleton`
 - **Detail page:** profile form + stats cards (order count, total spent, average per order) + full purchase history table linking to each receipt. Delete is blocked if the customer has any sales (hard-delete guard preserves history).
 - **POS integration:** [CustomerPicker](components/customers/CustomerPicker.tsx) is rendered above the payment-method selector in [POSTerminal](components/pos/POSTerminal.tsx). Cashiers can search existing customers or quick-create a new one inline via `quickCreateCustomer`. Selected `customer_id` is submitted as a hidden field; `walk-in` leaves it null.
 
-### Reports *(stub)*
+### Dashboard / Reports
 
-- **Routes/Files:** `/reports` → [app/(dashboard)/reports/page.tsx](app/(dashboard)/reports/page.tsx)
-- **Planned:** Sales summaries, stock movement history (from stock_logs), low-stock report
+- **Purpose:** Give managers and admins branch-scoped visibility into sales, stock, and payment performance.
+- **Routes/Files:**
+  - `/dashboard` → [app/(dashboard)/dashboard/page.tsx](app/(dashboard)/dashboard/page.tsx) — today KPIs, 7-day revenue trend, payment mix, top products, low stock, recent sales
+  - `/reports` → [app/(dashboard)/reports/page.tsx](app/(dashboard)/reports/page.tsx) — sales summary + inventory value by category + stock movement log, filtered by [DateRangePicker](components/reports/DateRangePicker.tsx)
+  - [app/api/reports/export/route.ts](app/api/reports/export/route.ts) — CSV export endpoint used by [ExportButton](components/reports/ExportButton.tsx) for `sales`, `stock-movements`, and `inventory` kinds
+  - [lib/repositories/contracts/analytics.ts](lib/repositories/contracts/analytics.ts), [lib/repositories/supabase/analytics.ts](lib/repositories/supabase/analytics.ts)
+- **Branch scoping:** every analytics method accepts `{ branchId }`. Non-admins are locked to their active branch via [resolveBranchFilter](lib/branch-filter.ts); admins see the [BranchScopeToggle](components/layout/BranchScopeToggle.tsx) and can flip to `?branch=all` to aggregate across every branch they can see (RLS still enforces tenant). The toggle propagates into CSV exports via `?branch=` on the export URL.
+- **Allowed roles:** `admin`, `manager`.
 
 ### User Management *(admin only)*
 

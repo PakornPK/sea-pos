@@ -10,15 +10,17 @@ type Props = {
   kind: Kind
   start?: string
   end?: string
+  branchId?: string | null
   label?: string
 }
 
 export function ExportButton({
-  kind, start, end, label = 'ดาวน์โหลด CSV',
+  kind, start, end, branchId, label = 'ดาวน์โหลด CSV',
 }: Props) {
   const params = new URLSearchParams({ kind })
-  if (start) params.set('start', start)
-  if (end)   params.set('end', end)
+  if (start)    params.set('start', start)
+  if (end)      params.set('end', end)
+  if (branchId) params.set('branch', branchId)
 
   return (
     <a

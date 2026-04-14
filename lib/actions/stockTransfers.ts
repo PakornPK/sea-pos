@@ -73,6 +73,8 @@ export async function createStockTransfer(
     newId = res.id
     revalidatePath('/inventory')
     revalidatePath('/inventory/transfers')
+    revalidatePath('/reports')
+    revalidatePath('/dashboard')
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
@@ -122,6 +124,8 @@ export async function receiveStockTransfer(
     revalidatePath('/inventory')
     revalidatePath('/inventory/transfers')
     revalidatePath(`/inventory/transfers/${id}`)
+    revalidatePath('/reports')
+    revalidatePath('/dashboard')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -138,4 +142,6 @@ export async function cancelStockTransfer(id: string): Promise<void> {
   revalidatePath('/inventory')
   revalidatePath('/inventory/transfers')
   revalidatePath(`/inventory/transfers/${id}`)
+  revalidatePath('/reports')
+  revalidatePath('/dashboard')
 }
