@@ -19,6 +19,14 @@ export interface ProductRepository {
     opts: { branchId: string; search?: string | null }
   ): Promise<Paginated<ProductWithStock>>
 
+  /**
+   * Scan lookup: matches `barcode` OR `sku` exactly (case-insensitive). Returns
+   * the product with its stock at the given branch, or null if no match or
+   * out of stock. Barcode takes precedence when both columns match different
+   * rows (should be prevented by the partial unique index on barcode).
+   */
+  findInStockByCodeForBranch(branchId: string, code: string): Promise<ProductWithStock | null>
+
   /** Every product in the company, joined with its stock at the given branch
    *  (0 when the pivot row is missing). Inventory table home. */
   listWithStockForBranch(

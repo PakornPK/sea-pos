@@ -94,6 +94,20 @@ export function AddProductForm({ categories }: AddProductFormProps) {
         <Input id="sku" name="sku" placeholder="เช่น WTR-600" disabled={pending} />
       </div>
 
+      {/* Barcode */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="barcode">บาร์โค้ด</Label>
+        <Input
+          id="barcode"
+          name="barcode"
+          placeholder="สแกนบาร์โค้ดหรือพิมพ์ (เช่น 8851234567890)"
+          disabled={pending}
+        />
+        <p className="text-xs text-muted-foreground">
+          แยกต่างหากจาก SKU — ใช้ตอนสแกนที่จุดขาย
+        </p>
+      </div>
+
       {/* Category */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="category_id">หมวดหมู่</Label>

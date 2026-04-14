@@ -26,6 +26,18 @@ export async function searchInStockProducts(input: {
   )
 }
 
+/**
+ * Scan lookup — resolves an exact barcode or SKU to an in-stock product at
+ * the cashier's active branch. Barcode match takes precedence over SKU.
+ * Returns null when nothing matches or the item is out of stock.
+ */
+export async function findProductByCode(code: string): Promise<ProductWithStock | null> {
+  const { me } = await getActionUser()
+  if (!me.activeBranchId) return null
+  if (!(SELL_ROLES as readonly string[]).includes(me.role)) return null
+  return productRepo.findInStockByCodeForBranch(me.activeBranchId, code)
+}
+
 const SELL_ROLES = ['admin', 'manager', 'cashier'] as const
 const VOID_ROLES = ['admin', 'manager'] as const
 

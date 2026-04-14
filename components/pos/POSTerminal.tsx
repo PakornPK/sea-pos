@@ -1,18 +1,17 @@
 'use client'
 
-import { useEffect, useState, useActionState, useTransition } from 'react'
+import { useEffect, useState, useActionState, useTransition, useRef } from 'react'
 import Image from 'next/image'
 import {
   Search, ShoppingCart, Plus, Minus, Trash2, ImageOff, Info,
   ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react'
 import { ProductDetailDialog } from '@/components/pos/ProductDetailDialog'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { createSale, searchInStockProducts } from '@/lib/actions/pos'
+import { createSale, searchInStockProducts, findProductByCode } from '@/lib/actions/pos'
 import { formatBaht } from '@/lib/format'
 import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
@@ -73,6 +72,19 @@ export function POSTerminal({
   const [search, setSearch]     = useState('')
   const [loading, startLoading] = useTransition()
 
+  // ── Barcode / SKU scan ─────────────────────────────────────────
+  // Keyboard-wedge scanners type the SKU then press Enter. The search input
+  // IS the scan target — we auto-focus it on mount and after each add-to-cart
+  // so consecutive scans work without the cashier touching the screen.
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [scanState, setScanState] = useState<'idle' | 'hit' | 'miss'>('idle')
+  useEffect(() => { searchRef.current?.focus() }, [])
+  useEffect(() => {
+    if (scanState === 'idle') return
+    const t = setTimeout(() => setScanState('idle'), 600)
+    return () => clearTimeout(t)
+  }, [scanState])
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   // Debounced refetch on search change; immediate fetch on page change.
@@ -94,6 +106,28 @@ export function POSTerminal({
   function onSearchChange(v: string) {
     setSearch(v)
     setPage(1)
+  }
+
+  // Enter in search = scan commit. Look up exact SKU at the active branch;
+  // on hit, add to cart and clear. On miss, flash red but keep the term so
+  // the cashier can see what was typed and correct it.
+  async function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    // Read from the DOM — scanners fire 13 chars + Enter faster than React
+    // commits state, so `search` can still be stale at this point.
+    const term = (e.currentTarget.value ?? search).trim()
+    if (!term) return
+    const product = await findProductByCode(term)
+    if (product) {
+      addToCart(product)
+      setSearch('')
+      setPage(1)
+      setScanState('hit')
+    } else {
+      setScanState('miss')
+    }
+    searchRef.current?.focus()
   }
 
   // ── Cart handlers ──────────────────────────────────────────────
@@ -146,12 +180,29 @@ export function POSTerminal({
         {/* Search */}
         <div className="relative shrink-0">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="ค้นหาสินค้า หรือ SKU..."
+          {/*
+            Native <input> instead of our shadcn/base-ui Input wrapper — the
+            wrapper's built-in key handling eats Enter before our onKeyDown
+            fires, so barcode scanners never commit the scan.
+          */}
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="ค้นหาสินค้า หรือ สแกน SKU / บาร์โค้ด แล้วกด Enter"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9"
+            onKeyDown={onSearchKeyDown}
+            className={cn(
+              'flex h-8 w-full rounded-lg border border-input bg-transparent pl-9 pr-3 py-1 text-base md:text-sm placeholder:text-muted-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+              scanState === 'hit'  && 'border-emerald-500 ring-1 ring-emerald-500',
+              scanState === 'miss' && 'border-destructive ring-1 ring-destructive',
+            )}
           />
+          {scanState === 'miss' && (
+            <p className="absolute -bottom-5 left-1 text-xs text-destructive">
+              ไม่พบ SKU หรือสินค้าหมดสต๊อก
+            </p>
+          )}
         </div>
 
         {/* Grid — big tap-friendly tiles */}

@@ -40,6 +40,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
   const [creatingNew, setCreatingNew] = useState(false)
   const [newName, setNewName]   = useState('')
   const [newSku, setNewSku]     = useState('')
+  const [newBarcode, setNewBarcode] = useState('')
   const [newPrice, setNewPrice] = useState(0)
   const [newCost, setNewCost]   = useState(0)
   const [newMin, setNewMin]     = useState(0)
@@ -93,6 +94,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
       const res = await quickCreateProduct({
         name: newName,
         sku: newSku || null,
+        barcode: newBarcode.trim() || null,
         categoryId: newCategoryId || null,
         price: newPrice,
         cost: newCost,
@@ -125,6 +127,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
         category_id: res.category_id,
         image_url:   imageUrl,
         vat_exempt:  false,
+        barcode:     newBarcode.trim() || null,
         created_at:  new Date().toISOString(),
       }
       setLocalProducts((prev) => [...prev, prod].sort((a, b) => a.name.localeCompare(b.name)))
@@ -134,7 +137,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
       ])
       // reset mini-form
       setCreatingNew(false)
-      setNewName(''); setNewSku(''); setNewPrice(0); setNewCost(0); setNewMin(0); setNewQty(1); setNewCategoryId('')
+      setNewName(''); setNewSku(''); setNewBarcode(''); setNewPrice(0); setNewCost(0); setNewMin(0); setNewQty(1); setNewCategoryId('')
       clearImage()
     })
   }
@@ -293,6 +296,13 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
               <Label className="text-xs">สต๊อกขั้นต่ำ</Label>
               <Input type="number" min={0} value={newMin || ''}
                 onChange={(e) => setNewMin(Number(e.target.value))}
+                disabled={pendingCreate} />
+            </div>
+
+            <div className="col-span-12 flex flex-col gap-1">
+              <Label className="text-xs">บาร์โค้ด</Label>
+              <Input value={newBarcode} onChange={(e) => setNewBarcode(e.target.value)}
+                placeholder="สแกนหรือพิมพ์ (เช่น 8851234567890)"
                 disabled={pendingCreate} />
             </div>
 

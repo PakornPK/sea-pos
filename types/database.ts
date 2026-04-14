@@ -74,6 +74,7 @@ export type Product = {
   category_id: string | null
   image_url: string | null
   vat_exempt: boolean
+  barcode: string | null
   created_at: string
 }
 
@@ -250,6 +251,7 @@ export type ProductInsert = {
   category_id?: string | null
   image_url?: string | null
   vat_exempt?: boolean
+  barcode?: string | null
   // Note: stock is seeded via productStockRepo.set(productId, branchId, qty)
   // in a follow-up call; it is no longer a column on products.
 }

@@ -3,7 +3,7 @@
 -- ⚠️  CAUTION: Deletes ALL product, sales, and customer data
 -- Safe to run multiple times (idempotent)
 --
--- Assumes migrations up to 016 have been applied. In particular:
+-- Assumes migrations up to 020 have been applied. In particular:
 --   - products.stock column has been dropped (stock lives in product_stock)
 --   - sales.branch_id / stock_logs.branch_id / purchase_orders.branch_id are NOT NULL
 --   - user_branches pivot exists
@@ -108,6 +108,27 @@ INSERT INTO products (id, sku, name, category_id, price, cost, min_stock) VALUES
   ('22222222-0000-0000-0000-000000000018', 'ORE-001',  'โอรีโอ 1 แพ็ค',             '11111111-0000-0000-0000-000000000005', 30.00, 22.00,  8);
 
 UPDATE products SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
+
+-- Fake EAN-13 barcodes (Thai country prefix 885) so scan-by-barcode at POS
+-- can be demoed out of the box. Not real GS1 codes — demo only.
+UPDATE products SET barcode = '8851001100016' WHERE id = '22222222-0000-0000-0000-000000000001';
+UPDATE products SET barcode = '8851001100023' WHERE id = '22222222-0000-0000-0000-000000000002';
+UPDATE products SET barcode = '8851002100013' WHERE id = '22222222-0000-0000-0000-000000000003';
+UPDATE products SET barcode = '8851002100020' WHERE id = '22222222-0000-0000-0000-000000000004';
+UPDATE products SET barcode = '8851003100010' WHERE id = '22222222-0000-0000-0000-000000000005';
+UPDATE products SET barcode = '8851003100027' WHERE id = '22222222-0000-0000-0000-000000000006';
+UPDATE products SET barcode = '8851004100017' WHERE id = '22222222-0000-0000-0000-000000000007';
+UPDATE products SET barcode = '8851004100024' WHERE id = '22222222-0000-0000-0000-000000000008';
+UPDATE products SET barcode = '8851004100031' WHERE id = '22222222-0000-0000-0000-000000000009';
+UPDATE products SET barcode = '8851005100014' WHERE id = '22222222-0000-0000-0000-000000000010';
+UPDATE products SET barcode = '8851005100021' WHERE id = '22222222-0000-0000-0000-000000000011';
+UPDATE products SET barcode = '8851005100038' WHERE id = '22222222-0000-0000-0000-000000000012';
+UPDATE products SET barcode = '8851006100011' WHERE id = '22222222-0000-0000-0000-000000000013';
+UPDATE products SET barcode = '8851006100028' WHERE id = '22222222-0000-0000-0000-000000000014';
+UPDATE products SET barcode = '8851006100035' WHERE id = '22222222-0000-0000-0000-000000000015';
+UPDATE products SET barcode = '8851007100018' WHERE id = '22222222-0000-0000-0000-000000000016';
+UPDATE products SET barcode = '8851007100025' WHERE id = '22222222-0000-0000-0000-000000000017';
+UPDATE products SET barcode = '8851007100032' WHERE id = '22222222-0000-0000-0000-000000000018';
 
 -- ── 3b. Seed per-branch stock (B01 is the main stock, B02 smaller) ──
 INSERT INTO product_stock (product_id, branch_id, quantity) VALUES

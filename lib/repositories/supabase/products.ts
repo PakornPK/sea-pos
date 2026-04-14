@@ -229,7 +229,7 @@ export const supabaseProductRepo: ProductRepository = {
     const db = await getDb()
     const { data, error } = await db
       .from('products').insert(input)
-      .select('id, sku, name, price, cost, min_stock, category_id, image_url, vat_exempt, created_at')
+      .select('id, sku, name, price, cost, min_stock, category_id, image_url, vat_exempt, barcode, created_at')
       .single()
     if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }
     return {
@@ -256,6 +256,56 @@ export const supabaseProductRepo: ProductRepository = {
     const db = await getDb()
     const { data } = await db.rpc('next_sku_for_category', { p_category_id: categoryId })
     return (data as string | null) ?? null
+  },
+
+  async findInStockByCodeForBranch(branchId: string, code: string): Promise<ProductWithStock | null> {
+    const trimmed = code.trim()
+    if (!trimmed) return null
+    const db = await getDb()
+
+    // Shared shaping logic: resolve a matched row + its effective VAT + stock.
+    const shape = (data: unknown): ProductWithStock | null => {
+      if (!data) return null
+      const row = data as Product & {
+        product_stock: Array<{ quantity: number }> | { quantity: number } | null
+        category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
+      }
+      const cat = Array.isArray(row.category) ? row.category[0] : row.category
+      const effectiveVat = Boolean(row.vat_exempt) || Boolean(cat?.vat_exempt)
+      const { product_stock: _ps, category: _c, ...rest } = row
+      void _ps; void _c
+      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(row) }
+    }
+
+    const baseSelect = '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)'
+
+    // 1) Barcode exact match (preferred — unique per company).
+    {
+      const { data } = await db
+        .from('products')
+        .select(baseSelect)
+        .eq('barcode', trimmed)
+        .eq('product_stock.branch_id', branchId)
+        .gt('product_stock.quantity', 0)
+        .limit(1)
+        .maybeSingle()
+      if (data) return shape(data)
+    }
+
+    // 2) SKU exact match (case-insensitive) — fallback for manual entry.
+    {
+      const { data } = await db
+        .from('products')
+        .select(baseSelect)
+        .ilike('sku', trimmed)
+        .eq('product_stock.branch_id', branchId)
+        .gt('product_stock.quantity', 0)
+        .limit(1)
+        .maybeSingle()
+      if (data) return shape(data)
+    }
+
+    return null
   },
 
   async vatExemptMap(productIds: string[]): Promise<Record<string, boolean>> {

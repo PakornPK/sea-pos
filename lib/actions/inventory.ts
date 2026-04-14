@@ -42,6 +42,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const cost = parseFloat(formData.get('cost') as string) || 0
   const categoryId = (formData.get('category_id') as string) || null
   const vatExempt = formData.get('vat_exempt') === 'on'
+  const barcode = (formData.get('barcode') as string | null)?.trim() || null
   const rawImage = formData.get('image') as File | null
   const hasImage = !!rawImage && rawImage.size > 0
 
@@ -73,6 +74,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     cost,
     category_id: categoryId,
     vat_exempt: vatExempt,
+    barcode,
   })
   if ('error' in res) return { error: res.error }
 
@@ -104,6 +106,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
 export async function quickCreateProduct(input: {
   name: string
   sku: string | null
+  barcode?: string | null
   categoryId: string | null
   price: number
   cost: number
@@ -133,6 +136,7 @@ export async function quickCreateProduct(input: {
     const res = await productRepo.createReturning({
       name,
       sku,
+      barcode: input.barcode?.trim() || null,
       category_id: input.categoryId,
       price: Number.isFinite(input.price) ? input.price : 0,
       cost: Number.isFinite(input.cost) ? input.cost : 0,
