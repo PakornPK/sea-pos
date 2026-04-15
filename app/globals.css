@@ -39,82 +39,114 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.333);
+  --radius-2xl: calc(var(--radius) * 1.833);
+  --radius-3xl: calc(var(--radius) * 2.333);
 }
 
+/* ─────────────────────────────────────────────
+   Apple Human Interface · Light
+   ───────────────────────────────────────────── */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Page canvas — Apple's signature #F5F5F7 off-white */
+  --background:              oklch(0.968 0.002 286);
+  --foreground:              oklch(0.149 0.002 286);  /* #1D1D1F */
+
+  /* Cards / surfaces */
+  --card:                    oklch(1 0 0);
+  --card-foreground:         oklch(0.149 0.002 286);
+  --popover:                 oklch(1 0 0);
+  --popover-foreground:      oklch(0.149 0.002 286);
+
+  /* iOS Blue — #007AFF */
+  --primary:                 oklch(0.563 0.215 252);
+  --primary-foreground:      oklch(1 0 0);
+
+  /* Neutral fills */
+  --secondary:               oklch(0.940 0.002 286);  /* #EBEBED */
+  --secondary-foreground:    oklch(0.149 0.002 286);
+  --muted:                   oklch(0.940 0.002 286);
+  --muted-foreground:        oklch(0.483 0.003 286);  /* #6E6E73 */
+  --accent:                  oklch(0.940 0.002 286);
+  --accent-foreground:       oklch(0.149 0.002 286);
+
+  /* iOS Red — #FF3B30 */
+  --destructive:             oklch(0.587 0.220 24);
+  --destructive-foreground:  oklch(1 0 0);
+
+  /* Borders & inputs */
+  --border:                  oklch(0.843 0.002 286);  /* #D1D1D6 */
+  --input:                   oklch(0.930 0.002 286);
+  --ring:                    oklch(0.563 0.215 252);  /* Blue focus */
+
+  /* Border radius — 12px base matches Apple card corners */
+  --radius: 0.75rem;
+
+  /* Sidebar — always white, macOS Finder style */
+  --sidebar:                 oklch(1 0 0);
+  --sidebar-foreground:      oklch(0.149 0.002 286);
+  --sidebar-primary:         oklch(0.563 0.215 252);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent:          oklch(0.968 0.002 286);
+  --sidebar-accent-foreground: oklch(0.149 0.002 286);
+  --sidebar-border:          oklch(0.900 0.002 286);
+  --sidebar-ring:            oklch(0.563 0.215 252);
+
+  /* Charts — Apple system colors */
+  --chart-1: oklch(0.563 0.215 252);   /* Blue */
+  --chart-2: oklch(0.719 0.188 145);   /* Green  #34C759 */
+  --chart-3: oklch(0.704 0.170 65);    /* Orange #FF9F0A */
+  --chart-4: oklch(0.587 0.220 24);    /* Red    #FF3B30 */
+  --chart-5: oklch(0.683 0.180 300);   /* Purple */
 }
 
+/* ─────────────────────────────────────────────
+   Apple Human Interface · Dark
+   ───────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --background:              oklch(0.0 0 0);          /* True black like iOS dark */
+  --foreground:              oklch(0.985 0 0);
+
+  --card:                    oklch(0.142 0.002 286);  /* #1C1C1E */
+  --card-foreground:         oklch(0.985 0 0);
+  --popover:                 oklch(0.142 0.002 286);
+  --popover-foreground:      oklch(0.985 0 0);
+
+  /* iOS Blue brightens slightly in dark mode */
+  --primary:                 oklch(0.634 0.213 252);  /* #0A84FF */
+  --primary-foreground:      oklch(1 0 0);
+
+  --secondary:               oklch(0.210 0.002 286);  /* #2C2C2E */
+  --secondary-foreground:    oklch(0.985 0 0);
+  --muted:                   oklch(0.210 0.002 286);
+  --muted-foreground:        oklch(0.590 0.003 286);  /* #8E8E93 */
+  --accent:                  oklch(0.210 0.002 286);
+  --accent-foreground:       oklch(0.985 0 0);
+
+  --destructive:             oklch(0.634 0.226 24);   /* #FF453A */
+  --destructive-foreground:  oklch(1 0 0);
+
+  --border:                  oklch(1 0 0 / 10%);
+  --input:                   oklch(1 0 0 / 12%);
+  --ring:                    oklch(0.634 0.213 252);
+
+  --sidebar:                 oklch(0.112 0.002 286);  /* #1C1C1E sidebar */
+  --sidebar-foreground:      oklch(0.985 0 0);
+  --sidebar-primary:         oklch(0.634 0.213 252);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent:          oklch(0.210 0.002 286);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-border:          oklch(1 0 0 / 8%);
+  --sidebar-ring:            oklch(0.634 0.213 252);
+
+  --chart-1: oklch(0.634 0.213 252);
+  --chart-2: oklch(0.767 0.185 145);
+  --chart-3: oklch(0.749 0.168 65);
+  --chart-4: oklch(0.634 0.226 24);
+  --chart-5: oklch(0.726 0.175 300);
 }
 
 @layer base {
@@ -123,11 +155,14 @@
   }
   body {
     @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
+    /* Prefer SF Pro on Apple devices, fall back to Geist → Inter */
+    font-family: -apple-system, BlinkMacSystemFont, var(--font-geist-sans), 'Inter', sans-serif;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
+
 /* ── Print styles (receipt page) ── */
 @media print {
   aside,
@@ -135,11 +170,10 @@
   .print\:hidden {
     display: none !important;
   }
-
   body {
     background: white !important;
+    font-size: 13px;
   }
-
   main {
     padding: 0 !important;
     overflow: visible !important;

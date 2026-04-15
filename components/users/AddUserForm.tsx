@@ -6,6 +6,7 @@ import { createUser } from '@/lib/actions/users'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import { BranchMultiSelect } from '@/components/users/BranchMultiSelect'
 import { ROLE_LABELS } from '@/lib/labels'
 import type { Branch, UserRole } from '@/types/database'
@@ -45,7 +46,7 @@ export function AddUserForm({ branches }: Props) {
     <form
       ref={formRef}
       action={formAction}
-      className="rounded-lg border bg-card p-4 space-y-4"
+      className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-4"
     >
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">เพิ่มผู้ใช้งานใหม่</h2>
@@ -84,18 +85,11 @@ export function AddUserForm({ branches }: Props) {
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="role">บทบาท *</Label>
-          <select
-            id="role"
-            name="role"
-            required
-            disabled={pending}
-            defaultValue="cashier"
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <NativeSelect id="role" name="role" required disabled={pending} defaultValue="cashier">
             {ROLE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
 

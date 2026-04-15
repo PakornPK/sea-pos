@@ -23,7 +23,7 @@ export default async function NewCompanyPage() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold">เพิ่มบริษัทใหม่</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">เพิ่มบริษัทใหม่</h1>
           <p className="text-sm text-muted-foreground mt-1">
             สร้างบริษัทพร้อมบัญชีผู้ดูแล (admin) คนแรก
           </p>

@@ -43,7 +43,7 @@ export function ProductThumb({
   const body = (
     <div
       className={cn(
-        'relative overflow-hidden rounded-md border bg-muted grid place-items-center',
+        'relative overflow-hidden rounded-xl bg-muted grid place-items-center',
         canEdit && 'cursor-pointer hover:border-primary'
       )}
       style={{ width: size, height: size }}

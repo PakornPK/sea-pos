@@ -17,7 +17,7 @@ export default function Loading() {
         <Skeleton className="h-9 w-40" />
       </div>
 
-      <div className="rounded-lg border bg-card p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="space-y-1.5">
             <Skeleton className="h-3 w-20" />

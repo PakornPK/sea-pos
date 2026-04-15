@@ -20,7 +20,7 @@ export function BranchPicker({ branches, active }: Props) {
   if (branches.length <= 1) {
     if (!active) return null
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5 rounded-xl ring-1 ring-black/[0.06] bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
         <MapPin className="h-3.5 w-3.5" />
         {active.name}
       </span>
@@ -41,7 +41,7 @@ export function BranchPicker({ branches, active }: Props) {
   }
 
   return (
-    <label className="relative inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:border-primary/50">
+    <label className="relative inline-flex items-center gap-1.5 rounded-xl ring-1 ring-black/[0.06] bg-background px-2 py-1 text-xs hover:border-primary/50">
       <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
       <select
         value={active?.id ?? ''}

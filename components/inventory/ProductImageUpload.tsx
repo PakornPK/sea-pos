@@ -84,7 +84,7 @@ export function ProductImageUpload({ productId, currentUrl, className }: Props) 
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
         className={cn(
-          'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted',
+          'relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted',
           'flex items-center justify-center transition-colors',
           'hover:border-primary hover:bg-accent',
           error && 'border-destructive',

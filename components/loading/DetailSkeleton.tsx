@@ -10,14 +10,14 @@ export function DetailSkeleton() {
 
       <div className="grid grid-cols-3 gap-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-lg border bg-card p-4 space-y-2">
+          <div key={i} className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-2">
             <Skeleton className="h-3 w-32" />
             <Skeleton className="h-7 w-20" />
           </div>
         ))}
       </div>
 
-      <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex flex-col gap-1.5">
             <Skeleton className="h-3 w-24" />

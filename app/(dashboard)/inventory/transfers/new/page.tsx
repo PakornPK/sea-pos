@@ -40,7 +40,7 @@ export default async function NewTransferPage() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold">สร้างรายการโอน</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">สร้างรายการโอน</h1>
           <p className="text-sm text-muted-foreground mt-1">
             ย้ายสินค้าจากสาขาปัจจุบันไปสาขาอื่น
           </p>

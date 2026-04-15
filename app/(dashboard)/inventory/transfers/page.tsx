@@ -56,7 +56,7 @@ export default async function TransfersPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">โอนสต๊อกระหว่างสาขา</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">โอนสต๊อกระหว่างสาขา</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             ย้ายสินค้าจากสาขาหนึ่งไปอีกสาขา สต๊อกต้นทางจะถูกหักทันทีที่สร้างรายการ
           </p>
@@ -80,7 +80,7 @@ export default async function TransfersPage({
       )}
 
       {rows.length === 0 ? (
-        <p className="rounded-lg border bg-muted/30 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl bg-muted/30 py-10 text-center text-sm text-muted-foreground">
           ยังไม่มีรายการโอน
         </p>
       ) : (

@@ -14,7 +14,7 @@ export default async function PlansPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">จัดการแพ็กเกจ</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">จัดการแพ็กเกจ</h1>
         <p className="text-sm text-muted-foreground mt-1">
           กำหนดชื่อ ราคา และขีดจำกัดของแต่ละแพ็กเกจ. การเปลี่ยนแปลงมีผลกับบริษัทที่อยู่ในแพ็กเกจนั้นทันที
         </p>

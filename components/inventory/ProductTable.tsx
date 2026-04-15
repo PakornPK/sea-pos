@@ -51,14 +51,14 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
       {/* Category filter tabs */}
       {categories.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Filter className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
           <button
             onClick={() => setSelectedCategory(null)}
             className={cn(
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              'rounded-full px-3 py-1 text-[12px] font-medium transition-all',
               selectedCategory === null
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'hover:bg-accent'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             )}
           >
             ทั้งหมด ({products.length})
@@ -70,10 +70,10 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
                 className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  'rounded-full px-3 py-1 text-[12px] font-medium transition-all',
                   selectedCategory === cat.id
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                 )}
               >
                 {cat.name} ({count})
@@ -160,11 +160,11 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                 </TableCell>
                 <TableCell className="text-center">
                   {!product.track_stock ? (
-                    <Badge variant="outline" className="text-xs">ไม่ติดตาม</Badge>
+                    <Badge variant="outline">ไม่ติดตาม</Badge>
                   ) : isLowStock ? (
-                    <Badge variant="destructive">ใกล้หมด</Badge>
+                    <Badge variant="warning">ใกล้หมด</Badge>
                   ) : (
-                    <Badge variant="secondary">ปกติ</Badge>
+                    <Badge variant="success">ปกติ</Badge>
                   )}
                 </TableCell>
                 {canAdjust && (

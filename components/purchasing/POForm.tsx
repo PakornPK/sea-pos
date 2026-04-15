@@ -6,6 +6,7 @@ import { createPurchaseOrder, updatePurchaseOrder } from '@/lib/actions/purchasi
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import { POLineEditor, type POLine } from '@/components/purchasing/POLineEditor'
 import type { Branch, Category, Product, Supplier } from '@/types/database'
 import type { VatConfig } from '@/lib/vat'
@@ -60,37 +61,35 @@ export function POForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="supplierId">ผู้จำหน่าย *</Label>
-          <select
+          <NativeSelect
             id="supplierId"
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
             required
             disabled={pending}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
           >
             <option value="">— เลือกผู้จำหน่าย —</option>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         {!isEdit && availableBranches.length > 1 && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="branchId">สาขาที่จะรับของ *</Label>
-            <select
+            <NativeSelect
               id="branchId"
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
               required
               disabled={pending}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             >
               {availableBranches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name} ({b.code})
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         )}
         <div className="flex flex-col gap-1.5">

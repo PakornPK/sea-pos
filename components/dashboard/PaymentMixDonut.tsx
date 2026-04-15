@@ -16,7 +16,7 @@ export function PaymentMixDonut({ data }: { data: PaymentMixPoint[] }) {
   const total = chartData.reduce((s, d) => s + d.value, 0)
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="font-semibold text-sm">วิธีชำระเงิน (30 วัน)</h3>
         <p className="text-xs text-muted-foreground">รวม ฿{total.toLocaleString('th-TH')}</p>

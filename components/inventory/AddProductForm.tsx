@@ -7,6 +7,7 @@ import { addProduct } from '@/lib/actions/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/types/database'
 
@@ -46,7 +47,7 @@ export function AddProductForm({ categories }: AddProductFormProps) {
             onClick={() => fileRef.current?.click()}
             disabled={pending}
             className={cn(
-              'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted',
+              'relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-muted',
               'grid place-items-center transition-colors',
               'hover:border-primary hover:bg-accent',
               pending && 'opacity-60 cursor-not-allowed'
@@ -111,19 +112,14 @@ export function AddProductForm({ categories }: AddProductFormProps) {
       {/* Category */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="category_id">หมวดหมู่</Label>
-        <select
-          id="category_id"
-          name="category_id"
-          disabled={pending}
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <NativeSelect id="category_id" name="category_id" disabled={pending}>
           <option value="">— ไม่ระบุหมวดหมู่ —</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.id}>
               {cat.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {/* Price / Cost */}

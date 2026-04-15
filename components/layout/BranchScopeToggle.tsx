@@ -28,22 +28,22 @@ export function BranchScopeToggle({
   }
 
   const pill =
-    'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors'
-  const active = 'border-primary bg-primary text-primary-foreground'
-  const idle   = 'text-muted-foreground hover:bg-accent hover:text-foreground'
+    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-medium transition-all'
+  const active = 'bg-card shadow-sm text-foreground'
+  const idle   = 'text-muted-foreground hover:text-foreground'
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-md border bg-background p-0.5 shrink-0">
+    <div className="inline-flex items-center gap-0.5 rounded-xl bg-muted/70 p-0.5 shrink-0">
       <Link
         href={build('active')}
-        className={cn(pill, !isAllBranches ? active : idle, 'border-transparent')}
+        className={cn(pill, !isAllBranches ? active : idle)}
       >
         <MapPin className="h-3 w-3" />
         {activeBranchLabel ?? 'สาขาของฉัน'}
       </Link>
       <Link
         href={build('all')}
-        className={cn(pill, isAllBranches ? active : idle, 'border-transparent')}
+        className={cn(pill, isAllBranches ? active : idle)}
       >
         <Globe2 className="h-3 w-3" />
         ทุกสาขา

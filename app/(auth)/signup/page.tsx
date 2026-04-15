@@ -15,7 +15,7 @@ export default function SignupPage() {
   return (
     <div className="flex flex-col gap-4 w-full max-w-sm">
       <div className="text-center space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">SEA-POS</h1>
+        <h1 className="text-[22px] font-bold tracking-tight">SEA-POS</h1>
         <p className="text-sm text-muted-foreground">สมัครใช้งานฟรี</p>
       </div>
       <SignupForm />

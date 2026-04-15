@@ -32,7 +32,7 @@ export function PlanEditor({ plan }: { plan: Plan }) {
   if (!editing) {
     return (
       <div className={cn(
-        'rounded-lg border bg-card p-5',
+        'rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5',
         !plan.is_active && 'opacity-60',
       )}>
         <div className="flex items-start justify-between">
@@ -65,7 +65,7 @@ export function PlanEditor({ plan }: { plan: Plan }) {
   }
 
   return (
-    <form action={formAction} className="rounded-lg border border-primary bg-card p-5 space-y-4">
+    <form action={formAction} className="rounded-2xl border border-primary bg-card shadow-sm p-5 space-y-4">
       <input type="hidden" name="code" value={plan.code} />
       <input type="hidden" name="sort_order" value={plan.sort_order} />
 

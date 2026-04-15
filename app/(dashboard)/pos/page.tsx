@@ -30,7 +30,7 @@ export default async function POSPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <h1 className="shrink-0 text-2xl font-semibold">ขายสินค้า</h1>
+      <h1 className="shrink-0 text-[26px] font-bold tracking-tight">ขายสินค้า</h1>
       <div className="min-h-0 flex-1">
         <POSTerminal
           initialProducts={initialPage.rows}

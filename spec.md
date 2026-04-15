@@ -904,3 +904,71 @@ Each paginated table is wrapped in `<Suspense key={…}>` with a `TableSkeleton`
   - **Delete user:** confirmation prompt then `auth.admin.deleteUser()`; cannot delete own account
   - All mutations run on the server with a service-role client that bypasses RLS — the client is never exposed to the browser
 - **Constraints:** Requires `SUPABASE_SERVICE_ROLE_KEY` in `.env`. Role is always validated against the `UserRole` union.
+
+### Track Stock (`track_stock`)
+
+- **Purpose:** Support restaurant and service-business menus where items should not decrement stock (e.g. cooked dishes, service fees).
+- **Migration:** [supabase/023_track_stock.sql](supabase/023_track_stock.sql) — adds `products.track_stock BOOLEAN NOT NULL DEFAULT true`.
+- **Behaviour:**
+  - `track_stock = true` (default): normal stock gate — products only appear in POS when `product_stock.quantity > 0`; `createSale` decrements stock.
+  - `track_stock = false`: product always appears in POS regardless of stock quantity (shown with ∞ badge); `createSale` and `voidSale` skip `productStockRepo.decrement` / `adjust` entirely.
+  - `addProduct` skips `productStockRepo.seed` when `track_stock = false`.
+- **POS query:** `listInStockForBranchPaginated` issues two parallel queries — tracked (INNER JOIN + `quantity > 0`) and untracked (LEFT JOIN) — merges in-memory and returns a single sorted page. `findInStockByCodeForBranch` (barcode/SKU scan) follows the same two-query pattern.
+- **Inventory table:** stock / min-stock columns show `—` for untracked products; no +/- adjust buttons; badge shows `outline` variant.
+- **UI:** "ติดตามสต๊อก" checkbox in [AddProductForm](components/inventory/AddProductForm.tsx) (default checked) and [EditProductForm](components/inventory/EditProductForm.tsx). Switching untracked → tracked on edit seeds an initial `product_stock` row.
+
+### Edit Product
+
+- **Purpose:** Allow admins and managers to update any product field after creation (name, SKU, barcode, category, price, cost, min-stock, track_stock, VAT-exempt).
+- **Routes/Files:**
+  - `/inventory/[id]/edit` → [app/(dashboard)/inventory/[id]/edit/page.tsx](app/(dashboard)/inventory/%5Bid%5D/edit/page.tsx)
+  - [components/inventory/EditProductForm.tsx](components/inventory/EditProductForm.tsx)
+  - Action: `updateProduct(productId, _prev, formData)` in [lib/actions/inventory.ts](lib/actions/inventory.ts)
+  - Repository: `productRepo.update(id, input)` and `productRepo.getById(id)` added to the contract + Supabase adapter
+- **Access:** admin, manager only (enforced by `requirePageRole`). Pencil icon column in [ProductTable](components/inventory/ProductTable.tsx) links to the edit page.
+- **Image:** `ProductImageUpload` component (same as add page) is shown at the top, handling uploads independently of the text form.
+
+---
+
+## UI Design System
+
+SEA-POS uses an **Apple Human Interface** aesthetic — macOS / iOS visual language applied to a web POS. Colors, radius, shadows, and type scale all reference Apple system values.
+
+### Color Palette (OKLCH)
+
+| Token | OKLCH | Hex | Meaning |
+|-------|-------|-----|---------|
+| `--background` | `oklch(0.968 0.002 286)` | `#F5F5F7` | Page background (Apple off-white) |
+| `--card` | `oklch(1 0 0)` | `#FFFFFF` | Card / input background |
+| `--primary` | `oklch(0.563 0.215 252)` | `#007AFF` | iOS blue |
+| `--foreground` | `oklch(0.149 0.002 286)` | `#1D1D1F` | Body text |
+| `--muted-foreground` | `oklch(0.483 0.003 286)` | `#6E6E73` | Secondary text |
+| `--border` | `oklch(0.843 0.002 286)` | `#D1D1D6` | Hairline borders |
+| `--destructive` | `oklch(0.587 0.220 24)` | `#FF3B30` | iOS red |
+| `--radius` | `0.75rem` | 12 px | Base radius |
+
+Dark-mode tokens are defined in the same file (true black bg, `#1C1C1E` cards, `#0A84FF` blue).
+
+### Typography
+
+- Font stack: `-apple-system, BlinkMacSystemFont, var(--font-geist-sans), 'Inter', sans-serif`
+- Base size: `15px` (set in `html` via `globals.css`)
+- Page `<h1>`: `text-[26px] font-bold tracking-tight`
+- Section headings: `text-[15px] font-semibold tracking-tight`
+- Labels: `text-[13px] font-medium text-foreground/80`
+- Table headers: `text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground`
+
+### Component Conventions
+
+| Component | Key classes |
+|-----------|-------------|
+| Cards / panels | `rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05]` |
+| Table container | `rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] overflow-x-auto` (auto-applied by `Table` primitive) |
+| Inputs | `h-9 rounded-xl bg-card border-input`, blue focus glow |
+| Selects | `NativeSelect` from [components/ui/native-select.tsx](components/ui/native-select.tsx) — matches input style with `ChevronDown` overlay, `appearance-none` |
+| Buttons | `active:scale-[0.98]` micro-press; `xl` size for POS pay button |
+| Badges | `rounded-full text-[11px]`; `success` (iOS green), `warning` (iOS orange) variants added |
+| Dialogs | `rounded-2xl shadow-2xl`; footer `rounded-b-2xl border-t` |
+| Segment controls | `rounded-xl bg-muted/70 p-0.5`; active pill `bg-card shadow-sm` (used in `BranchScopeToggle`, `DateRangePicker`) |
+| Sidebar | macOS Settings style — grouped nav sections, blue `rounded-[22px]` brand icon, active item `bg-primary rounded-xl` |
+| Login page | Blue app icon + card form, `max-w-[360px]` centered layout |

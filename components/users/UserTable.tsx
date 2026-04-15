@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import {
   deleteUser, forceSignOutUser, resetUserPassword, updateUser, updateUserBranches,
 } from '@/lib/actions/users'
@@ -143,17 +144,16 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
                       </div>
                       <div className="min-w-[160px]">
                         <Label className="text-xs" htmlFor={`role-${u.id}`}>บทบาท</Label>
-                        <select
+                        <NativeSelect
                           id={`role-${u.id}`}
                           name="role"
                           defaultValue={u.role}
                           disabled={pending}
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         >
                           {Object.entries(ROLE_LABELS).map(([v, l]) => (
                             <option key={v} value={v}>{l}</option>
                           ))}
-                        </select>
+                        </NativeSelect>
                       </div>
                       <div className="flex gap-1.5">
                         <Button type="submit" size="sm" disabled={pending}>

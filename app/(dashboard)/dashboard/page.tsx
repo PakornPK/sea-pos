@@ -36,8 +36,8 @@ export default async function DashboardPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">ภาพรวมร้าน</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-[26px] font-bold tracking-tight">ภาพรวมร้าน</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
             สรุปยอดขาย สินค้า และการซื้อในวันนี้
           </p>
         </div>
@@ -89,10 +89,10 @@ async function TodayKpis({ branchId }: { branchId: string | null }) {
   const s = await analyticsRepo.todaySummary({ branchId })
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <KpiCard label="รายได้วันนี้" value={formatBaht(s.revenue)} icon={DollarSign} />
-      <KpiCard label="จำนวนบิล"     value={s.billCount.toLocaleString('th-TH')} icon={Receipt} />
-      <KpiCard label="ยอดเฉลี่ย/บิล" value={formatBaht(s.avgBill)}   icon={TrendingUp} />
-      <KpiCard label="ชิ้นที่ขาย"   value={s.itemsSold.toLocaleString('th-TH')} icon={ShoppingBag} />
+      <KpiCard label="รายได้วันนี้"  value={formatBaht(s.revenue)}                   icon={DollarSign}  color="blue"   />
+      <KpiCard label="จำนวนบิล"      value={s.billCount.toLocaleString('th-TH')}      icon={Receipt}     color="green"  />
+      <KpiCard label="ยอดเฉลี่ย/บิล" value={formatBaht(s.avgBill)}                   icon={TrendingUp}  color="purple" />
+      <KpiCard label="ชิ้นที่ขาย"    value={s.itemsSold.toLocaleString('th-TH')}     icon={ShoppingBag} color="orange" />
     </div>
   )
 }
@@ -133,22 +133,22 @@ function KpiRowSkeleton() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[88px] rounded-lg" />
+        <Skeleton key={i} className="h-[100px] rounded-2xl" />
       ))}
     </div>
   )
 }
 
 function ChartSkeleton() {
-  return <Skeleton className="h-[270px] rounded-lg" />
+  return <Skeleton className="h-[270px] rounded-2xl" />
 }
 
 function ListSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
-      <Skeleton className="h-4 w-32 mb-2" />
+    <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-black/[0.05] space-y-3">
+      <Skeleton className="h-4 w-28" />
       {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} className="h-5 w-full" />
+        <Skeleton key={i} className="h-5 w-full rounded-lg" />
       ))}
     </div>
   )

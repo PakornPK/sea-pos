@@ -39,7 +39,7 @@ export default async function SalesListPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">รายการขาย</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">รายการขาย</h1>
       </div>
 
       <Suspense

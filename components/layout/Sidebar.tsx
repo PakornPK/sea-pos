@@ -5,13 +5,11 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users,
   BarChart2, LogOut, UserCog, Settings, Building2, Shield, PackageOpen,
-  MapPin, ArrowLeftRight,
+  MapPin, ArrowLeftRight, CircleUserRound,
 } from 'lucide-react'
-import type { Branch } from '@/types/database'
+import type { Branch, UserRole } from '@/types/database'
 import { cn } from '@/lib/utils'
 import { signOut } from '@/lib/actions/auth'
-import { Button } from '@/components/ui/button'
-import type { UserRole } from '@/types/database'
 
 type NavItem = {
   href: string
@@ -20,102 +18,163 @@ type NavItem = {
   roles: UserRole[]
 }
 
-const CUSTOMER_NAV: NavItem[] = [
-  { href: '/dashboard',  label: 'ภาพรวมร้าน',   icon: LayoutDashboard, roles: ['admin', 'manager'] },
-  { href: '/inventory',            label: 'คลังสินค้า', icon: Package,         roles: ['admin', 'manager', 'purchasing'] },
-  { href: '/inventory/transfers',  label: 'โอนสต๊อก',   icon: ArrowLeftRight,  roles: ['admin', 'manager', 'purchasing'] },
-  { href: '/pos',        label: 'ขายสินค้า',   icon: ShoppingCart, roles: ['admin', 'manager', 'cashier'] },
-  { href: '/pos/sales',  label: 'รายการขาย',   icon: ScrollText,   roles: ['admin', 'manager'] },
-  { href: '/purchasing', label: 'จัดซื้อ',     icon: Truck,        roles: ['admin', 'manager', 'purchasing'] },
-  { href: '/customers',  label: 'ลูกค้า',      icon: Users,        roles: ['admin', 'manager', 'cashier'] },
-  { href: '/reports',    label: 'รายงาน',      icon: BarChart2,    roles: ['admin', 'manager'] },
-  { href: '/users',            label: 'ผู้ใช้งาน',   icon: UserCog,  roles: ['admin'] },
-  { href: '/settings/branches', label: 'สาขา',        icon: MapPin,   roles: ['admin'] },
-  { href: '/settings/company',  label: 'ตั้งค่าบริษัท', icon: Settings, roles: ['admin'] },
+type NavSection = {
+  label: string | null
+  items: NavItem[]
+}
+
+const CUSTOMER_SECTIONS: NavSection[] = [
+  {
+    label: null,
+    items: [
+      { href: '/dashboard',           label: 'ภาพรวม',      icon: LayoutDashboard, roles: ['admin', 'manager'] },
+      { href: '/pos',                  label: 'ขายสินค้า',   icon: ShoppingCart,    roles: ['admin', 'manager', 'cashier'] },
+      { href: '/pos/sales',            label: 'รายการขาย',   icon: ScrollText,      roles: ['admin', 'manager'] },
+      { href: '/inventory',            label: 'คลังสินค้า',  icon: Package,         roles: ['admin', 'manager', 'purchasing'] },
+      { href: '/inventory/transfers',  label: 'โอนสต๊อก',   icon: ArrowLeftRight,  roles: ['admin', 'manager', 'purchasing'] },
+    ],
+  },
+  {
+    label: 'จัดการ',
+    items: [
+      { href: '/purchasing', label: 'จัดซื้อ',  icon: Truck,    roles: ['admin', 'manager', 'purchasing'] },
+      { href: '/customers',  label: 'ลูกค้า',   icon: Users,    roles: ['admin', 'manager', 'cashier'] },
+      { href: '/reports',    label: 'รายงาน',   icon: BarChart2, roles: ['admin', 'manager'] },
+    ],
+  },
+  {
+    label: 'ตั้งค่า',
+    items: [
+      { href: '/users',              label: 'ผู้ใช้งาน', icon: UserCog,  roles: ['admin'] },
+      { href: '/settings/branches',  label: 'สาขา',      icon: MapPin,   roles: ['admin'] },
+      { href: '/settings/company',   label: 'บริษัท',    icon: Settings, roles: ['admin'] },
+    ],
+  },
 ]
 
-const PLATFORM_NAV: Array<{ href: string; label: string; icon: React.ElementType }> = [
-  { href: '/platform/companies', label: 'บริษัทลูกค้า', icon: Building2 },
-  { href: '/platform/plans',     label: 'แพ็กเกจ',      icon: PackageOpen },
+const PLATFORM_SECTIONS: NavSection[] = [
+  {
+    label: null,
+    items: [
+      { href: '/platform/companies', label: 'บริษัทลูกค้า', icon: Building2,   roles: [] },
+      { href: '/platform/plans',     label: 'แพ็กเกจ',      icon: PackageOpen, roles: [] },
+    ],
+  },
 ]
 
 type SidebarProps = {
   role: UserRole
   isPlatformAdmin: boolean
   activeBranch: Branch | null
+  fullName: string
+  email: string
 }
 
-export function Sidebar({ role, isPlatformAdmin, activeBranch }: SidebarProps) {
+
+export function Sidebar({ role, isPlatformAdmin, activeBranch, fullName, email }: SidebarProps) {
   const pathname = usePathname()
 
-  const items = isPlatformAdmin
-    ? PLATFORM_NAV
-    : CUSTOMER_NAV.filter((item) => item.roles.includes(role))
+  const sections = isPlatformAdmin
+    ? PLATFORM_SECTIONS
+    : CUSTOMER_SECTIONS.map((s) => ({
+        ...s,
+        items: s.items.filter((item) => item.roles.includes(role)),
+      })).filter((s) => s.items.length > 0)
 
-  // Highlight only the longest matching nav href for the current path.
-  // Fixes the `/inventory` + `/inventory/transfers` double-highlight:
-  // both match via startsWith, but only the deeper one should be active.
-  const activeHref = items.reduce<string | null>((best, item) => {
-    if (item.href === '/pos' ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + '/')) {
+  const allItems = sections.flatMap((s) => s.items)
+
+  const activeHref = allItems.reduce<string | null>((best, item) => {
+    const match = item.href === '/pos'
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href + '/')
+    if (match) {
       if (!best || item.href.length > best.length) return item.href
     }
-    // Exact match always wins regardless of length (edge case: nav item = current path)
-    if (pathname === item.href && (!best || item.href.length > best.length)) return item.href
     return best
   }, null)
 
   const isActive = (href: string) => href === activeHref
+  const displayName = fullName.trim() || email
 
   return (
-    <aside className="flex h-full w-60 flex-col border-r bg-background">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <span className="text-lg font-semibold tracking-tight">SEA-POS</span>
-        {isPlatformAdmin && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-            <Shield className="h-3 w-3" />
-            แพลตฟอร์ม
-          </span>
-        )}
+    <aside className="flex h-full w-56 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
+      {/* Brand */}
+      <div className="flex h-[60px] items-center gap-2.5 px-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary shadow-sm">
+          <span className="text-[13px] font-bold text-primary-foreground">S</span>
+        </div>
+        <div className="flex flex-col leading-none">
+          <span className="text-[15px] font-semibold tracking-tight text-foreground">SEA-POS</span>
+          {isPlatformAdmin && (
+            <span className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-primary">
+              <Shield className="h-2.5 w-2.5" />
+              แพลตฟอร์ม
+            </span>
+          )}
+        </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 p-3 overflow-y-auto">
-        {items.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              isActive(href)
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-2 py-1">
+        {sections.map((section, si) => (
+          <div key={si} className={cn(si > 0 && 'mt-4')}>
+            {section.label && (
+              <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                {section.label}
+              </p>
             )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
-          </Link>
+            <div className="flex flex-col gap-0.5">
+              {section.items.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-xl px-3 py-2 text-[14px] font-medium transition-colors',
+                    isActive(href)
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  )}
+                >
+                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive(href) ? 'opacity-100' : 'opacity-60')} />
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
+      {/* Active branch pill */}
       {activeBranch && !isPlatformAdmin && (
-        <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <MapPin className="h-3 w-3" />
-            {activeBranch.name}
-            <span className="text-muted-foreground/60">({activeBranch.code})</span>
-          </span>
+        <div className="px-3 pb-1">
+          <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5">
+            <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="truncate text-[12px] text-muted-foreground">
+              {activeBranch.name}
+            </span>
+            <span className="ml-auto text-[11px] font-medium text-muted-foreground/60">
+              {activeBranch.code}
+            </span>
+          </div>
         </div>
       )}
 
-      <div className="border-t p-3">
-        <form action={signOut}>
-          <Button
+      {/* User row + logout */}
+      <div className="border-t border-sidebar-border p-2">
+        <form action={signOut} className="w-full">
+          <button
             type="submit"
-            variant="ghost"
-            className="w-full justify-start gap-3 text-muted-foreground"
+            title="ออกจากระบบ"
+            className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-destructive/10 hover:text-destructive group"
           >
-            <LogOut className="h-4 w-4" />
-            ออกจากระบบ
-          </Button>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
+              <CircleUserRound className="h-4 w-4" />
+            </div>
+            <span className="flex-1 truncate text-left text-[13px] font-medium text-foreground group-hover:text-destructive transition-colors">
+              {displayName}
+            </span>
+            <LogOut className="h-3.5 w-3.5 text-muted-foreground group-hover:text-destructive transition-colors" />
+          </button>
         </form>
       </div>
     </aside>

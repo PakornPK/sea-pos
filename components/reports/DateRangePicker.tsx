@@ -63,7 +63,7 @@ export function DateRangePicker({ currentStart, currentEnd, activePreset }: Prop
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex gap-1 rounded-md border bg-card p-1">
+      <div className="flex gap-0.5 rounded-xl bg-muted/70 p-0.5">
         {PRESETS.map((p) => (
           <button
             key={p.days}
@@ -71,10 +71,10 @@ export function DateRangePicker({ currentStart, currentEnd, activePreset }: Prop
             onClick={() => applyPreset(p.days)}
             disabled={pending}
             className={cn(
-              'rounded px-3 py-1 text-xs font-medium transition-colors',
+              'rounded-lg px-3 py-1 text-[12px] font-medium transition-all',
               activePreset === p.days
-                ? 'bg-primary text-primary-foreground'
-                : 'hover:bg-accent text-muted-foreground'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             {p.label}
@@ -82,7 +82,7 @@ export function DateRangePicker({ currentStart, currentEnd, activePreset }: Prop
         ))}
       </div>
 
-      <div className="flex items-center gap-1.5 rounded-md border bg-card px-2 py-1">
+      <div className="flex items-center gap-1.5 rounded-xl bg-card shadow-sm ring-1 ring-black/[0.06] px-2.5 py-1">
         <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
         <Input
           type="date"

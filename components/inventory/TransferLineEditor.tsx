@@ -56,13 +56,13 @@ export function TransferLineEditor({ products, onChange }: Props) {
   return (
     <div className="space-y-3">
       {/* Add row */}
-      <div className="grid grid-cols-12 items-end gap-2 rounded-lg border bg-muted/30 p-3">
+      <div className="grid grid-cols-12 items-end gap-2 rounded-2xl bg-muted/30 p-3">
         <div className="col-span-8 flex flex-col gap-1">
           <Label className="text-xs">สินค้า (สต๊อกต้นทาง)</Label>
           <select
             value={pickId}
             onChange={(e) => setPickId(e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            className="flex h-9 w-full rounded-xl border border-input bg-card px-3 py-1.5 text-[14px]"
           >
             <option value="">— เลือกสินค้า —</option>
             {products.map((p) => {
@@ -101,7 +101,7 @@ export function TransferLineEditor({ products, onChange }: Props) {
           ยังไม่มีรายการสินค้า
         </p>
       ) : (
-        <div className="rounded-lg border">
+        <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-black/[0.05]">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>

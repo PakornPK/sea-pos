@@ -22,7 +22,7 @@ export default async function CategoriesPage() {
         <Link href="/inventory" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
           <ChevronLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-semibold">จัดการหมวดหมู่</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">จัดการหมวดหมู่</h1>
       </div>
 
       <AddCategoryForm />

@@ -71,7 +71,7 @@ export default async function TransferDetailPage({
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold">รายการโอนสต๊อก</h1>
+              <h1 className="text-[26px] font-bold tracking-tight">รายการโอนสต๊อก</h1>
               <Badge variant={STATUS_VARIANT[transfer.status]}>
                 {STATUS_LABEL[transfer.status]}
               </Badge>
@@ -90,7 +90,7 @@ export default async function TransferDetailPage({
       </div>
 
       {/* Route summary */}
-      <div className="flex items-center gap-3 rounded-lg border bg-card p-4 text-sm">
+      <div className="flex items-center gap-3 rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 text-sm">
         <div className="flex-1">
           <p className="text-xs text-muted-foreground">สาขาต้นทาง</p>
           <p className="mt-1 font-medium">
@@ -109,7 +109,7 @@ export default async function TransferDetailPage({
       </div>
 
       {transfer.notes && (
-        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+        <div className="rounded-2xl bg-muted/30 px-4 py-3 text-sm">
           <span className="text-xs text-muted-foreground">หมายเหตุ: </span>
           {transfer.notes}
         </div>

@@ -39,7 +39,7 @@ export function ProductDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-muted">
+        <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted">
           {product.image_url ? (
             <Image
               src={product.image_url}

@@ -111,7 +111,7 @@ export function CustomerPicker({ customers, selected, onChange }: Props) {
         ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm hover:bg-accent transition-colors"
+        className="w-full flex items-center gap-2 rounded-xl ring-1 ring-black/[0.06] bg-background px-3 py-2 text-sm hover:bg-accent transition-colors"
       >
         <User className="h-4 w-4 text-muted-foreground shrink-0" />
         <span className="flex-1 text-left truncate">
@@ -148,7 +148,7 @@ export function CustomerPicker({ customers, selected, onChange }: Props) {
             width: popoverRect.width,
             zIndex: 50,
           }}
-          className="rounded-md border bg-popover shadow-lg"
+          className="rounded-xl ring-1 ring-black/[0.06] bg-popover shadow-lg"
         >
           {!creating ? (
             <>

@@ -16,7 +16,7 @@ export default async function CompanySettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">ตั้งค่าบริษัท</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">ตั้งค่าบริษัท</h1>
         <p className="text-sm text-muted-foreground mt-1">
           ข้อมูลที่แสดงบนใบเสร็จและเอกสารของบริษัท
         </p>

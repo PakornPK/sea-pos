@@ -13,7 +13,7 @@ export function RevenueTrendChart({ data }: { data: DailySeriesPoint[] }) {
   }))
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="font-semibold text-sm">ยอดขายรายวัน (7 วัน)</h3>
         <p className="text-xs text-muted-foreground">

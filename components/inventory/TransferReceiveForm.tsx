@@ -37,7 +37,7 @@ export function TransferReceiveForm({ transferId, items }: Props) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+    <form action={formAction} className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
       <input type="hidden" name="id" value={transferId} />
 
       <div className="flex items-center gap-2 text-sm font-semibold text-primary">
@@ -49,7 +49,7 @@ export function TransferReceiveForm({ transferId, items }: Props) {
         (ไม่คืนให้สาขาต้นทาง) โปรดระบุเหตุผลเพื่อเก็บเป็นประวัติ
       </p>
 
-      <div className="rounded-md border bg-background">
+      <div className="rounded-xl bg-muted/30">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left">
             <tr>

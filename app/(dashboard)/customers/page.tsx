@@ -28,7 +28,7 @@ export default async function CustomersPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">ลูกค้า</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">ลูกค้า</h1>
       </div>
 
       <Suspense

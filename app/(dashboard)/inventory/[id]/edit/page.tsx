@@ -34,7 +34,7 @@ export default async function EditProductPage({
         <Link href="/inventory" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
           <ChevronLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-semibold">แก้ไขสินค้า</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">แก้ไขสินค้า</h1>
       </div>
 
       <div className="flex flex-col gap-6 max-w-md">

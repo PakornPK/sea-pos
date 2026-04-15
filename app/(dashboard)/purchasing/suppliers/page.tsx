@@ -36,7 +36,7 @@ export default async function SuppliersPage({
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-semibold">ผู้จำหน่าย</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">ผู้จำหน่าย</h1>
       </div>
 
       <Suspense

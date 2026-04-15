@@ -53,24 +53,24 @@ export default async function CustomerDetailPage({
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <h1 className="text-2xl font-semibold">{customer.name}</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">{customer.name}</h1>
         </div>
         {canDelete && <CustomerDeleteButton id={customer.id} name={customer.name} />}
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
           <p className="text-xs text-muted-foreground">จำนวนบิล (ไม่รวมยกเลิก)</p>
           <p className="text-2xl font-bold tabular-nums mt-1">{completed.length}</p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
           <p className="text-xs text-muted-foreground">ยอดซื้อรวม</p>
           <p className="text-2xl font-bold tabular-nums mt-1">
             {formatBaht(totalSpent)}
           </p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
           <p className="text-xs text-muted-foreground">เฉลี่ยต่อบิล</p>
           <p className="text-2xl font-bold tabular-nums mt-1">
             {formatBaht(avgPerOrder)}
@@ -82,7 +82,7 @@ export default async function CustomerDetailPage({
       {canManage ? (
         <CustomerForm customer={customer} />
       ) : (
-        <div className="rounded-lg border bg-card p-4 space-y-2 text-sm">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-2 text-[14px]">
           <div className="flex items-center gap-2">
             <Phone className="h-4 w-4 text-muted-foreground" />
             <span>{customer.phone || <span className="text-muted-foreground">—</span>}</span>
@@ -100,7 +100,7 @@ export default async function CustomerDetailPage({
 
       {/* Purchase history */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">ประวัติการซื้อ</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight mb-3">ประวัติการซื้อ</h2>
         {sales.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">
             ลูกค้ารายนี้ยังไม่มีประวัติการซื้อ

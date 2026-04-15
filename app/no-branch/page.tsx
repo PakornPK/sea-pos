@@ -15,7 +15,7 @@ export default function NoBranchPage() {
         <MapPinOff className="h-8 w-8 text-muted-foreground" />
       </div>
       <div className="space-y-1.5">
-        <h1 className="text-2xl font-semibold">ยังไม่ได้กำหนดสาขา</h1>
+        <h1 className="text-[22px] font-bold tracking-tight">ยังไม่ได้กำหนดสาขา</h1>
         <p className="text-sm text-muted-foreground">
           บัญชีของคุณยังไม่ถูกมอบหมายให้กับสาขาใด กรุณาติดต่อผู้ดูแลระบบ
           ของบริษัทเพื่อขอเพิ่มสิทธิ์เข้าถึงสาขา

@@ -3,6 +3,7 @@
 import { useTransition } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { PAGE_SIZE_OPTIONS } from '@/lib/pagination'
+import { NativeSelect } from '@/components/ui/native-select'
 
 type Props = {
   currentSize: number
@@ -30,18 +31,18 @@ export function PageSizePicker({ currentSize }: Props) {
   }
 
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+    <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
       <span className="hidden sm:inline">ต่อหน้า:</span>
-      <select
+      <NativeSelect
         value={value}
         onChange={handleChange}
         disabled={pending}
-        className="h-8 rounded-md border border-input bg-background px-2 text-xs tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-8 w-20 text-[12px] tabular-nums rounded-lg px-2 pr-6"
       >
         {PAGE_SIZE_OPTIONS.map((s) => (
           <option key={s} value={s}>{s}</option>
         ))}
-      </select>
+      </NativeSelect>
     </label>
   )
 }

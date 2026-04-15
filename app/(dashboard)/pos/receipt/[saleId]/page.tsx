@@ -65,7 +65,7 @@ export default async function ReceiptPage({
           <ChevronLeft className="h-4 w-4" />
           กลับ
         </Link>
-        <h1 className="text-2xl font-semibold">ใบเสร็จรับเงิน</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">ใบเสร็จรับเงิน</h1>
         {isVoided ? (
           <Badge variant="destructive" className="ml-auto">ยกเลิกแล้ว</Badge>
         ) : (
@@ -76,8 +76,8 @@ export default async function ReceiptPage({
       {/* ── Receipt body ── */}
       <div
         className={cn(
-          'border rounded-xl p-6 space-y-4',
-          'print:border-0 print:shadow-none print:p-0',
+          'rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-6 space-y-4',
+          'print:rounded-none print:bg-transparent print:shadow-none print:ring-0 print:p-0',
           isVoided && 'opacity-60'
         )}
       >
@@ -186,7 +186,7 @@ export default async function ReceiptPage({
 
       {/* ── Void / Cancel section (hidden on print, admin/manager only) ── */}
       {canVoid && (
-        <div className="border border-destructive/30 rounded-xl p-5 space-y-3 print:hidden">
+        <div className="rounded-2xl bg-destructive/5 ring-1 ring-destructive/20 p-5 space-y-3 print:hidden">
           <div>
             <p className="font-semibold text-sm">ยกเลิกออเดอร์</p>
             <p className="text-xs text-muted-foreground mt-0.5">

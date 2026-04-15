@@ -112,7 +112,7 @@ export default async function PODetailPage({
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold font-mono">
+              <h1 className="text-[26px] font-bold tracking-tight font-mono">
                 {formatPoNo(po.po_no)}
               </h1>
               <Badge variant={PO_STATUS_VARIANT[po.status as PurchaseOrderStatus]}>
@@ -135,7 +135,7 @@ export default async function PODetailPage({
       </div>
 
       {/* Summary card */}
-      <div className="rounded-lg border bg-card p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">ผู้จำหน่าย</p>
           <p className="font-medium mt-1">{supplier?.name ?? '—'}</p>
@@ -165,7 +165,7 @@ export default async function PODetailPage({
       </div>
 
       {po.notes && (
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+        <div className="rounded-xl bg-muted/40 px-4 py-3 text-[14px]">
           <span className="text-muted-foreground">หมายเหตุ:</span> {po.notes}
         </div>
       )}
@@ -173,7 +173,7 @@ export default async function PODetailPage({
       {/* Body: edit form for drafts, read-only lines for other statuses */}
       {isDraft ? (
         <div>
-          <h2 className="text-lg font-semibold mb-3">แก้ไขใบสั่งซื้อ</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight mb-3">แก้ไขใบสั่งซื้อ</h2>
           <POForm
             suppliers={suppliers}
             products={products}
@@ -189,31 +189,31 @@ export default async function PODetailPage({
         </div>
       ) : (
         <div>
-          <h2 className="text-lg font-semibold mb-3">รายการสินค้า</h2>
-          <div className="rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
+          <h2 className="text-[15px] font-semibold tracking-tight mb-3">รายการสินค้า</h2>
+          <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-black/[0.05]">
+            <table className="w-full text-[14px]">
+              <thead className="border-b border-border/60 bg-muted/20 text-left">
                 <tr>
-                  <th className="px-3 py-2 font-medium">สินค้า</th>
-                  <th className="px-3 py-2 font-medium text-right w-24">สั่ง</th>
-                  <th className="px-3 py-2 font-medium text-right w-24">รับแล้ว</th>
-                  <th className="px-3 py-2 font-medium text-right w-32">ราคาทุน</th>
-                  <th className="px-3 py-2 font-medium text-right w-32">รวม</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">สินค้า</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-24">สั่ง</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-24">รับแล้ว</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-32">ราคาทุน</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-32">รวม</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((i) => {
                   const prod = Array.isArray(i.product) ? i.product[0] : i.product
                   return (
-                    <tr key={i.id} className="border-t">
-                      <td className="px-3 py-2">
+                    <tr key={i.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="px-3 py-2.5">
                         <div className="font-medium">{prod?.name ?? '—'}</div>
                         {prod?.sku && (
-                          <div className="text-xs text-muted-foreground">{prod.sku}</div>
+                          <div className="text-[12px] text-muted-foreground">{prod.sku}</div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{i.quantity_ordered}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-2.5 text-right tabular-nums">{i.quantity_ordered}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
                         {i.quantity_received}
                         {i.quantity_received < i.quantity_ordered && (
                           <span className="text-destructive ml-1">
@@ -221,42 +221,42 @@ export default async function PODetailPage({
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-2.5 text-right tabular-nums">
                         {formatBaht(i.unit_cost)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-2.5 text-right tabular-nums">
                         {formatBaht(lineTotal(i.unit_cost, i.quantity_ordered))}
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
-              <tfoot className="border-t bg-muted/30 text-sm">
+              <tfoot className="border-t border-border/60 bg-muted/20 text-[14px]">
                 {po.vat_amount > 0 ? (
                   <>
                     <tr className="text-muted-foreground">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-xs">ยอดก่อน VAT</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-xs">
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-[12px]">ยอดก่อน VAT</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-[12px]">
                         {formatBaht(po.subtotal_ex_vat)}
                       </td>
                     </tr>
                     <tr className="text-muted-foreground">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-xs">VAT ซื้อ</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-xs">
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-[12px]">VAT ซื้อ</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-[12px]">
                         {formatBaht(po.vat_amount)}
                       </td>
                     </tr>
-                    <tr className="border-t">
-                      <td colSpan={3} className="px-3 py-2 text-right font-medium">รวมทั้งสิ้น</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                    <tr className="border-t border-border/60">
+                      <td colSpan={3} className="px-3 py-2.5 text-right font-medium">รวมทั้งสิ้น</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
                         {formatBaht(po.total_amount)}
                       </td>
                     </tr>
                   </>
                 ) : (
                   <tr>
-                    <td colSpan={3} className="px-3 py-2 text-right font-medium">ยอดรวม</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                    <td colSpan={3} className="px-3 py-2.5 text-right font-medium">ยอดรวม</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
                       {formatBaht(po.total_amount)}
                     </td>
                   </tr>
@@ -270,7 +270,7 @@ export default async function PODetailPage({
       {/* Receive UI: only when status = ordered */}
       {isOrdered && (
         <div>
-          <h2 className="text-lg font-semibold mb-3">รับของ</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight mb-3">รับของ</h2>
           <ReceiveForm id={po.id} lines={receiveLines} />
         </div>
       )}

@@ -63,7 +63,7 @@ export function BranchMultiSelect({
             <div
               key={b.id}
               className={cn(
-                'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm',
+                'flex items-center justify-between gap-2 rounded-xl ring-1 ring-black/[0.06] px-3 py-2 text-sm',
                 isSel ? 'border-primary bg-primary/5' : 'bg-muted/20',
                 disabled && 'opacity-60'
               )}

@@ -45,7 +45,7 @@ export default async function CompaniesPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">บริษัทลูกค้า</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">บริษัทลูกค้า</h1>
           <p className="text-sm text-muted-foreground mt-1">จัดการบริษัทที่ใช้งาน SEA-POS</p>
         </div>
         <Link
@@ -69,8 +69,8 @@ async function CompanyList() {
 
   if (companies.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-12 text-center">
-        <p className="text-sm text-muted-foreground">ยังไม่มีบริษัทในระบบ</p>
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-12 text-center">
+        <p className="text-[14px] text-muted-foreground">ยังไม่มีบริษัทในระบบ</p>
       </div>
     )
   }
@@ -120,9 +120,11 @@ async function CompanyList() {
 
 function TableSkel() {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] overflow-hidden">
       {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full" />
+        <div key={i} className="border-b border-border/60 px-4 py-3 last:border-0">
+          <Skeleton className="h-4 w-full rounded-lg" />
+        </div>
       ))}
     </div>
   )

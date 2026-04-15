@@ -33,11 +33,11 @@ export default async function NewPOPage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-semibold">สร้างใบสั่งซื้อ</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">สร้างใบสั่งซื้อ</h1>
       </div>
 
       {suppliers.length === 0 ? (
-        <div className="rounded-lg border bg-card p-6 text-center">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-6 text-center">
           <p className="text-muted-foreground">
             ยังไม่มีผู้จำหน่ายในระบบ{' '}
             <Link href="/purchasing/suppliers" className="text-primary underline">

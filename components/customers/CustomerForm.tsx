@@ -23,7 +23,7 @@ export function CustomerForm({ customer, onDone }: CustomerFormProps) {
     <form
       ref={formRef}
       action={formAction}
-      className="rounded-lg border bg-card p-4 space-y-4"
+      className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4"
     >
       {isEdit && <input type="hidden" name="id" value={customer!.id} />}
 

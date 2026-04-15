@@ -6,6 +6,7 @@ import { ImagePlus, Plus, Trash2, PackagePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 import { quickCreateProduct } from '@/lib/actions/inventory'
 import { uploadProductImage } from '@/lib/actions/storage'
@@ -169,10 +170,10 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
       {/* Add existing product */}
       {!creatingNew && (
         <div className="space-y-2">
-          <div className="grid grid-cols-12 gap-2 items-end rounded-lg border bg-muted/30 p-3">
+          <div className="grid grid-cols-12 gap-2 items-end rounded-xl bg-muted/40 p-3">
             <div className="col-span-6 flex flex-col gap-1">
               <Label className="text-xs">สินค้า</Label>
-              <select
+              <NativeSelect
                 value={selectedProductId}
                 onChange={(e) => {
                   const pid = e.target.value
@@ -180,7 +181,6 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
                   const p = productMap.get(pid)
                   if (p) setCost(Number(p.cost ?? 0))
                 }}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
                 <option value="">— เลือกสินค้า —</option>
                 {localProducts.map((p) => {
@@ -191,7 +191,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
                     </option>
                   )
                 })}
-              </select>
+              </NativeSelect>
             </div>
             <div className="col-span-2 flex flex-col gap-1">
               <Label className="text-xs">จำนวน</Label>
@@ -223,7 +223,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
 
       {/* Inline new product mini-form */}
       {creatingNew && (
-        <div className="rounded-lg border bg-card p-4 space-y-3">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-medium">
               <PackagePlus className="h-4 w-4" />
@@ -244,7 +244,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
               onClick={() => imageRef.current?.click()}
               disabled={pendingCreate}
               className={cn(
-                'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted',
+                'relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted',
                 'grid place-items-center transition-colors hover:border-primary hover:bg-accent',
                 pendingCreate && 'opacity-60 cursor-not-allowed'
               )}
@@ -309,17 +309,16 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
 
             <div className="col-span-12 flex flex-col gap-1">
               <Label className="text-xs">หมวดหมู่</Label>
-              <select
+              <NativeSelect
                 value={newCategoryId}
                 onChange={(e) => setNewCategoryId(e.target.value)}
                 disabled={pendingCreate}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
                 <option value="">— ไม่ระบุหมวดหมู่ —</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
 
             <div className="col-span-3 flex flex-col gap-1">
@@ -368,7 +367,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
           ยังไม่มีรายการสินค้า
         </p>
       ) : (
-        <div className="rounded-lg border">
+        <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-black/[0.05]">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>

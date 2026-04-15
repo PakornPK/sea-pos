@@ -88,7 +88,7 @@ export function CompanyLogoUpload({ kind, label, hint, currentUrl, aspect = 'squ
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
         className={cn(
-          'relative shrink-0 overflow-hidden rounded-lg border bg-muted',
+          'relative shrink-0 overflow-hidden rounded-2xl bg-muted',
           'grid place-items-center transition-colors',
           'hover:border-primary hover:bg-accent',
           error && 'border-destructive',

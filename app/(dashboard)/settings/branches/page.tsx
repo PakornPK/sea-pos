@@ -24,7 +24,7 @@ export default async function BranchesPage() {
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">สาขา</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">สาขา</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             จัดการสาขาของบริษัท รหัสสาขาจะขึ้นต้นเลขใบเสร็จของสาขานั้น ๆ
           </p>
@@ -40,7 +40,7 @@ export default async function BranchesPage() {
 
       <div className="flex flex-col gap-2">
         {branches.length === 0 ? (
-          <p className="rounded-lg border bg-muted/30 py-10 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl bg-muted/30 py-10 text-center text-[14px] text-muted-foreground">
             ยังไม่มีสาขา
           </p>
         ) : (

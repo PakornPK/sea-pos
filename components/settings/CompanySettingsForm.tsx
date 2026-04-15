@@ -6,6 +6,7 @@ import { updateCompanySettings } from '@/lib/actions/company'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import { CompanyLogoUpload } from '@/components/settings/CompanyLogoUpload'
 import type { Company } from '@/types/database'
 
@@ -44,7 +45,7 @@ export function CompanySettingsForm({ company }: Props) {
 
   return (
    <div className="flex flex-col gap-6 max-w-xl">
-    <section className="rounded-lg border bg-card p-5 space-y-4">
+    <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
       <div>
         <h2 className="font-semibold text-sm">โลโก้และหัวจดหมาย</h2>
         <p className="text-xs text-muted-foreground mt-1">
@@ -69,7 +70,7 @@ export function CompanySettingsForm({ company }: Props) {
 
     <form action={formAction} className="flex flex-col gap-6">
       {/* Company identity */}
-      <section className="rounded-lg border bg-card p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <h2 className="font-semibold text-sm">ข้อมูลบริษัท</h2>
@@ -121,7 +122,7 @@ export function CompanySettingsForm({ company }: Props) {
       </section>
 
       {/* VAT configuration */}
-      <section className="rounded-lg border bg-card p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
         <div>
           <h2 className="font-semibold text-sm">ภาษีมูลค่าเพิ่ม (VAT)</h2>
           <p className="text-xs text-muted-foreground mt-1">
@@ -132,18 +133,17 @@ export function CompanySettingsForm({ company }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="vat_mode">รูปแบบ VAT</Label>
-            <select
+            <NativeSelect
               id="vat_mode"
               name="vat_mode"
               value={vatMode}
               onChange={(e) => setVatMode(e.target.value as 'none' | 'included' | 'excluded')}
               disabled={pending}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             >
               <option value="none">ไม่คิด VAT</option>
               <option value="excluded">ราคาไม่รวม VAT (บวกเพิ่มตอนชำระ)</option>
               <option value="included">ราคารวม VAT แล้ว (แยกรายงานภายหลัง)</option>
-            </select>
+            </NativeSelect>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="vat_rate">อัตรา VAT (%)</Label>
@@ -163,7 +163,7 @@ export function CompanySettingsForm({ company }: Props) {
       </section>
 
       {/* Receipt customization */}
-      <section className="rounded-lg border bg-card p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
         <div>
           <h2 className="font-semibold text-sm">ใบเสร็จรับเงิน</h2>
           <p className="text-xs text-muted-foreground mt-1">

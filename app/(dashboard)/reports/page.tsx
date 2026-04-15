@@ -46,7 +46,7 @@ export default async function ReportsPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">รายงาน</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">รายงาน</h1>
           <p className="text-sm text-muted-foreground mt-1">{humanRange(range)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -118,7 +118,7 @@ async function InventoryValueReport({ branchId }: { branchId: string | null }) {
   const grandTotal = sumBy(rows, (r) => r.stock_value)
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm">มูลค่าสต๊อกตามหมวดหมู่</h3>
         <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ async function StockMovementReport({ range, branchId }: { range: DateRange; bran
   })
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm">การเคลื่อนไหวสต๊อก</h3>
         <div className="flex items-center gap-2">
@@ -264,7 +264,7 @@ async function VatReport({ range, branchId }: { range: DateRange; branchId: stri
       </div>
 
       {/* Net liability for ภ.พ.30 */}
-      <div className="rounded-lg border bg-card p-4 flex items-center justify-between">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">VAT สุทธิ (ขาย − ซื้อ)</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -285,7 +285,7 @@ function KpiSkeleton() {
       <Skeleton className="h-4 w-28" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[88px] rounded-lg" />
+          <Skeleton key={i} className="h-[88px] rounded-2xl" />
         ))}
       </div>
     </div>
@@ -293,5 +293,5 @@ function KpiSkeleton() {
 }
 
 function BlockSkeleton() {
-  return <Skeleton className="h-[360px] rounded-lg" />
+  return <Skeleton className="h-[360px] rounded-2xl" />
 }

@@ -54,7 +54,7 @@ export function CompanyPlanControls({ companyId, currentPlan, plans }: Props) {
               onClick={() => apply(p.code, p.name)}
               disabled={pending}
               className={cn(
-                'flex flex-col gap-2 rounded-lg border-2 p-4 text-left transition-colors',
+                'flex flex-col gap-2 rounded-2xl border-2 p-4 text-left transition-colors',
                 isCurrent
                   ? 'border-primary bg-accent'
                   : 'border-border hover:bg-accent/50',

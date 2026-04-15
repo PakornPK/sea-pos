@@ -54,7 +54,7 @@ export default async function CompanyDetailPage({
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">{company.name}</h1>
+          <h1 className="text-[26px] font-bold tracking-tight">{company.name}</h1>
           <Badge variant={STATUS_VARIANT[company.status]}>
             {STATUS_LABEL[company.status]}
           </Badge>
@@ -68,7 +68,7 @@ export default async function CompanyDetailPage({
         <InfoCard label="แพ็กเกจปัจจุบัน" value={company.plan} />
       </div>
 
-      <div className="rounded-lg border bg-card p-5">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
         <h2 className="font-semibold text-sm mb-3">แพ็กเกจ</h2>
         <CompanyPlanControls
           companyId={company.id}
@@ -77,7 +77,7 @@ export default async function CompanyDetailPage({
         />
       </div>
 
-      <div className="rounded-lg border bg-card p-5 max-w-3xl">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 max-w-3xl">
         <h2 className="font-semibold text-sm mb-3">จัดการสถานะ</h2>
         <CompanyStatusControls companyId={company.id} currentStatus={company.status} />
       </div>
@@ -87,9 +87,9 @@ export default async function CompanyDetailPage({
 
 function InfoCard({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={cn('mt-1', mono && 'font-mono text-xs break-all')}>{value}</p>
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
+      <p className="text-[12px] text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 text-[14px]', mono && 'font-mono text-[12px] break-all')}>{value}</p>
     </div>
   )
 }

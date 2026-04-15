@@ -21,7 +21,7 @@ export default async function AddProductPage() {
         <Link href="/inventory" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
           <ChevronLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-semibold">เพิ่มสินค้า</h1>
+        <h1 className="text-[26px] font-bold tracking-tight">เพิ่มสินค้า</h1>
       </div>
       <AddProductForm categories={categories} />
     </div>

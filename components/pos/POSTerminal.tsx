@@ -181,15 +181,18 @@ export function POSTerminal({
 
   // ── Cart handlers ──────────────────────────────────────────────
   function addToCart(product: ProductWithStock) {
+    const tracked = product.track_stock !== false
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
       if (existing) {
-        if (existing.quantity >= product.stock) return prev
+        // Cap quantity at stock only for tracked products.
+        if (tracked && existing.quantity >= product.stock) return prev
         return prev.map((i) =>
           i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
         )
       }
-      if (product.stock < 1) return prev
+      // Block adding tracked products with no stock.
+      if (tracked && product.stock < 1) return prev
       return [
         ...prev,
         {
@@ -223,28 +226,32 @@ export function POSTerminal({
   const showVatRow = vatConfig.mode !== 'none' && breakdown.vatAmount > 0
 
   return (
-    <div className="flex h-full gap-4 overflow-hidden">
-      {/* ── Product grid ──────────────────────────────────────── */}
+    <div className="flex h-full gap-3 overflow-hidden">
+
+      {/* ── LEFT: Product grid ─────────────────────────────────── */}
       <div className="flex flex-1 flex-col gap-3 overflow-hidden">
-        {/* Search */}
+
+        {/* Search bar — Apple-style tall input */}
         <div className="relative shrink-0">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          {/*
-            Native <input> instead of our shadcn/base-ui Input wrapper — the
-            wrapper's built-in key handling eats Enter before our onKeyDown
-            fires, so barcode scanners never commit the scan.
-          */}
+          <Search className={cn(
+            'absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors',
+            scanState === 'hit'  ? 'text-[oklch(0.719_0.188_145)]' :
+            scanState === 'miss' ? 'text-destructive' :
+            'text-muted-foreground'
+          )} />
           <input
             ref={searchRef}
             type="text"
-            placeholder="ค้นหาสินค้า หรือ สแกน SKU / บาร์โค้ด แล้วกด Enter"
+            placeholder="ค้นหาสินค้า หรือสแกน SKU / บาร์โค้ด แล้วกด Enter"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={onSearchKeyDown}
             className={cn(
-              'flex h-8 w-full rounded-lg border border-input bg-transparent pl-9 pr-3 py-1 text-base md:text-sm placeholder:text-muted-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-              scanState === 'hit'  && 'border-emerald-500 ring-1 ring-emerald-500',
-              scanState === 'miss' && 'border-destructive ring-1 ring-destructive',
+              'flex h-10 w-full rounded-xl border bg-card pl-10 pr-4 text-[14px] placeholder:text-muted-foreground outline-none transition-all',
+              'focus:border-primary focus:ring-3 focus:ring-primary/20 focus:shadow-sm',
+              scanState === 'hit'  && 'border-[oklch(0.719_0.188_145)] ring-2 ring-[oklch(0.719_0.188_145)]/20',
+              scanState === 'miss' && 'border-destructive ring-2 ring-destructive/20',
+              scanState === 'idle' && 'border-border',
             )}
           />
           {scanState === 'miss' && (
@@ -254,13 +261,13 @@ export function POSTerminal({
           )}
         </div>
 
-        {/* Grid — big tap-friendly tiles */}
+        {/* Product grid — App Store–style cards */}
         <div
-          className="relative grid flex-1 auto-rows-min grid-cols-3 gap-3 overflow-y-auto content-start md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+          className="relative grid flex-1 auto-rows-min grid-cols-3 gap-2.5 overflow-y-auto content-start md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
           style={{ scrollbarGutter: 'stable' }}
         >
           {loading && (
-            <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-background/40 backdrop-blur-[1px]">
+            <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-background/50 backdrop-blur-sm">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           )}
@@ -268,31 +275,42 @@ export function POSTerminal({
           {products.map((product, idx) => {
             const inCart = cart.find((i) => i.productId === product.id)
             const inCartQty = inCart?.quantity ?? 0
-            const lowStock = product.stock <= product.min_stock
+            const tracked = product.track_stock !== false
+            const lowStock = tracked && product.stock > 0 && product.stock <= product.min_stock
             return (
               <div
                 key={product.id}
                 className={cn(
-                  'relative flex h-36 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
+                  'group relative flex flex-col overflow-hidden rounded-2xl bg-card shadow-sm transition-all duration-150',
                   inCartQty > 0
-                    ? 'border-primary bg-primary/5'
-                    : 'hover:border-primary/50 hover:bg-accent'
+                    ? 'ring-2 ring-primary shadow-primary/10'
+                    : 'ring-1 ring-black/[0.06] hover:shadow-md hover:ring-black/[0.10] active:scale-[0.97]'
                 )}
               >
+                {/* Detail info button */}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setDetailProduct(product) }}
                   aria-label="ดูรายละเอียด"
-                  className="absolute right-1.5 top-1.5 z-10 grid h-6 w-6 place-items-center rounded-full bg-background/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-primary"
+                  className="absolute right-2 top-2 z-10 grid h-6 w-6 place-items-center rounded-full bg-black/25 text-white/90 backdrop-blur-sm transition-opacity opacity-0 group-hover:opacity-100"
                 >
                   <Info className="h-3 w-3" />
                 </button>
+
+                {/* In-cart quantity badge */}
+                {inCartQty > 0 && (
+                  <div className="absolute left-2 top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow">
+                    {inCartQty}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => addToCart(product)}
                   className="flex h-full w-full flex-col text-left"
                 >
-                  <div className="relative h-20 shrink-0 bg-muted">
+                  {/* Image */}
+                  <div className="relative aspect-square w-full shrink-0 bg-muted">
                     {product.image_url ? (
                       <Image
                         src={product.image_url}
@@ -305,24 +323,30 @@ export function POSTerminal({
                       />
                     ) : (
                       <div className="absolute inset-0 grid place-items-center">
-                        <ImageOff className="h-6 w-6 text-muted-foreground/40" />
+                        <ImageOff className="h-7 w-7 text-muted-foreground/30" />
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-1 flex-col justify-between p-2 min-w-0">
-                    <p className="line-clamp-2 text-xs font-medium leading-tight break-words">
+
+                  {/* Info */}
+                  <div className="flex flex-col gap-1 p-2.5">
+                    <p className="line-clamp-2 text-[12px] font-medium leading-tight text-foreground break-words">
                       {product.name}
                     </p>
-                    <div className="flex items-center justify-between gap-1 min-w-0">
-                      <span className="truncate text-sm font-semibold tabular-nums">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[13px] font-semibold tabular-nums text-foreground">
                         {formatBaht(product.price)}
                       </span>
-                      <Badge
-                        variant={lowStock ? 'destructive' : 'outline'}
-                        className="shrink-0 whitespace-nowrap text-[10px] px-1.5 py-0"
-                      >
-                        {inCartQty > 0 ? `${inCartQty}/${product.stock}` : product.stock}
-                      </Badge>
+                      {tracked ? (
+                        <span className={cn(
+                          'text-[10px] tabular-nums font-medium',
+                          lowStock ? 'text-[oklch(0.574_0.170_65)]' : 'text-muted-foreground'
+                        )}>
+                          {product.stock}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/60">∞</span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -331,57 +355,55 @@ export function POSTerminal({
           })}
 
           {!loading && products.length === 0 && (
-            <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
+            <p className="col-span-full py-16 text-center text-[14px] text-muted-foreground">
               ไม่พบสินค้า
             </p>
           )}
         </div>
 
         {/* Pagination */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
-          <span className="text-xs text-muted-foreground tabular-nums">
-            หน้า {page} / {totalPages} · {total} รายการ
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-card px-3 py-2 shadow-sm ring-1 ring-black/[0.06]">
+          <span className="text-[12px] text-muted-foreground tabular-nums">
+            {total} รายการ · หน้า {page}/{totalPages}
           </span>
           <div className="flex items-center gap-1">
-            <Button
-              type="button" size="sm" variant="outline"
-              onClick={goPrev} disabled={page <= 1 || loading}
-            >
+            <Button type="button" size="icon-sm" variant="ghost" onClick={goPrev} disabled={page <= 1 || loading}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             {buildPageList(page, totalPages).map((item, idx) =>
               item === '…' ? (
-                <span key={`gap-${idx}`} className="px-1.5 text-xs text-muted-foreground">…</span>
+                <span key={`gap-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
               ) : (
                 <Button
                   key={item}
-                  type="button" size="sm"
-                  variant={item === page ? 'default' : 'outline'}
+                  type="button"
+                  size="icon-sm"
+                  variant={item === page ? 'default' : 'ghost'}
                   onClick={() => setPage(item)}
                   disabled={loading}
-                  className="min-w-8 px-2 tabular-nums"
+                  className="tabular-nums"
                 >
                   {item}
                 </Button>
               )
             )}
-            <Button
-              type="button" size="sm" variant="outline"
-              onClick={goNext} disabled={page >= totalPages || loading}
-            >
+            <Button type="button" size="icon-sm" variant="ghost" onClick={goNext} disabled={page >= totalPages || loading}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ── Cart (unchanged structure) ────────────────────────── */}
-      <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border bg-card">
-        {/* Header */}
+      {/* ── RIGHT: Cart ────────────────────────────────────────── */}
+      <div className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.06]">
+
+        {/* Cart header */}
         <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-          <ShoppingCart className="h-4 w-4" />
-          <span className="font-semibold">รายการสั่ง</span>
-          {totalQty > 0 && <Badge className="text-xs">{totalQty} รายการ</Badge>}
+          <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          <span className="text-[14px] font-semibold">รายการสั่ง</span>
+          {totalQty > 0 && (
+            <Badge className="text-[10px] h-[18px] px-1.5">{totalQty}</Badge>
+          )}
           <div className="ml-auto">
             <HeldSalesDrawer
               onResume={handleResume}
@@ -392,41 +414,42 @@ export function POSTerminal({
           </div>
         </div>
 
-        {/* Items */}
-        <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        {/* Cart items */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {cart.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              กดเลือกสินค้าทางซ้าย
-            </p>
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <ShoppingCart className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-[13px] text-muted-foreground">เลือกสินค้าทางซ้าย</p>
+            </div>
           ) : (
             cart.map((item) => (
-              <div key={item.productId} className="space-y-1.5">
+              <div key={item.productId} className="rounded-xl bg-muted/40 px-3 py-2.5 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex-1 text-sm font-medium leading-snug">{item.name}</p>
+                  <p className="flex-1 text-[13px] font-medium leading-snug">{item.name}</p>
                   <button
                     onClick={() => removeItem(item.productId)}
-                    className="mt-0.5 shrink-0 text-muted-foreground hover:text-destructive"
+                    className="mt-0.5 shrink-0 text-muted-foreground/50 hover:text-destructive transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => updateQty(item.productId, -1)}
-                      className="flex h-6 w-6 items-center justify-center rounded border hover:bg-accent"
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-background shadow-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
-                    <span className="w-7 text-center text-sm tabular-nums">{item.quantity}</span>
+                    <span className="w-8 text-center text-[13px] font-semibold tabular-nums">{item.quantity}</span>
                     <button
                       onClick={() => updateQty(item.productId, 1)}
-                      className="flex h-6 w-6 items-center justify-center rounded border hover:bg-accent"
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white shadow-sm hover:bg-primary/90 transition-colors"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>
-                  <span className="text-sm font-medium tabular-nums">
+                  <span className="text-[13px] font-semibold tabular-nums">
                     {formatBaht(lineTotal(item.price, item.quantity))}
                   </span>
                 </div>
@@ -436,37 +459,39 @@ export function POSTerminal({
         </div>
 
         {/* Checkout */}
-        <div className="shrink-0 space-y-3 border-t p-4">
+        <div className="shrink-0 border-t px-4 pt-3 pb-4 space-y-3">
+          {/* VAT breakdown */}
           {showVatRow && (
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between text-muted-foreground">
+            <div className="space-y-1">
+              <div className="flex justify-between text-[12px] text-muted-foreground">
                 <span>ยอดก่อน VAT</span>
                 <span className="tabular-nums">{formatBaht(breakdown.subtotalExVat)}</span>
               </div>
-              <div className="flex justify-between text-muted-foreground">
+              <div className="flex justify-between text-[12px] text-muted-foreground">
                 <span>VAT {vatConfig.rate}%</span>
                 <span className="tabular-nums">{formatBaht(breakdown.vatAmount)}</span>
               </div>
             </div>
           )}
+
+          {/* Total */}
           <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">รวมทั้งสิ้น</span>
-            <span className="text-2xl font-bold tabular-nums">{formatBaht(breakdown.total)}</span>
+            <span className="text-[13px] text-muted-foreground">รวมทั้งสิ้น</span>
+            <span className="text-[26px] font-bold tabular-nums tracking-tight">
+              {formatBaht(breakdown.total)}
+            </span>
           </div>
 
           <Separator />
 
-          <form action={formAction} className="space-y-3">
+          <form action={formAction} className="space-y-2.5">
             <input type="hidden" name="cart" value={JSON.stringify(cart)} />
             <input type="hidden" name="paymentMethod" value={payment} />
             <input type="hidden" name="customerId" value={customer?.id ?? ''} />
 
-            <CustomerPicker
-              customers={customers}
-              selected={customer}
-              onChange={setCustomer}
-            />
+            <CustomerPicker customers={customers} selected={customer} onChange={setCustomer} />
 
+            {/* Payment method selector */}
             <div className="grid grid-cols-3 gap-1.5">
               {PAYMENT_METHODS.map(({ value, label }) => (
                 <button
@@ -474,10 +499,10 @@ export function POSTerminal({
                   type="button"
                   onClick={() => setPayment(value)}
                   className={cn(
-                    'rounded-md border py-2 text-xs font-medium transition-colors',
+                    'rounded-xl py-2 text-[12px] font-medium transition-all',
                     payment === value
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'hover:bg-accent'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/70'
                   )}
                 >
                   {label}
@@ -486,20 +511,26 @@ export function POSTerminal({
             </div>
 
             {state?.error && (
-              <p className="text-center text-xs text-destructive">{state.error}</p>
+              <p className="text-center text-[12px] text-destructive">{state.error}</p>
             )}
 
+            {/* Pay — the most important button on screen */}
             <Button
               type="submit"
+              size="xl"
               className="w-full"
               disabled={cart.length === 0 || isPending}
             >
-              {isPending ? 'กำลังบันทึก...' : 'ชำระเงิน'}
+              {isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> กำลังบันทึก...</>
+                : `ชำระเงิน ${cart.length > 0 ? formatBaht(breakdown.total) : ''}`
+              }
             </Button>
 
             <Button
               type="button"
               variant="outline"
+              size="lg"
               className="w-full"
               disabled={cart.length === 0 || isPending || holding}
               onClick={handleHold}
@@ -511,7 +542,7 @@ export function POSTerminal({
               <button
                 type="button"
                 onClick={() => setCart([])}
-                className="w-full py-1 text-center text-xs text-muted-foreground hover:text-destructive"
+                className="w-full py-1 text-center text-[12px] text-muted-foreground hover:text-destructive transition-colors"
               >
                 ล้างรายการทั้งหมด
               </button>
