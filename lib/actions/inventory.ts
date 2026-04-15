@@ -43,6 +43,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const cost = parseFloat(formData.get('cost') as string) || 0
   const categoryId = (formData.get('category_id') as string) || null
   const vatExempt = formData.get('vat_exempt') === 'on'
+  const trackStock = formData.get('track_stock') === 'on'  // checkbox: checked='on', unchecked=null
   const barcode = (formData.get('barcode') as string | null)?.trim() || null
   const rawImage = formData.get('image') as File | null
   const hasImage = !!rawImage && rawImage.size > 0
@@ -76,13 +77,14 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     category_id: categoryId,
     vat_exempt: vatExempt,
     barcode,
+    track_stock: trackStock,
   })
   if ('error' in res) return { error: res.error }
 
-  // Seed a pivot row at 0 for the user's current branch so the product is
-  // queryable from the POS immediately. Stock is raised via PO receive or
-  // manual adjust.
-  if (me.activeBranchId) {
+  // Seed a pivot row at 0 for the user's current branch so tracked products
+  // are queryable from the POS immediately. Untracked products (menu items /
+  // services) don't need a stock row since they bypass the stock gate.
+  if (me.activeBranchId && trackStock) {
     await productStockRepo.seed(res.id, me.activeBranchId)
   }
 
@@ -165,6 +167,45 @@ export async function quickCreateProduct(input: {
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
+}
+
+export async function updateProduct(productId: string, _prev: unknown, formData: FormData) {
+  const { me } = await requireActionRole([...ADJUST_ROLES])
+
+  const name = (formData.get('name') as string).trim()
+  const sku = (formData.get('sku') as string | null)?.trim() ?? ''
+  const minStock = parseInt(formData.get('min_stock') as string) || 0
+  const price = parseFloat(formData.get('price') as string) || 0
+  const cost = parseFloat(formData.get('cost') as string) || 0
+  const categoryId = (formData.get('category_id') as string) || null
+  const vatExempt = formData.get('vat_exempt') === 'on'
+  const trackStock = formData.get('track_stock') === 'on'
+  const barcode = (formData.get('barcode') as string | null)?.trim() || null
+
+  if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
+
+  const err = await productRepo.update(productId, {
+    name,
+    sku: sku || null,
+    min_stock: minStock,
+    price,
+    cost,
+    category_id: categoryId,
+    vat_exempt: vatExempt,
+    barcode,
+    track_stock: trackStock,
+  })
+  if (err) return { error: err }
+
+  // Ensure a stock row exists when track_stock is true. Idempotent — safe to
+  // call even if the row already exists (ON CONFLICT DO NOTHING).
+  if (trackStock && me.activeBranchId) {
+    await productStockRepo.seed(productId, me.activeBranchId)
+  }
+
+  revalidatePath('/inventory')
+  revalidatePath('/pos')
+  redirect('/inventory')
 }
 
 export async function deleteProduct(productId: string) {

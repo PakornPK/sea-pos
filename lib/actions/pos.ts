@@ -47,6 +47,7 @@ type CartItem = {
   price: number
   quantity: number
   vatExempt?: boolean
+  trackStock?: boolean  // false = menu item / service; stock is never decremented
 }
 
 export async function createSale(_prev: SaleState, formData: FormData): Promise<SaleState> {
@@ -69,12 +70,15 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     return { error: 'กรุณาเลือกวิธีชำระเงิน' }
   }
 
-  // Re-resolve VAT config + per-item exemption server-side. Never trust the
-  // client-supplied `vatExempt` flag — a tampered payload could otherwise
-  // mis-state the tax on the receipt.
+  // Re-resolve VAT config + per-item flags server-side. Never trust client
+  // flags — a tampered payload could mis-state tax or skip stock checks.
   const company = me.companyId ? await companyRepo.getByIdCached(me.companyId) : null
   const vatConfig = getVatConfig(company)
-  const exemptMap = await productRepo.vatExemptMap(cart.map((i) => i.productId))
+  const productIds = cart.map((i) => i.productId)
+  const [exemptMap, trackStockMap] = await Promise.all([
+    productRepo.vatExemptMap(productIds),
+    productRepo.trackStockMap(productIds),
+  ])
   const breakdown = computeVat(
     cart.map((i) => ({
       price: i.price,
@@ -107,6 +111,8 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   if (itemsError) return { error: itemsError }
 
   for (const item of cart) {
+    // Skip decrement for untracked products (menu items, services).
+    if (trackStockMap[item.productId] === false) continue
     const stockErr = await productStockRepo.decrement({
       productId: item.productId,
       branchId:  me.activeBranchId,
@@ -146,7 +152,10 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (typeof voidResult !== 'boolean') return { error: voidResult.error }
     if (!voidResult) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
 
+    const trackMap = await productRepo.trackStockMap(items.map((i) => i.product_id))
     for (const item of items) {
+      // Don't restore stock for untracked products (menu items / services).
+      if (trackMap[item.product_id] === false) continue
       await productStockRepo.adjust({
         productId: item.product_id,
         branchId:  saleBranchId,

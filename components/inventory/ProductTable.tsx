@@ -16,7 +16,7 @@ import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatBaht } from '@/lib/format'
-import { Plus, Filter, MapPin } from 'lucide-react'
+import { Plus, Filter, MapPin, Pencil } from 'lucide-react'
 import { useState } from 'react'
 
 type ProductTableProps = {
@@ -95,11 +95,12 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
             <TableHead className="text-right">ขั้นต่ำ</TableHead>
             <TableHead className="text-center">สถานะ</TableHead>
             {canAdjust && <TableHead className="text-center">ปรับสต๊อก</TableHead>}
+            {canAdjust && <TableHead className="w-10" />}
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.map((product) => {
-            const isLowStock = product.stock <= product.min_stock
+            const isLowStock = product.track_stock && product.stock <= product.min_stock
             const cat = typeof product.category === 'object' && product.category
               ? product.category as { id: string; name: string }
               : null
@@ -127,7 +128,9 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                   {formatBaht(product.price)}
                 </TableCell>
                 <TableCell className="text-right">
-                  {isAllBranches && product.stock_by_branch ? (
+                  {!product.track_stock ? (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  ) : isAllBranches && product.stock_by_branch ? (
                     <div className="flex flex-col items-end gap-0.5">
                       <span className="tabular-nums font-semibold">
                         รวม {product.stock}
@@ -152,9 +155,13 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                     <span className="tabular-nums">{product.stock}</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right">{product.min_stock}</TableCell>
+                <TableCell className="text-right">
+                  {product.track_stock ? product.min_stock : <span className="text-muted-foreground text-xs">—</span>}
+                </TableCell>
                 <TableCell className="text-center">
-                  {isLowStock ? (
+                  {!product.track_stock ? (
+                    <Badge variant="outline" className="text-xs">ไม่ติดตาม</Badge>
+                  ) : isLowStock ? (
                     <Badge variant="destructive">ใกล้หมด</Badge>
                   ) : (
                     <Badge variant="secondary">ปกติ</Badge>
@@ -162,11 +169,26 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                 </TableCell>
                 {canAdjust && (
                   <TableCell>
-                    <div className="flex items-center justify-center gap-2">
-                      <StockAdjustButton productId={product.id} delta={-1} disabled={product.stock <= 0} />
-                      <span className="w-8 text-center tabular-nums">{product.stock}</span>
-                      <StockAdjustButton productId={product.id} delta={1} />
-                    </div>
+                    {product.track_stock ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <StockAdjustButton productId={product.id} delta={-1} disabled={product.stock <= 0} />
+                        <span className="w-8 text-center tabular-nums">{product.stock}</span>
+                        <StockAdjustButton productId={product.id} delta={1} />
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs text-center block">—</span>
+                    )}
+                  </TableCell>
+                )}
+                {canAdjust && (
+                  <TableCell>
+                    <Link
+                      href={`/inventory/${product.id}/edit`}
+                      className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-7 w-7 p-0')}
+                      title="แก้ไขสินค้า"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Link>
                   </TableCell>
                 )}
               </TableRow>

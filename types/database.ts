@@ -75,6 +75,7 @@ export type Product = {
   image_url: string | null
   vat_exempt: boolean
   barcode: string | null
+  track_stock: boolean          // false = always show in POS, never decrement stock
   created_at: string
 }
 
@@ -271,6 +272,7 @@ export type ProductInsert = {
   image_url?: string | null
   vat_exempt?: boolean
   barcode?: string | null
+  track_stock?: boolean
   // Note: stock is seeded via productStockRepo.set(productId, branchId, qty)
   // in a follow-up call; it is no longer a column on products.
 }

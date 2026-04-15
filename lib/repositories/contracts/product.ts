@@ -49,8 +49,13 @@ export interface ProductRepository {
     opts?: { categoryId?: string | null; search?: string | null }
   ): Promise<Paginated<ProductWithStockAndCategory>>
 
+  getById(id: string): Promise<Product | null>
+
   create(input: ProductInsert): Promise<{ id: string } | { error: string }>
   createReturning(input: ProductInsert): Promise<Product | { error: string }>
+
+  /** Update mutable product fields. Returns error string or null. */
+  update(id: string, input: Partial<ProductInsert>): Promise<string | null>
 
   updateImageUrl(id: string, url: string | null): Promise<string | null>
   delete(id: string): Promise<string | null>
@@ -62,6 +67,12 @@ export interface ProductRepository {
    * (don't trust a client-supplied flag).
    */
   vatExemptMap(productIds: string[]): Promise<Record<string, boolean>>
+
+  /**
+   * track_stock flag per product id. False means the product is a menu item
+   * or service — stock is never decremented on sale.
+   */
+  trackStockMap(productIds: string[]): Promise<Record<string, boolean>>
 }
 
 /**

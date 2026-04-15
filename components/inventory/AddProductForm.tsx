@@ -154,6 +154,23 @@ export function AddProductForm({ categories }: AddProductFormProps) {
         </div>
       </div>
 
+      {/* track_stock toggle */}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="track_stock"
+          defaultChecked
+          onChange={(e) => {
+            const minStockInput = document.getElementById('min_stock') as HTMLInputElement | null
+            if (minStockInput) minStockInput.disabled = !e.target.checked || pending
+          }}
+          disabled={pending}
+          className="h-4 w-4"
+        />
+        ติดตามสต๊อก
+        <span className="text-xs text-muted-foreground">(ยกเลิกเช็คสำหรับเมนูอาหาร / บริการ)</span>
+      </label>
+
       {/* Min stock */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="min_stock">สต๊อกขั้นต่ำ</Label>

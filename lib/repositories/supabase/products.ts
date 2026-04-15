@@ -44,40 +44,59 @@ export const supabaseProductRepo: ProductRepository = {
     opts: { branchId: string; search?: string | null },
   ): Promise<Paginated<ProductWithStock>> {
     const db = await getDb()
-    const { from, to } = toSupabaseRange(p)
 
-    // Inner join on product_stock filtered to the target branch + stock > 0.
-    // Category joined so POS can resolve effective VAT exemption (product
-    // flag OR category flag wins).
-    let q = db
-      .from('products')
-      .select(
-        '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)',
-        { count: 'exact' },
-      )
-      .eq('product_stock.branch_id', opts.branchId)
-      .gt('product_stock.quantity', 0)
-      .order('name')
-      .range(from, to)
-
-    if (opts.search?.trim()) {
-      const term = opts.search.trim().replace(/[%,]/g, '')
-      q = q.or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
+    type RawRow = Product & {
+      product_stock: Array<{ quantity: number; branch_id: string }> | { quantity: number; branch_id: string } | null
+      category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
     }
 
-    const { data, count } = await q
-    const rows: ProductWithStock[] = (data ?? []).map((r) => {
-      const row = r as unknown as Product & {
-        product_stock: Array<{ quantity: number }> | { quantity: number } | null
-        category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
-      }
-      const cat = Array.isArray(row.category) ? row.category[0] : row.category
-      const effectiveVat = Boolean(row.vat_exempt) || Boolean(cat?.vat_exempt)
-      const { product_stock: _ps, category: _c, ...rest } = row
+    const shapeRow = (r: RawRow): ProductWithStock => {
+      const cat = Array.isArray(r.category) ? r.category[0] : r.category
+      const effectiveVat = Boolean(r.vat_exempt) || Boolean(cat?.vat_exempt)
+      const { product_stock: _ps, category: _c, ...rest } = r
       void _ps; void _c
-      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(row) }
-    })
-    return packPaginated(rows, count ?? 0, p)
+      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(r) }
+    }
+
+    const select = '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)'
+    const selectLeft = '*, category:categories(vat_exempt), product_stock!left(quantity, branch_id)'
+
+    const searchTerm = opts.search?.trim().replace(/[%,]/g, '') ?? ''
+
+    // Two parallel queries:
+    // A) tracked products (track_stock=true): must have stock > 0 at this branch
+    // B) untracked products (track_stock=false): always available regardless of stock
+    const [trackedRes, untrackedRes] = await Promise.all([
+      (async () => {
+        let q = db
+          .from('products')
+          .select(select)
+          .eq('track_stock', true)
+          .eq('product_stock.branch_id', opts.branchId)
+          .gt('product_stock.quantity', 0)
+          .order('name')
+        if (searchTerm) q = q.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
+        return q
+      })(),
+      (async () => {
+        let q = db
+          .from('products')
+          .select(selectLeft)
+          .eq('track_stock', false)
+          .order('name')
+        if (searchTerm) q = q.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
+        return q
+      })(),
+    ])
+
+    const tracked = ((trackedRes.data ?? []) as unknown as RawRow[]).map(shapeRow)
+    const untracked = ((untrackedRes.data ?? []) as unknown as RawRow[]).map(shapeRow)
+
+    // Merge and sort by name, then paginate in-memory.
+    const all = [...untracked, ...tracked].sort((a, b) => a.name.localeCompare(b.name, 'th'))
+    const { from, to } = toSupabaseRange(p)
+    const rows = all.slice(from, to + 1)
+    return packPaginated(rows, all.length, p)
   },
 
   async listWithStockForBranch(
@@ -217,6 +236,12 @@ export const supabaseProductRepo: ProductRepository = {
     return packPaginated((data ?? []) as ProductWithCategory[], count ?? 0, p)
   },
 
+  async getById(id: string): Promise<Product | null> {
+    const db = await getDb()
+    const { data } = await db.from('products').select('*').eq('id', id).maybeSingle()
+    return data ? (data as Product) : null
+  },
+
   async create(input: ProductInsert): Promise<{ id: string } | { error: string }> {
     const db = await getDb()
     const { data, error } = await db
@@ -229,7 +254,7 @@ export const supabaseProductRepo: ProductRepository = {
     const db = await getDb()
     const { data, error } = await db
       .from('products').insert(input)
-      .select('id, sku, name, price, cost, min_stock, category_id, image_url, vat_exempt, barcode, created_at')
+      .select('id, sku, name, price, cost, min_stock, category_id, image_url, vat_exempt, barcode, track_stock, created_at')
       .single()
     if (error || !data) return { error: error?.message ?? 'บันทึกไม่สำเร็จ' }
     return {
@@ -237,6 +262,12 @@ export const supabaseProductRepo: ProductRepository = {
       price: Number(data.price),
       cost: Number(data.cost),
     } as Product
+  },
+
+  async update(id: string, input: Partial<ProductInsert>): Promise<string | null> {
+    const db = await getDb()
+    const { error } = await db.from('products').update(input).eq('id', id)
+    return error?.message ?? null
   },
 
   async updateImageUrl(id: string, url: string | null): Promise<string | null> {
@@ -277,34 +308,41 @@ export const supabaseProductRepo: ProductRepository = {
       return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(row) }
     }
 
-    const baseSelect = '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)'
+    // For track_stock=true products: inner join gated on stock > 0.
+    // For track_stock=false products: left join, no stock gate.
+    const innerSelect = '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)'
+    const leftSelect  = '*, category:categories(vat_exempt), product_stock!left(quantity, branch_id)'
 
-    // 1) Barcode exact match (preferred — unique per company).
+    // 1) Barcode — tracked in-stock.
     {
-      const { data } = await db
-        .from('products')
-        .select(baseSelect)
-        .eq('barcode', trimmed)
-        .eq('product_stock.branch_id', branchId)
-        .gt('product_stock.quantity', 0)
-        .limit(1)
-        .maybeSingle()
+      const { data } = await db.from('products').select(innerSelect)
+        .eq('track_stock', true).eq('barcode', trimmed)
+        .eq('product_stock.branch_id', branchId).gt('product_stock.quantity', 0)
+        .limit(1).maybeSingle()
       if (data) return shape(data)
     }
-
-    // 2) SKU exact match (case-insensitive) — fallback for manual entry.
+    // 2) SKU — tracked in-stock.
     {
-      const { data } = await db
-        .from('products')
-        .select(baseSelect)
-        .ilike('sku', trimmed)
-        .eq('product_stock.branch_id', branchId)
-        .gt('product_stock.quantity', 0)
-        .limit(1)
-        .maybeSingle()
+      const { data } = await db.from('products').select(innerSelect)
+        .eq('track_stock', true).ilike('sku', trimmed)
+        .eq('product_stock.branch_id', branchId).gt('product_stock.quantity', 0)
+        .limit(1).maybeSingle()
       if (data) return shape(data)
     }
-
+    // 3) Barcode — untracked (always available).
+    {
+      const { data } = await db.from('products').select(leftSelect)
+        .eq('track_stock', false).eq('barcode', trimmed)
+        .limit(1).maybeSingle()
+      if (data) return shape(data)
+    }
+    // 4) SKU — untracked.
+    {
+      const { data } = await db.from('products').select(leftSelect)
+        .eq('track_stock', false).ilike('sku', trimmed)
+        .limit(1).maybeSingle()
+      if (data) return shape(data)
+    }
     return null
   },
 
@@ -324,6 +362,21 @@ export const supabaseProductRepo: ProductRepository = {
     }>) {
       const cat = Array.isArray(r.category) ? r.category[0] : r.category
       out[r.id] = Boolean(r.vat_exempt) || Boolean(cat?.vat_exempt)
+    }
+    return out
+  },
+
+  async trackStockMap(productIds: string[]): Promise<Record<string, boolean>> {
+    if (productIds.length === 0) return {}
+    const db = await getDb()
+    const { data } = await db
+      .from('products')
+      .select('id, track_stock')
+      .in('id', productIds)
+
+    const out: Record<string, boolean> = {}
+    for (const r of (data ?? []) as Array<{ id: string; track_stock: boolean }>) {
+      out[r.id] = r.track_stock !== false  // default true if somehow missing
     }
     return out
   },
