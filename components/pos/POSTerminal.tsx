@@ -28,6 +28,7 @@ type CartItem = {
   price:      number
   quantity:   number
   vatExempt:  boolean
+  stock:      number   // -1 = untracked (infinite)
 }
 
 type POSTerminalProps = {
@@ -148,6 +149,7 @@ export function POSTerminal({
         price:     i.price,
         quantity:  i.quantity,
         vatExempt: Boolean(i.vatExempt),
+        stock:     -1,  // held sale snapshot has no live stock; server validates at checkout
       })),
     )
     // Customer on the held bill is re-selected from the picker list if present.
@@ -201,6 +203,7 @@ export function POSTerminal({
           price:     product.price,
           quantity:  1,
           vatExempt: Boolean(product.vat_exempt),
+          stock:     product.track_stock === false ? -1 : product.stock,
         },
       ]
     })
@@ -209,7 +212,13 @@ export function POSTerminal({
   function updateQty(productId: string, delta: number) {
     setCart((prev) =>
       prev
-        .map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + delta } : i))
+        .map((i) => {
+          if (i.productId !== productId) return i
+          const next = i.quantity + delta
+          // Cap at available stock for tracked products (stock >= 0).
+          if (delta > 0 && i.stock >= 0 && next > i.stock) return i
+          return { ...i, quantity: next }
+        })
         .filter((i) => i.quantity > 0)
     )
   }
@@ -276,18 +285,19 @@ export function POSTerminal({
             const inCart = cart.find((i) => i.productId === product.id)
             const inCartQty = inCart?.quantity ?? 0
             const tracked = product.track_stock !== false
+            const remaining = tracked ? product.stock - inCartQty : Infinity
             const lowStock = tracked && product.stock > 0 && product.stock <= product.min_stock
             return (
               <div
                 key={product.id}
                 className={cn(
-                  'group relative flex flex-col overflow-hidden rounded-2xl bg-card shadow-sm transition-all duration-150',
+                  'group relative rounded-2xl bg-card shadow-sm transition-all duration-150',
                   inCartQty > 0
                     ? 'ring-2 ring-primary shadow-primary/10'
-                    : 'ring-1 ring-border/70 hover:shadow-md hover:ring-border active:scale-[0.97]'
+                    : 'ring-1 ring-border/70 hover:shadow-md hover:ring-border'
                 )}
               >
-                {/* Detail info button */}
+                {/* Detail info button — outside inner overflow-hidden so it always shows */}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setDetailProduct(product) }}
@@ -304,10 +314,11 @@ export function POSTerminal({
                   </div>
                 )}
 
+                {/* Inner button: overflow-hidden + scale here so ring is unaffected */}
                 <button
                   type="button"
                   onClick={() => addToCart(product)}
-                  className="flex h-full w-full flex-col text-left"
+                  className="flex h-full w-full flex-col overflow-hidden rounded-2xl bg-card text-left active:scale-[0.97] transition-transform duration-100"
                 >
                   {/* Image */}
                   <div className="relative aspect-square w-full shrink-0 bg-muted">
@@ -340,9 +351,10 @@ export function POSTerminal({
                       {tracked ? (
                         <span className={cn(
                           'text-[10px] tabular-nums font-medium',
+                          remaining <= 0 ? 'text-destructive' :
                           lowStock ? 'text-[oklch(0.574_0.170_65)]' : 'text-muted-foreground'
                         )}>
-                          {product.stock}
+                          {remaining}
                         </span>
                       ) : (
                         <span className="text-[10px] text-muted-foreground/60">∞</span>
@@ -444,7 +456,8 @@ export function POSTerminal({
                     <span className="w-8 text-center text-[13px] font-semibold tabular-nums">{item.quantity}</span>
                     <button
                       onClick={() => updateQty(item.productId, 1)}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white shadow-sm hover:bg-primary/90 transition-colors"
+                      disabled={item.stock >= 0 && item.quantity >= item.stock}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
