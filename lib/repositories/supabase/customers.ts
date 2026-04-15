@@ -1,7 +1,8 @@
+import { unstable_cache } from 'next/cache'
 import type { Customer } from '@/types/database'
 import { toSupabaseRange, packPaginated, type PageParams, type Paginated } from '@/lib/pagination'
 import type { CustomerRepository, CustomerInput } from '@/lib/repositories/contracts'
-import { getDb } from './db'
+import { getDb, getAdminDb } from './db'
 
 export const supabaseCustomerRepo: CustomerRepository = {
   async list(): Promise<Customer[]> {
@@ -15,6 +16,18 @@ export const supabaseCustomerRepo: CustomerRepository = {
     const { data } = await db
       .from('customers').select('id, name, phone').order('name')
     return data ?? []
+  },
+
+  listForPickerCached(companyId: string) {
+    return unstable_cache(
+      async () => {
+        const { data } = await getAdminDb()
+          .from('customers').select('id, name, phone').eq('company_id', companyId).order('name')
+        return (data ?? []) as Array<{ id: string; name: string; phone: string | null }>
+      },
+      ['customers-picker', companyId],
+      { tags: [`customers:${companyId}`] },
+    )()
   },
 
   async listPaginated(

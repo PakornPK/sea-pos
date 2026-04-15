@@ -9,6 +9,13 @@ export interface CompanyRepository {
   /** Returns the current user's company (resolved via RLS). */
   getCurrent(): Promise<Company | null>
   getById(id: string): Promise<Company | null>
+  /**
+   * Cross-request cached read by id (service-role, scoped by id key).
+   * Use instead of getById() in Server Components / Server Actions that
+   * render on every request — avoids a DB hit when the row hasn't changed.
+   * Invalidate with revalidateTag(`company:${id}`).
+   */
+  getByIdCached(id: string): Promise<Company | null>
   updateSettings(id: string, settings: Record<string, unknown>): Promise<string | null>
   updateName(id: string, name: string): Promise<string | null>
 

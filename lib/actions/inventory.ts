@@ -25,6 +25,7 @@ export async function adjustStock(productId: string, delta: number) {
     if (err) return { error: err }
 
     revalidatePath('/inventory')
+    revalidatePath('/pos')
     revalidatePath('/reports')
     revalidatePath('/dashboard')
   } catch (e) {
@@ -100,6 +101,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   }
 
   revalidatePath('/inventory')
+  revalidatePath('/pos')
   redirect('/inventory')
 }
 
@@ -149,6 +151,7 @@ export async function quickCreateProduct(input: {
     }
 
     revalidatePath('/inventory')
+    revalidatePath('/pos')
     return {
       id: res.id,
       name: res.name,
@@ -171,4 +174,5 @@ export async function deleteProduct(productId: string) {
   if (error) return { error }
 
   revalidatePath('/inventory')
+  revalidatePath('/pos')
 }

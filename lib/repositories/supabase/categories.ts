@@ -1,12 +1,25 @@
+import { unstable_cache } from 'next/cache'
 import type { Category } from '@/types/database'
 import type { CategoryRepository } from '@/lib/repositories/contracts'
-import { getDb } from './db'
+import { getDb, getAdminDb } from './db'
 
 export const supabaseCategoryRepo: CategoryRepository = {
   async list(): Promise<Category[]> {
     const db = await getDb()
     const { data } = await db.from('categories').select('*').order('name')
     return (data ?? []) as Category[]
+  },
+
+  listCached(companyId: string): Promise<Category[]> {
+    return unstable_cache(
+      async (): Promise<Category[]> => {
+        const { data } = await getAdminDb()
+          .from('categories').select('*').eq('company_id', companyId).order('name')
+        return (data ?? []) as Category[]
+      },
+      ['categories', companyId],
+      { tags: [`categories:${companyId}`] },
+    )()
   },
 
   async create(input: { name: string; sku_prefix: string | null; vat_exempt?: boolean }): Promise<string | null> {

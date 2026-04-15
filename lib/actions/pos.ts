@@ -72,7 +72,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   // Re-resolve VAT config + per-item exemption server-side. Never trust the
   // client-supplied `vatExempt` flag — a tampered payload could otherwise
   // mis-state the tax on the receipt.
-  const company = await companyRepo.getCurrent()
+  const company = me.companyId ? await companyRepo.getByIdCached(me.companyId) : null
   const vatConfig = getVatConfig(company)
   const exemptMap = await productRepo.vatExemptMap(cart.map((i) => i.productId))
   const breakdown = computeVat(

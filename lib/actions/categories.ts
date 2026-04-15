@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
 import { categoryRepo } from '@/lib/repositories'
 
@@ -17,7 +17,7 @@ export async function addCategory(
   formData: FormData
 ): Promise<CategoryState> {
   try {
-    await requireActionRole([...MANAGE_ROLES])
+    const { me } = await requireActionRole([...MANAGE_ROLES])
     const name = (formData.get('name') as string).trim()
     if (!name) return { error: 'กรุณาระบุชื่อหมวดหมู่' }
 
@@ -30,30 +30,34 @@ export async function addCategory(
 
     revalidatePath('/inventory/categories')
     revalidatePath('/inventory')
+    if (me.companyId) revalidateTag(`categories:${me.companyId}`, {})
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
 
 export async function updateCategoryPrefix(categoryId: string, prefix: string) {
-  await requireActionRole([...MANAGE_ROLES])
+  const { me } = await requireActionRole([...MANAGE_ROLES])
   const error = await categoryRepo.updatePrefix(categoryId, cleanPrefix(prefix))
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
+  if (me.companyId) revalidateTag(`categories:${me.companyId}`, {})
 }
 
 export async function updateCategoryVatExempt(categoryId: string, vatExempt: boolean) {
-  await requireActionRole([...MANAGE_ROLES])
+  const { me } = await requireActionRole([...MANAGE_ROLES])
   const error = await categoryRepo.updateVatExempt(categoryId, vatExempt)
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
   revalidatePath('/inventory')
+  if (me.companyId) revalidateTag(`categories:${me.companyId}`, {})
 }
 
 export async function deleteCategory(categoryId: string) {
-  await requireActionRole([...MANAGE_ROLES])
+  const { me } = await requireActionRole([...MANAGE_ROLES])
   const error = await categoryRepo.delete(categoryId)
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
   revalidatePath('/inventory')
+  if (me.companyId) revalidateTag(`categories:${me.companyId}`, {})
 }

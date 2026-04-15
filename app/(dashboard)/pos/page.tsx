@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { requirePageRole } from '@/lib/auth'
-import { productRepo, customerRepo, companyRepo } from '@/lib/repositories'
+import { productRepo, companyRepo, customerRepo } from '@/lib/repositories'
+import { listHeldSales } from '@/lib/actions/heldSales'
 import { POSTerminal } from '@/components/pos/POSTerminal'
 import { DEFAULT_PAGE_SIZE } from '@/lib/pagination'
 import { getVatConfig, DEFAULT_VAT_CONFIG } from '@/lib/vat'
@@ -19,10 +20,11 @@ export default async function POSPage() {
       )
     : Promise.resolve({ rows: [], totalCount: 0, page: 1, pageSize: DEFAULT_PAGE_SIZE, totalPages: 1 })
 
-  const [initialPage, customers, company] = await Promise.all([
+  const [initialPage, customers, company, initialHeldSales] = await Promise.all([
     initialPagePromise,
-    customerRepo.listForPicker(),
-    companyRepo.getCurrent(),
+    me.companyId ? customerRepo.listForPickerCached(me.companyId) : Promise.resolve([]),
+    me.companyId ? companyRepo.getByIdCached(me.companyId) : Promise.resolve(null),
+    listHeldSales(),
   ])
   const vatConfig = company ? getVatConfig(company) : DEFAULT_VAT_CONFIG
 
@@ -37,6 +39,7 @@ export default async function POSPage() {
           pageSize={initialPage.pageSize}
           customers={customers}
           vatConfig={vatConfig}
+          initialHeldSales={initialHeldSales}
         />
       </div>
     </div>

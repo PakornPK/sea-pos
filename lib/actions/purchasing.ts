@@ -216,6 +216,7 @@ export async function receivePurchaseOrder(
     }
 
     revalidatePath('/inventory')
+    revalidatePath('/pos')
     revalidatePath('/purchasing')
     revalidatePath(`/purchasing/${id}`)
     revalidatePath('/reports')

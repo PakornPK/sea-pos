@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
 import { companyRepo } from '@/lib/repositories'
 
@@ -57,6 +57,7 @@ export async function updateCompanySettings(
 
     revalidatePath('/settings/company')
     revalidatePath('/', 'layout')  // affects receipt rendering everywhere
+    revalidateTag(`company:${me.companyId}`, {})
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }

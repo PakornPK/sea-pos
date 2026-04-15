@@ -18,6 +18,7 @@ import { CustomerPicker, type PickerCustomer } from '@/components/customers/Cust
 import { HeldSalesDrawer } from '@/components/pos/HeldSalesDrawer'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
 import type { HeldSale, ProductWithStock } from '@/types/database'
+import type { HeldSaleListRow } from '@/lib/repositories'
 import { computeVat, type VatConfig } from '@/lib/vat'
 import { lineTotal } from '@/lib/money'
 
@@ -30,12 +31,13 @@ type CartItem = {
 }
 
 type POSTerminalProps = {
-  initialProducts: ProductWithStock[]
-  initialTotal:    number
-  initialPage:     number
-  pageSize:        number
-  customers:       PickerCustomer[]
-  vatConfig:       VatConfig
+  initialProducts:  ProductWithStock[]
+  initialTotal:     number
+  initialPage:      number
+  pageSize:         number
+  customers:        PickerCustomer[]
+  vatConfig:        VatConfig
+  initialHeldSales: HeldSaleListRow[]
 }
 
 /** Build a compact page list with ellipsis: [1, …, 4, 5, 6, …, 12]. */
@@ -58,7 +60,7 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
   }))
 
 export function POSTerminal({
-  initialProducts, initialTotal, initialPage, pageSize, customers, vatConfig,
+  initialProducts, initialTotal, initialPage, pageSize, customers, vatConfig, initialHeldSales,
 }: POSTerminalProps) {
   // ── Cart (unchanged — user loves this part) ────────────────────
   const [cart, setCart] = useState<CartItem[]>([])
@@ -385,6 +387,7 @@ export function POSTerminal({
               onResume={handleResume}
               currentCartHasItems={cart.length > 0}
               refreshKey={heldRefresh}
+              initialRows={initialHeldSales}
             />
           </div>
         </div>

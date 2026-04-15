@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
 import { customerRepo, type CustomerInput } from '@/lib/repositories'
@@ -24,7 +24,7 @@ export async function addCustomer(
   formData: FormData
 ): Promise<CustomerState> {
   try {
-    await requireActionRole([...CREATE_ROLES])
+    const { me } = await requireActionRole([...CREATE_ROLES])
     const payload = parseCustomerForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
@@ -32,6 +32,7 @@ export async function addCustomer(
     if (error) return { error }
 
     revalidatePath('/customers')
+    if (me.companyId) revalidateTag(`customers:${me.companyId}`, {})
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -43,7 +44,7 @@ export async function updateCustomer(
   formData: FormData
 ): Promise<CustomerState> {
   try {
-    await requireActionRole([...MANAGE_ROLES])
+    const { me } = await requireActionRole([...MANAGE_ROLES])
 
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบลูกค้า' }
@@ -56,6 +57,7 @@ export async function updateCustomer(
 
     revalidatePath('/customers')
     revalidatePath(`/customers/${id}`)
+    if (me.companyId) revalidateTag(`customers:${me.companyId}`, {})
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -63,7 +65,7 @@ export async function updateCustomer(
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
-  await requireActionRole(['admin'])
+  const { me } = await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบลูกค้า')
 
   if (await customerRepo.hasSales(id)) {
@@ -74,6 +76,7 @@ export async function deleteCustomer(id: string): Promise<void> {
   if (error) throw new Error(error)
 
   revalidatePath('/customers')
+  if (me.companyId) revalidateTag(`customers:${me.companyId}`, {})
   redirect('/customers')
 }
 
@@ -82,7 +85,7 @@ export async function quickCreateCustomer(
   phone: string | null
 ): Promise<{ id: string; name: string; phone: string | null } | { error: string }> {
   try {
-    await getActionUser()
+    const { me } = await getActionUser()
     const trimmed = name.trim()
     if (!trimmed) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
@@ -93,6 +96,7 @@ export async function quickCreateCustomer(
     if ('error' in res) return res
 
     revalidatePath('/customers')
+    if (me.companyId) revalidateTag(`customers:${me.companyId}`, {})
     return res
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }

@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, Tag } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { productRepo, categoryRepo, branchRepo } from '@/lib/repositories'
+import { productRepo, branchRepo, categoryRepo } from '@/lib/repositories'
 import { parsePageParams } from '@/lib/pagination'
 import { resolveBranchFilter } from '@/lib/branch-filter'
 import { ProductTable } from '@/components/inventory/ProductTable'
@@ -88,7 +88,7 @@ async function InventoryTable({ sp, canAdjust }: { sp: Search; canAdjust: boolea
 
   const [result, categories, activeBranch] = await Promise.all([
     resultPromise,
-    categoryRepo.list(),
+    me.companyId ? categoryRepo.listCached(me.companyId) : Promise.resolve([]),
     me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
   ])
 

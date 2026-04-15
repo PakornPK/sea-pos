@@ -11,6 +11,11 @@ export type CustomerInput = {
 export interface CustomerRepository {
   list(): Promise<Customer[]>
   listForPicker(): Promise<Array<{ id: string; name: string; phone: string | null }>>
+  /**
+   * Cross-request cached picker list scoped to a company (service-role).
+   * Invalidate with revalidateTag(`customers:${companyId}`).
+   */
+  listForPickerCached(companyId: string): Promise<Array<{ id: string; name: string; phone: string | null }>>
   listPaginated(p: PageParams, opts?: { search?: string }): Promise<Paginated<Customer>>
   getById(id: string): Promise<Customer | null>
   create(input: CustomerInput): Promise<string | null>

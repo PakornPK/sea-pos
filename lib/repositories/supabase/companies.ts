@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import type { Company, CompanyPlan, CompanyStatus } from '@/types/database'
 import type { CompanyRepository, CompanyListRow } from '@/lib/repositories/contracts'
 import { getDb, getAdminDb } from './db'
@@ -13,6 +14,17 @@ export const supabaseCompanyRepo: CompanyRepository = {
     const db = await getDb()
     const { data } = await db.from('companies').select('*').eq('id', id).maybeSingle()
     return (data as Company | null) ?? null
+  },
+
+  getByIdCached(id: string): Promise<Company | null> {
+    return unstable_cache(
+      async (): Promise<Company | null> => {
+        const { data } = await getAdminDb().from('companies').select('*').eq('id', id).maybeSingle()
+        return (data as Company | null) ?? null
+      },
+      ['company', id],
+      { tags: [`company:${id}`] },
+    )()
   },
 
   async updateSettings(id: string, settings: Record<string, unknown>): Promise<string | null> {

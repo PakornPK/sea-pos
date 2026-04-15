@@ -26,25 +26,41 @@ type Props = {
    * to open the drawer.
    */
   refreshKey?: number
+  /**
+   * Server-fetched list passed on first render so the badge shows immediately
+   * with zero client requests on page load.
+   */
+  initialRows?: HeldSaleListRow[]
 }
 
 /**
  * Header pill that opens a list of parked bills for the active branch. Count
  * badge refreshes when the drawer opens or when `refreshKey` bumps.
  */
-export function HeldSalesDrawer({ onResume, currentCartHasItems, refreshKey = 0 }: Props) {
+export function HeldSalesDrawer({ onResume, currentCartHasItems, refreshKey = 0, initialRows = [] }: Props) {
   const [open, setOpen] = useState(false)
-  const [rows, setRows] = useState<HeldSaleListRow[]>([])
+  const [rows, setRows] = useState<HeldSaleListRow[]>(initialRows)
   const [loading, startLoading] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  // Fetch on mount, on drawer open, and whenever the parent bumps refreshKey.
+  // Re-fetch when the drawer opens (get latest from server).
+  // Do NOT fire on close — that was causing a redundant call.
   useEffect(() => {
+    if (!open) return
     startLoading(async () => {
       const list = await listHeldSales()
       setRows(list)
     })
-  }, [open, refreshKey])
+  }, [open])
+
+  // Re-fetch badge count when refreshKey bumps (a new bill was held).
+  useEffect(() => {
+    if (refreshKey === 0) return   // skip initial mount
+    startLoading(async () => {
+      const list = await listHeldSales()
+      setRows(list)
+    })
+  }, [refreshKey])
 
   async function handleResume(id: string) {
     if (currentCartHasItems) {
