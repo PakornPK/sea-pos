@@ -12,7 +12,7 @@ import type { AuthedUser } from '@/lib/auth'
  *   - Returns `null` when the effective scope is "all branches".
  */
 export function resolveBranchFilter(
-  me: AuthedUser,
+me: AuthedUser,
   rawParam: string | undefined,
 ): string | null {
   const isAdmin = me.role === 'admin' || me.isPlatformAdmin
