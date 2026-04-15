@@ -25,9 +25,10 @@ export function ProductDetailDialog({
 }: Props) {
   if (!product) return null
 
-  const lowStock = product.stock <= product.min_stock
-  const outOfStock = product.stock === 0
-  const remaining = product.stock - inCartQty
+  const untracked = product.track_stock === false
+  const lowStock = !untracked && product.stock <= product.min_stock
+  const outOfStock = !untracked && product.stock === 0
+  const remaining = untracked ? Infinity : product.stock - inCartQty
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -62,11 +63,15 @@ export function ProductDetailDialog({
           <Separator />
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">สต๊อกคงเหลือ</span>
-            <Badge variant={outOfStock ? 'destructive' : lowStock ? 'destructive' : 'outline'}>
-              {product.stock} ชิ้น
-            </Badge>
+            {untracked ? (
+              <Badge variant="outline">ไม่จำกัด</Badge>
+            ) : (
+              <Badge variant={outOfStock ? 'destructive' : lowStock ? 'warning' : 'outline'}>
+                {product.stock} ชิ้น
+              </Badge>
+            )}
           </div>
-          {inCartQty > 0 && (
+          {!untracked && inCartQty > 0 && (
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">อยู่ในรายการ</span>
               <span className="tabular-nums font-medium">{inCartQty} ชิ้น</span>
@@ -83,11 +88,11 @@ export function ProductDetailDialog({
           <Button
             type="button"
             onClick={() => { onAddToCart(product); onOpenChange(false) }}
-            disabled={remaining <= 0}
+            disabled={!untracked && remaining <= 0}
             className="w-full"
           >
             <Plus className="h-4 w-4" />
-            {remaining <= 0 ? 'สต๊อกหมด' : 'เพิ่มลงรายการ'}
+            {!untracked && remaining <= 0 ? 'สต๊อกหมด' : 'เพิ่มลงรายการ'}
           </Button>
         </DialogFooter>
       </DialogContent>
