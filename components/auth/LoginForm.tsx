@@ -28,7 +28,7 @@ export function LoginForm() {
       </div>
 
       {/* Card */}
-      <div className="w-full rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.06] p-6">
+      <div className="w-full rounded-2xl bg-card shadow-sm ring-1 ring-border/70 p-6">
         <form action={formAction} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">อีเมล</Label>

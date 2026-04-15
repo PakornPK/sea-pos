@@ -23,7 +23,7 @@ export function SupplierForm({
     <form
       ref={formRef}
       action={formAction}
-      className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-4"
+      className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4 space-y-4"
     >
       {isEdit && <input type="hidden" name="id" value={supplier!.id} />}
 

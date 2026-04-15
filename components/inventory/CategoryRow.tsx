@@ -54,7 +54,7 @@ export function CategoryRow({ id, name, prefix, vatExempt }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] px-4 py-3">
+    <div className="flex flex-col gap-1 rounded-2xl bg-card shadow-sm ring-1 ring-border/60 px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium">{name}</span>
         <div className="flex items-center gap-2">

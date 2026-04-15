@@ -11,7 +11,7 @@ export function CreateCompanyForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-6 max-w-xl">
-      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
         <h2 className="font-semibold text-sm">ข้อมูลบริษัท</h2>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">ชื่อบริษัท *</Label>
@@ -19,7 +19,7 @@ export function CreateCompanyForm() {
         </div>
       </section>
 
-      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
         <h2 className="font-semibold text-sm">บัญชีผู้ดูแลคนแรก</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">

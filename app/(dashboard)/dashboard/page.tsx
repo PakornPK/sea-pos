@@ -145,7 +145,7 @@ function ChartSkeleton() {
 
 function ListSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-black/[0.05] space-y-3">
+    <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border/60 space-y-3">
       <Skeleton className="h-4 w-28" />
       {Array.from({ length: rows }).map((_, i) => (
         <Skeleton key={i} className="h-5 w-full rounded-lg" />

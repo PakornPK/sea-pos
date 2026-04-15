@@ -60,7 +60,7 @@ export default async function BlockedPage() {
         <p className="text-sm text-muted-foreground">{message.body}</p>
       </div>
       {company && (
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.06] px-4 py-3 text-[14px] w-full">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/70 px-4 py-3 text-[14px] w-full">
           <div className="flex justify-between">
             <span className="text-muted-foreground">บริษัท</span>
             <span className="font-medium">{company.name}</span>

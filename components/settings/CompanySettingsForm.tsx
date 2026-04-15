@@ -45,7 +45,7 @@ export function CompanySettingsForm({ company }: Props) {
 
   return (
    <div className="flex flex-col gap-6 max-w-xl">
-    <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
+    <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
       <div>
         <h2 className="font-semibold text-sm">โลโก้และหัวจดหมาย</h2>
         <p className="text-xs text-muted-foreground mt-1">
@@ -70,7 +70,7 @@ export function CompanySettingsForm({ company }: Props) {
 
     <form action={formAction} className="flex flex-col gap-6">
       {/* Company identity */}
-      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <h2 className="font-semibold text-sm">ข้อมูลบริษัท</h2>
@@ -122,7 +122,7 @@ export function CompanySettingsForm({ company }: Props) {
       </section>
 
       {/* VAT configuration */}
-      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
         <div>
           <h2 className="font-semibold text-sm">ภาษีมูลค่าเพิ่ม (VAT)</h2>
           <p className="text-xs text-muted-foreground mt-1">
@@ -163,7 +163,7 @@ export function CompanySettingsForm({ company }: Props) {
       </section>
 
       {/* Receipt customization */}
-      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 space-y-4">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
         <div>
           <h2 className="font-semibold text-sm">ใบเสร็จรับเงิน</h2>
           <p className="text-xs text-muted-foreground mt-1">

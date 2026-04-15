@@ -37,7 +37,7 @@ export default async function NewPOPage() {
       </div>
 
       {suppliers.length === 0 ? (
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-6 text-center">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-6 text-center">
           <p className="text-muted-foreground">
             ยังไม่มีผู้จำหน่ายในระบบ{' '}
             <Link href="/purchasing/suppliers" className="text-primary underline">

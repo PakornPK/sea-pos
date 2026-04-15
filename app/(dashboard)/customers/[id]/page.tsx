@@ -60,17 +60,17 @@ export default async function CustomerDetailPage({
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
           <p className="text-xs text-muted-foreground">จำนวนบิล (ไม่รวมยกเลิก)</p>
           <p className="text-2xl font-bold tabular-nums mt-1">{completed.length}</p>
         </div>
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
           <p className="text-xs text-muted-foreground">ยอดซื้อรวม</p>
           <p className="text-2xl font-bold tabular-nums mt-1">
             {formatBaht(totalSpent)}
           </p>
         </div>
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
           <p className="text-xs text-muted-foreground">เฉลี่ยต่อบิล</p>
           <p className="text-2xl font-bold tabular-nums mt-1">
             {formatBaht(avgPerOrder)}
@@ -82,7 +82,7 @@ export default async function CustomerDetailPage({
       {canManage ? (
         <CustomerForm customer={customer} />
       ) : (
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-2 text-[14px]">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4 space-y-2 text-[14px]">
           <div className="flex items-center gap-2">
             <Phone className="h-4 w-4 text-muted-foreground" />
             <span>{customer.phone || <span className="text-muted-foreground">—</span>}</span>

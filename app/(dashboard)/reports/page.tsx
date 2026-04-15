@@ -118,7 +118,7 @@ async function InventoryValueReport({ branchId }: { branchId: string | null }) {
   const grandTotal = sumBy(rows, (r) => r.stock_value)
 
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm">มูลค่าสต๊อกตามหมวดหมู่</h3>
         <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ async function StockMovementReport({ range, branchId }: { range: DateRange; bran
   })
 
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm">การเคลื่อนไหวสต๊อก</h3>
         <div className="flex items-center gap-2">
@@ -264,7 +264,7 @@ async function VatReport({ range, branchId }: { range: DateRange; branchId: stri
       </div>
 
       {/* Net liability for ภ.พ.30 */}
-      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 flex items-center justify-between">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">VAT สุทธิ (ขาย − ซื้อ)</p>
           <p className="text-xs text-muted-foreground mt-0.5">

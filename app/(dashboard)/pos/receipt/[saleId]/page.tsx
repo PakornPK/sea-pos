@@ -76,7 +76,7 @@ export default async function ReceiptPage({
       {/* ── Receipt body ── */}
       <div
         className={cn(
-          'rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-6 space-y-4',
+          'rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-6 space-y-4',
           'print:rounded-none print:bg-transparent print:shadow-none print:ring-0 print:p-0',
           isVoided && 'opacity-60'
         )}

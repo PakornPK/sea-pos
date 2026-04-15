@@ -19,7 +19,7 @@ export function UsageCard({ label, current, limit, unit }: Props) {
   const warning = !unlimited && ratio >= 0.8 && !reached
 
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
       <div className="flex items-baseline justify-between">
         <p className="text-xs text-muted-foreground">{label}</p>
         {reached && (

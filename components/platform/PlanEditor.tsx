@@ -32,7 +32,7 @@ export function PlanEditor({ plan }: { plan: Plan }) {
   if (!editing) {
     return (
       <div className={cn(
-        'rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5',
+        'rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5',
         !plan.is_active && 'opacity-60',
       )}>
         <div className="flex items-start justify-between">

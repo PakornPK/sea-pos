@@ -46,7 +46,7 @@ export function AddUserForm({ branches }: Props) {
     <form
       ref={formRef}
       action={formAction}
-      className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-4"
+      className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4 space-y-4"
     >
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">เพิ่มผู้ใช้งานใหม่</h2>

@@ -10,7 +10,7 @@ export function AddCategoryForm() {
   const [state, formAction, pending] = useActionState(addCategory, undefined)
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-2xl ring-1 ring-black/[0.05] p-4">
+    <form action={formAction} className="flex flex-col gap-3 rounded-2xl ring-1 ring-border/60 p-4">
       <p className="font-medium text-sm">เพิ่มหมวดหมู่ใหม่</p>
       <div className="grid grid-cols-12 gap-2">
         <div className="col-span-8">

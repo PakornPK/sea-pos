@@ -5,7 +5,7 @@ import type { LowStockItem } from '@/lib/repositories'
 
 export function LowStockList({ items }: { items: LowStockItem[] }) {
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive" />

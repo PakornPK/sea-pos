@@ -101,7 +101,7 @@ export function TransferLineEditor({ products, onChange }: Props) {
           ยังไม่มีรายการสินค้า
         </p>
       ) : (
-        <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-black/[0.05]">
+        <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-border/60">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>

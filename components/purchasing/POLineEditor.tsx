@@ -223,7 +223,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
 
       {/* Inline new product mini-form */}
       {creatingNew && (
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 space-y-3">
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-medium">
               <PackagePlus className="h-4 w-4" />
@@ -367,7 +367,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
           ยังไม่มีรายการสินค้า
         </p>
       ) : (
-        <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-black/[0.05]">
+        <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-border/60">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>

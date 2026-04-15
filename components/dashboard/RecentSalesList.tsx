@@ -9,7 +9,7 @@ import type { RecentSale } from '@/lib/repositories'
 
 export function RecentSalesList({ sales }: { sales: RecentSale[] }) {
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm">การขายล่าสุด</h3>
         <Link href="/pos/sales" className="text-xs text-primary hover:underline">

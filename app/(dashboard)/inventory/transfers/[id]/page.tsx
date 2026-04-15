@@ -90,7 +90,7 @@ export default async function TransferDetailPage({
       </div>
 
       {/* Route summary */}
-      <div className="flex items-center gap-3 rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4 text-sm">
+      <div className="flex items-center gap-3 rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4 text-sm">
         <div className="flex-1">
           <p className="text-xs text-muted-foreground">สาขาต้นทาง</p>
           <p className="mt-1 font-medium">

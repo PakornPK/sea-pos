@@ -284,7 +284,7 @@ export function POSTerminal({
                   'group relative flex flex-col overflow-hidden rounded-2xl bg-card shadow-sm transition-all duration-150',
                   inCartQty > 0
                     ? 'ring-2 ring-primary shadow-primary/10'
-                    : 'ring-1 ring-black/[0.06] hover:shadow-md hover:ring-black/[0.10] active:scale-[0.97]'
+                    : 'ring-1 ring-border/70 hover:shadow-md hover:ring-border active:scale-[0.97]'
                 )}
               >
                 {/* Detail info button */}
@@ -362,7 +362,7 @@ export function POSTerminal({
         </div>
 
         {/* Pagination */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-card px-3 py-2 shadow-sm ring-1 ring-black/[0.06]">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-card px-3 py-2 shadow-sm ring-1 ring-border/70">
           <span className="text-[12px] text-muted-foreground tabular-nums">
             {total} รายการ · หน้า {page}/{totalPages}
           </span>
@@ -395,7 +395,7 @@ export function POSTerminal({
       </div>
 
       {/* ── RIGHT: Cart ────────────────────────────────────────── */}
-      <div className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.06]">
+      <div className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border/70">
 
         {/* Cart header */}
         <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">

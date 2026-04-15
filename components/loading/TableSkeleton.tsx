@@ -32,7 +32,7 @@ export function TableSkeleton({
         </div>
       )}
 
-      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] overflow-hidden">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 overflow-hidden">
         <div className="border-b border-border/60 bg-muted/20 px-4 py-3 grid gap-4"
              style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
           {Array.from({ length: columns }).map((_, i) => (

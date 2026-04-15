@@ -69,7 +69,7 @@ async function CompanyList() {
 
   if (companies.length === 0) {
     return (
-      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-12 text-center">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-12 text-center">
         <p className="text-[14px] text-muted-foreground">ยังไม่มีบริษัทในระบบ</p>
       </div>
     )
@@ -120,7 +120,7 @@ async function CompanyList() {
 
 function TableSkel() {
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] overflow-hidden">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 overflow-hidden">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="border-b border-border/60 px-4 py-3 last:border-0">
           <Skeleton className="h-4 w-full rounded-lg" />

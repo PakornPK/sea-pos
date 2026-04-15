@@ -23,7 +23,7 @@ export function TransferCreateForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4 max-w-2xl">
-      <div className="grid grid-cols-5 items-end gap-3 rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-4">
+      <div className="grid grid-cols-5 items-end gap-3 rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
         <div className="col-span-2 flex flex-col gap-1">
           <Label className="text-xs">สาขาต้นทาง</Label>
           <div className="flex h-9 items-center rounded-xl bg-muted/40 px-3 text-sm">

@@ -20,7 +20,7 @@ const COLOR_MAP = {
 export function KpiCard({ label, value, hint, icon: Icon, color = 'blue', className }: Props) {
   return (
     <div className={cn(
-      'flex flex-col gap-3 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-black/[0.05]',
+      'flex flex-col gap-3 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border/60',
       className
     )}>
       <div className="flex items-center justify-between">

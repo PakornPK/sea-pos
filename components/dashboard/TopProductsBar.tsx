@@ -13,7 +13,7 @@ export function TopProductsBar({ data }: { data: TopProduct[] }) {
   }))
 
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5">
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <h3 className="font-semibold text-sm mb-3">สินค้าขายดี 5 อันดับ (30 วัน)</h3>
       {chartData.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">ยังไม่มีข้อมูล</p>

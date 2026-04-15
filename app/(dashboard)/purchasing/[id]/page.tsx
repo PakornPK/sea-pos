@@ -135,7 +135,7 @@ export default async function PODetailPage({
       </div>
 
       {/* Summary card */}
-      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] p-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">ผู้จำหน่าย</p>
           <p className="font-medium mt-1">{supplier?.name ?? '—'}</p>
@@ -190,7 +190,7 @@ export default async function PODetailPage({
       ) : (
         <div>
           <h2 className="text-[15px] font-semibold tracking-tight mb-3">รายการสินค้า</h2>
-          <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-black/[0.05]">
+          <div className="rounded-2xl overflow-hidden bg-card shadow-sm ring-1 ring-border/60">
             <table className="w-full text-[14px]">
               <thead className="border-b border-border/60 bg-muted/20 text-left">
                 <tr>

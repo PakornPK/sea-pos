@@ -42,7 +42,7 @@ export function BranchRow({ branch }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded-2xl bg-card shadow-sm ring-1 ring-black/[0.05] px-4 py-3.5">
+    <div className="flex flex-col gap-1 rounded-2xl bg-card shadow-sm ring-1 ring-border/60 px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
