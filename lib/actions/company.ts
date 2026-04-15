@@ -39,7 +39,7 @@ export async function updateCompanySettings(
       ? Math.round(rawVatRate * 100) / 100
       : 7
 
-    const settings: CompanySettings = {
+    const formSettings: CompanySettings = {
       receipt_header: String(formData.get('receipt_header') ?? '').trim() || undefined,
       receipt_footer: String(formData.get('receipt_footer') ?? '').trim() || undefined,
       tax_id:         String(formData.get('tax_id')         ?? '').trim() || undefined,
@@ -49,10 +49,19 @@ export async function updateCompanySettings(
       vat_rate:       vatMode === 'none' ? undefined : vatRate,
     }
 
+    // Read existing settings to preserve upload-managed fields (logo_url, letterhead_url).
+    // Merge: existing first so upload fields survive, form values overwrite on top.
+    // Strip undefined so cleared form fields are removed from the JSON, not stored as null.
+    const current = await companyRepo.getByIdCached(me.companyId)
+    const existing = (current?.settings ?? {}) as Record<string, unknown>
+    const settings = Object.fromEntries(
+      Object.entries({ ...existing, ...formSettings }).filter(([, v]) => v !== undefined)
+    )
+
     const nameErr = await companyRepo.updateName(me.companyId, name)
     if (nameErr) return { error: nameErr }
 
-    const settingsErr = await companyRepo.updateSettings(me.companyId, settings as Record<string, unknown>)
+    const settingsErr = await companyRepo.updateSettings(me.companyId, settings)
     if (settingsErr) return { error: settingsErr }
 
     revalidatePath('/settings/company')

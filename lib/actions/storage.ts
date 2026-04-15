@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
 import { storageRepo, productRepo, companyRepo } from '@/lib/repositories'
 import type { StorageBucket } from '@/lib/repositories'
@@ -92,6 +92,7 @@ export async function uploadCompanyAsset(
 
     revalidatePath('/settings/company')
     revalidatePath('/pos/receipt', 'page')
+    revalidateTag(`company:${me.companyId}`, {})
     return { url: res.publicUrl, path: res.path }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'อัปโหลดไม่สำเร็จ' }
@@ -110,6 +111,7 @@ export async function removeCompanyAsset(kind: CompanyAssetKind): Promise<void> 
 
   revalidatePath('/settings/company')
   revalidatePath('/pos/receipt', 'page')
+  revalidateTag(`company:${me.companyId}`, {})
 }
 
 // ─── Generic helper: create a short-lived download URL ───────
