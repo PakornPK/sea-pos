@@ -39,6 +39,12 @@ export const supabaseCompanyRepo: CompanyRepository = {
     return error?.message ?? null
   },
 
+  async updateBillingInfo(id, info): Promise<string | null> {
+    const admin = getAdminDb()
+    const { error } = await admin.from('companies').update(info).eq('id', id)
+    return error?.message ?? null
+  },
+
   async listAll(): Promise<CompanyListRow[]> {
     const admin = getAdminDb()
     const [{ data: companies }, { data: profiles }, { data: authUsers }] = await Promise.all([

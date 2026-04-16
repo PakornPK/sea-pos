@@ -331,6 +331,7 @@ export function POSTerminal({
                         sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
                         unoptimized
                         priority={idx < 12}
+                        loading='eager'
                       />
                     ) : (
                       <div className="absolute inset-0 grid place-items-center">

@@ -3,9 +3,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requirePlatformAdmin } from '@/lib/auth'
-import { companyRepo, planRepo } from '@/lib/repositories'
+import { companyRepo, planRepo, billingRepo } from '@/lib/repositories'
 import { CompanyStatusControls } from '@/components/platform/CompanyStatusControls'
 import { CompanyPlanControls } from '@/components/platform/CompanyPlanControls'
+import { CompanyBillingSection } from '@/components/platform/CompanyBillingSection'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -38,9 +39,11 @@ export default async function CompanyDetailPage({
   const { id } = await params
   await requirePlatformAdmin()
 
-  const [company, plans] = await Promise.all([
+  const [company, plans, subscription, invoices] = await Promise.all([
     companyRepo.getById(id),
     planRepo.listActive(),
+    billingRepo.getSubscriptionByCompany(id),
+    billingRepo.listInvoices({ companyId: id }),
   ])
   if (!company) notFound()
 
@@ -81,6 +84,12 @@ export default async function CompanyDetailPage({
         <h2 className="font-semibold text-sm mb-3">จัดการสถานะ</h2>
         <CompanyStatusControls companyId={company.id} currentStatus={company.status} />
       </div>
+
+      <CompanyBillingSection
+        company={company}
+        subscription={subscription}
+        invoices={invoices}
+      />
     </div>
   )
 }

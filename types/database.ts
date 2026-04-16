@@ -33,6 +33,11 @@ export type Company = {
   plan: CompanyPlan
   status: CompanyStatus
   settings: Record<string, unknown>
+  // Billing info (added in migration 024)
+  tax_id:        string | null
+  address:       string | null
+  contact_email: string | null
+  contact_phone: string | null
   created_at: string
 }
 
@@ -339,4 +344,104 @@ export type SaleWithItems = Sale & {
 export type PurchaseOrderWithItems = PurchaseOrder & {
   items: PurchaseOrderItem[]
   supplier: Supplier
+}
+
+// ─── Billing / Platform types (migration 024) ─────────────────────────────────
+
+export type PlatformSettings = {
+  code:                 'default'
+  seller_name:          string
+  seller_tax_id:        string | null
+  seller_address:       string | null
+  seller_phone:         string | null
+  seller_email:         string | null
+  vat_enabled:          boolean
+  vat_rate_pct:         number
+  bank_name:            string | null
+  bank_account_name:    string | null
+  bank_account_no:      string | null
+  promptpay_id:         string | null
+  invoice_prefix:       string
+  invoice_year:         number | null
+  invoice_seq:          number
+  updated_at:           string
+}
+
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'suspended' | 'cancelled'
+export type PaymentMethod = 'bank_transfer' | 'promptpay' | 'cash' | 'other'
+
+export type Subscription = {
+  id:                   string
+  company_id:           string
+  plan_code:            string
+  started_at:           string
+  current_period_start: string
+  current_period_end:   string
+  due_date:             string
+  status:               SubscriptionStatus
+  overdue_months:       number
+  notes:                string | null
+  created_at:           string
+  updated_at:           string
+}
+
+export type SubscriptionPayment = {
+  id:              string
+  subscription_id: string
+  company_id:      string
+  amount_baht:     number
+  paid_at:         string
+  method:          PaymentMethod
+  reference_no:    string | null
+  note:            string | null
+  period_start:    string
+  period_end:      string
+  recorded_by:     string | null
+  created_at:      string
+}
+
+export type InvoiceLine = {
+  description:      string
+  qty:              number
+  unit_price_baht:  number
+  amount_baht:      number
+}
+
+export type InvoiceStatus = 'draft' | 'issued' | 'void'
+
+export type PlatformInvoice = {
+  id:                   string
+  invoice_no:           string
+  company_id:           string
+  subscription_id:      string | null
+  payment_id:           string | null
+  issued_at:            string
+  due_at:               string | null
+  status:               InvoiceStatus
+  // Frozen seller snapshot
+  seller_name:          string
+  seller_tax_id:        string | null
+  seller_address:       string | null
+  seller_phone:         string | null
+  seller_email:         string | null
+  // Frozen buyer snapshot
+  buyer_name:           string
+  buyer_tax_id:         string | null
+  buyer_address:        string | null
+  buyer_contact_email:  string | null
+  buyer_contact_phone:  string | null
+  // Lines & amounts
+  lines:                InvoiceLine[]
+  subtotal_baht:        number
+  vat_rate_pct:         number
+  vat_baht:             number
+  total_baht:           number
+  // Notes
+  notes:                string | null
+  void_reason:          string | null
+  voided_at:            string | null
+  voided_by:            string | null
+  issued_by:            string | null
+  created_at:           string
+  updated_at:           string
 }

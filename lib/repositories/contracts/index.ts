@@ -13,7 +13,7 @@
  */
 
 export type { CompanyRepository, CompanyListRow } from './company'
-export type { PlanRepository, PlanInput } from './plan'
+export type { PlanRepository, PlanInput, PlanWithUsage } from './plan'
 export type { StorageRepository, StorageBucket, UploadResult } from './storage'
 export type { BranchRepository }         from './branch'
 export type { ProductRepository, ProductStockRepository } from './product'
@@ -34,6 +34,15 @@ export type {
 export type { UserRepository, UserListRow } from './user'
 export type { HeldSaleRepository, HeldSaleListRow } from './heldSale'
 export type { AuthRepository }           from './auth'
+export type {
+  BillingRepository,
+  PlatformSettingsInput,
+  SubscriptionInput,
+  RecordPaymentInput,
+  IssueInvoiceInput,
+  InvoiceListRow,
+  SubscriptionListRow,
+} from './billing'
 export type {
   AnalyticsRepository,
   TodaySummary,
@@ -67,6 +76,7 @@ import type { UserRepository }            from './user'
 import type { AuthRepository }            from './auth'
 import type { AnalyticsRepository }       from './analytics'
 import type { HeldSaleRepository }        from './heldSale'
+import type { BillingRepository }         from './billing'
 
 /** Aggregate type — an adapter implements all of these to be a valid backend. */
 export interface Repositories {
@@ -87,4 +97,5 @@ export interface Repositories {
   auth:          AuthRepository
   analytics:     AnalyticsRepository
   heldSale:      HeldSaleRepository
+  billing:       BillingRepository
 }

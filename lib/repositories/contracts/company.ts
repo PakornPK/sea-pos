@@ -18,6 +18,12 @@ export interface CompanyRepository {
   getByIdCached(id: string): Promise<Company | null>
   updateSettings(id: string, settings: Record<string, unknown>): Promise<string | null>
   updateName(id: string, name: string): Promise<string | null>
+  updateBillingInfo(id: string, info: {
+    tax_id:        string | null
+    address:       string | null
+    contact_email: string | null
+    contact_phone: string | null
+  }): Promise<string | null>
 
   // ─── Platform-admin ops (bypass tenant filter via service role) ─────
   listAll(): Promise<CompanyListRow[]>

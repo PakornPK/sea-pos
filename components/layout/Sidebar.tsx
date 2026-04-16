@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users,
   BarChart2, LogOut, UserCog, Settings, Building2, Shield, PackageOpen,
-  MapPin, ArrowLeftRight, CircleUserRound,
+  MapPin, ArrowLeftRight, CircleUserRound, FileText, SlidersHorizontal,
 } from 'lucide-react'
 import type { Branch, UserRole } from '@/types/database'
 import { cn } from '@/lib/utils'
@@ -56,8 +56,10 @@ const PLATFORM_SECTIONS: NavSection[] = [
   {
     label: null,
     items: [
-      { href: '/platform/companies', label: 'บริษัทลูกค้า', icon: Building2,   roles: [] },
-      { href: '/platform/plans',     label: 'แพ็กเกจ',      icon: PackageOpen, roles: [] },
+      { href: '/platform/companies', label: 'บริษัทลูกค้า', icon: Building2,        roles: [] },
+      { href: '/platform/plans',     label: 'แพ็กเกจ',      icon: PackageOpen,      roles: [] },
+      { href: '/platform/invoices',  label: 'ใบกำกับภาษี',   icon: FileText,         roles: [] },
+      { href: '/platform/settings',  label: 'ตั้งค่า',       icon: SlidersHorizontal, roles: [] },
     ],
   },
 ]
