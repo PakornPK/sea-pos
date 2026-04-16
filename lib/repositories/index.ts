@@ -37,6 +37,7 @@ export const authRepo          = repos.auth
 export const analyticsRepo     = repos.analytics
 export const heldSaleRepo      = repos.heldSale
 export const billingRepo       = repos.billing
+export const loyaltyRepo       = repos.loyalty
 
 // Also re-export contract types so callers never need to reach into contracts/
 export type {
@@ -63,4 +64,9 @@ export type {
   SubscriptionListRow,
   RecordPaymentInput,
   IssueInvoiceInput,
+  MemberListRow,
+  MemberWithDetails,
+  MemberTreeRow,
+  EnrollMemberInput,
+  AwardPointsInput,
 } from './contracts'

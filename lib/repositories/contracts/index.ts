@@ -45,6 +45,16 @@ export type {
   PlatformDashboardSummary,
 } from './billing'
 export type {
+  LoyaltyRepository,
+  MembershipSettingsInput,
+  MembershipTierInput,
+  EnrollMemberInput,
+  AwardPointsInput,
+  MemberListRow,
+  MemberWithDetails,
+  MemberTreeRow,
+} from './loyalty'
+export type {
   AnalyticsRepository,
   TodaySummary,
   DailySeriesPoint,
@@ -78,6 +88,7 @@ import type { AuthRepository }            from './auth'
 import type { AnalyticsRepository }       from './analytics'
 import type { HeldSaleRepository }        from './heldSale'
 import type { BillingRepository }         from './billing'
+import type { LoyaltyRepository }         from './loyalty'
 
 /** Aggregate type — an adapter implements all of these to be a valid backend. */
 export interface Repositories {
@@ -99,4 +110,5 @@ export interface Repositories {
   analytics:     AnalyticsRepository
   heldSale:      HeldSaleRepository
   billing:       BillingRepository
+  loyalty:       LoyaltyRepository
 }

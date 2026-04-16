@@ -449,3 +449,66 @@ export type PlatformInvoice = {
   created_at:           string
   updated_at:           string
 }
+
+// ─── Membership ────────────────────────────────────────────────────────────────
+
+export type MlmLevelConfig = {
+  level:    number
+  rate_pct: number
+}
+
+export type MembershipSettings = {
+  company_id:          string
+  enabled:             boolean
+  points_per_baht:     number
+  baht_per_point:      number
+  max_redeem_pct:      number
+  points_expiry_days:  number | null
+  mlm_enabled:         boolean
+  mlm_levels:          MlmLevelConfig[]
+  created_at:          string
+  updated_at:          string
+}
+
+export type MembershipTier = {
+  id:                string
+  company_id:        string
+  name:              string
+  color:             string
+  min_spend_baht:    number
+  discount_pct:      number
+  points_multiplier: number
+  sort_order:        number
+  created_at:        string
+}
+
+export type MemberPointsLogType = 'earn' | 'redeem' | 'expire' | 'commission' | 'adjust'
+
+export type Member = {
+  id:                    string
+  company_id:            string
+  member_no:             string
+  name:                  string
+  phone:                 string | null
+  email:                 string | null
+  address:               string | null
+  tier_id:               string | null
+  points_balance:        number
+  total_spend_baht:      number
+  referred_by_member_id: string | null
+  enrolled_at:           string
+  created_at:            string
+}
+
+export type MemberPointsLog = {
+  id:               string
+  company_id:       string
+  member_id:        string
+  type:             MemberPointsLogType
+  points:           number
+  balance_after:    number
+  sale_id:          string | null
+  source_member_id: string | null
+  note:             string | null
+  created_at:       string
+}
