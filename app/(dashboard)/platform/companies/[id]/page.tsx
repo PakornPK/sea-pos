@@ -45,6 +45,10 @@ export default async function CompanyDetailPage({
     billingRepo.getSubscriptionByCompany(id),
     billingRepo.listInvoices({ companyId: id }),
   ])
+
+  const payments = subscription
+    ? await billingRepo.listPaymentsBySubscription(subscription.id)
+    : []
   if (!company) notFound()
 
   return (
@@ -89,6 +93,7 @@ export default async function CompanyDetailPage({
         company={company}
         subscription={subscription}
         invoices={invoices}
+        payments={payments}
       />
     </div>
   )

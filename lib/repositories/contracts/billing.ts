@@ -30,6 +30,7 @@ export type RecordPaymentInput = {
   note?:           string | null
   period_start:    string
   period_end:      string
+  receipt_path?:   string | null
 }
 
 export type IssueInvoiceInput = {

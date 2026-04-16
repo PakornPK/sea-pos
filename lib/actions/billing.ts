@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getActionUser } from '@/lib/auth'
-import { billingRepo } from '@/lib/repositories'
+import { billingRepo, storageRepo } from '@/lib/repositories'
 import type { PaymentMethod } from '@/types/database'
 import type { InvoiceLine } from '@/types/database'
 
@@ -90,6 +90,19 @@ export async function recordPayment(
     const periodEnd   = String(formData.get('period_end')   ?? '').trim()
     if (!periodStart || !periodEnd) return { error: 'กรุณาระบุช่วงเวลา' }
 
+    // Upload receipt slip if provided
+    let receiptPath: string | null = null
+    const receiptFile = formData.get('receipt') as File | null
+    if (receiptFile && receiptFile.size > 0) {
+      const ext = receiptFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const filename = `${Date.now()}.${ext}`
+      const uploaded = await storageRepo.upload('receipts', companyId, `payments/${filename}`, receiptFile, {
+        contentType: receiptFile.type || 'image/jpeg',
+        upsert: false,
+      })
+      if (!('error' in uploaded)) receiptPath = uploaded.path
+    }
+
     const result = await billingRepo.recordPayment({
       subscription_id: subscriptionId,
       company_id:      companyId,
@@ -100,6 +113,7 @@ export async function recordPayment(
       note:            String(formData.get('note')         ?? '').trim() || null,
       period_start:    periodStart,
       period_end:      periodEnd,
+      receipt_path:    receiptPath,
     })
     if (!result) return { error: 'บันทึกการชำระเงินไม่สำเร็จ' }
 
@@ -168,6 +182,13 @@ export async function issueInvoice(
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
+}
+
+// ─── Get signed URL for a payment receipt ────────────────────────────────────
+
+export async function getReceiptUrl(receiptPath: string): Promise<string | null> {
+  await requirePlatformAdmin()
+  return storageRepo.createSignedUrl('receipts', receiptPath, 3600)
 }
 
 // ─── Void invoice ─────────────────────────────────────────────────────────────

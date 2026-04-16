@@ -104,6 +104,21 @@ export function RecordPaymentDialog({
           <Input id="pay-note" name="note" disabled={pending} />
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="pay-receipt">
+            สลิป / หลักฐานการชำระเงิน
+            <span className="ml-1 text-[11px] font-normal text-muted-foreground">(ไม่บังคับ · JPG, PNG, PDF)</span>
+          </Label>
+          <input
+            id="pay-receipt"
+            name="receipt"
+            type="file"
+            accept="image/*,.pdf"
+            disabled={pending}
+            className="text-[13px] file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:font-medium hover:file:bg-muted/80"
+          />
+        </div>
+
         {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
 
         <div className="flex gap-2">

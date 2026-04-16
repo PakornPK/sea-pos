@@ -1,8 +1,8 @@
 'use client'
 
-import { useActionState, useState } from 'react'
-import { ChevronDown, ChevronUp, Check } from 'lucide-react'
-import { updateCompanyBillingInfo } from '@/lib/actions/billing'
+import { useActionState, useState, useTransition } from 'react'
+import { ChevronDown, ChevronUp, Check, Receipt } from 'lucide-react'
+import { updateCompanyBillingInfo, getReceiptUrl } from '@/lib/actions/billing'
 import { RecordPaymentDialog } from './RecordPaymentDialog'
 import { InvoiceList } from './InvoiceList'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { Company, Subscription } from '@/types/database'
+import type { Company, Subscription, SubscriptionPayment, PaymentMethod } from '@/types/database'
 import type { InvoiceListRow } from '@/lib/repositories'
 
 const STATUS_LABEL: Record<Subscription['status'], string> = {
@@ -31,6 +31,75 @@ const STATUS_VARIANT: Record<Subscription['status'], 'default' | 'secondary' | '
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' })
+}
+
+const METHOD_LABEL: Record<PaymentMethod, string> = {
+  bank_transfer: 'โอนธนาคาร',
+  promptpay:     'PromptPay',
+  cash:          'เงินสด',
+  other:         'อื่น ๆ',
+}
+
+function ReceiptViewButton({ receiptPath }: { receiptPath: string }) {
+  const [pending, startTransition] = useTransition()
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      disabled={pending}
+      className="h-7 px-2 text-primary"
+      onClick={() =>
+        startTransition(async () => {
+          const url = await getReceiptUrl(receiptPath)
+          if (url) window.open(url, '_blank', 'noopener,noreferrer')
+        })
+      }
+    >
+      <Receipt className="h-3.5 w-3.5" />
+      <span className="text-[12px]">{pending ? '...' : 'ดูสลิป'}</span>
+    </Button>
+  )
+}
+
+function PaymentHistory({ payments }: { payments: SubscriptionPayment[] }) {
+  if (payments.length === 0) {
+    return <p className="text-[13px] text-muted-foreground">ยังไม่มีประวัติการชำระเงิน</p>
+  }
+  return (
+    <div className="overflow-hidden rounded-xl ring-1 ring-border/50">
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-border/50 bg-muted/30">
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground">วันที่</th>
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground">วิธี</th>
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ref</th>
+            <th className="px-3 py-2 text-right font-medium text-muted-foreground">จำนวน</th>
+            <th className="px-3 py-2 text-right font-medium text-muted-foreground"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/40">
+          {payments.map((p) => (
+            <tr key={p.id} className="hover:bg-muted/20">
+              <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                {new Date(p.paid_at).toLocaleDateString('th-TH', { dateStyle: 'medium' })}
+              </td>
+              <td className="px-3 py-2">{METHOD_LABEL[p.method]}</td>
+              <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                {p.reference_no ?? '—'}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums font-medium">
+                ฿{p.amount_baht.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+              </td>
+              <td className="px-3 py-2 text-right">
+                {p.receipt_path && <ReceiptViewButton receiptPath={p.receipt_path} />}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function BillingInfoForm({ company }: { company: Company }) {
@@ -86,10 +155,12 @@ export function CompanyBillingSection({
   company,
   subscription,
   invoices,
+  payments,
 }: {
   company: Company
   subscription: Subscription | null
   invoices: InvoiceListRow[]
+  payments: SubscriptionPayment[]
 }) {
   return (
     <div className="flex flex-col gap-4 max-w-3xl">
@@ -156,6 +227,12 @@ export function CompanyBillingSection({
           </div>
           <BillingInfoForm company={company} />
         </div>
+      </div>
+
+      {/* Payment history */}
+      <div className="flex flex-col gap-3">
+        <h3 className="font-semibold text-[14px]">ประวัติการชำระเงิน</h3>
+        <PaymentHistory payments={payments} />
       </div>
 
       {/* Invoice list */}

@@ -397,6 +397,7 @@ export type SubscriptionPayment = {
   period_start:    string
   period_end:      string
   recorded_by:     string | null
+  receipt_path:    string | null
   created_at:      string
 }
 
