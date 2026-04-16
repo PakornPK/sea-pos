@@ -54,6 +54,17 @@ export function LoginForm() {
             />
           </div>
 
+          <label className="flex items-center gap-2 text-[13px] text-muted-foreground select-none cursor-pointer">
+            <input
+              type="checkbox"
+              name="remember_me"
+              defaultChecked
+              disabled={pending}
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            จดจำฉันในอุปกรณ์นี้
+          </label>
+
           {state?.error && (
             <p className="rounded-xl bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
               {state.error}

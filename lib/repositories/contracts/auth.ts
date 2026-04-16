@@ -1,5 +1,5 @@
 export interface AuthRepository {
-  signInWithPassword(credentials: { email: string; password: string }): Promise<string | null>
+  signInWithPassword(credentials: { email: string; password: string }, rememberMe?: boolean): Promise<string | null>
   signOut(): Promise<string | null>
   /**
    * Self-serve signup. The DB `handle_new_user` trigger picks up `companyName`

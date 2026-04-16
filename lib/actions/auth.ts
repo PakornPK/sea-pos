@@ -5,10 +5,14 @@ import { redirect } from 'next/navigation'
 import { authRepo } from '@/lib/repositories'
 
 export async function signIn(_prev: unknown, formData: FormData) {
-  const error = await authRepo.signInWithPassword({
-    email:    formData.get('email')    as string,
-    password: formData.get('password') as string,
-  })
+  const rememberMe = formData.get('remember_me') === 'on'
+  const error = await authRepo.signInWithPassword(
+    {
+      email:    formData.get('email')    as string,
+      password: formData.get('password') as string,
+    },
+    rememberMe
+  )
   if (error) return { error }
 
   revalidatePath('/', 'layout')
