@@ -66,6 +66,9 @@ export type {
   IssueInvoiceInput,
   MemberListRow,
   MemberWithDetails,
+  LoyaltySummary,
+  TierStat,
+  TopMemberRow,
   EnrollMemberInput,
   AwardPointsInput,
 } from './contracts'

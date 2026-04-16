@@ -12,8 +12,11 @@ import type {
   AwardPointsInput,
   MemberListRow,
   MemberWithDetails,
+  LoyaltySummary,
+  TierStat,
+  TopMemberRow,
 } from '@/lib/repositories/contracts/loyalty'
-import { chain, money, add } from '@/lib/money'
+import { chain, money, add, sumBy } from '@/lib/money'
 import { getDb } from './db'
 
 export const supabaseLoyaltyRepo: LoyaltyRepository = {
@@ -248,5 +251,116 @@ export const supabaseLoyaltyRepo: LoyaltyRepository = {
       .order('created_at', { ascending: false })
       .limit(100)
     return (data ?? []) as MemberPointsLog[]
+  },
+
+  // ─── Report ────────────────────────────────────────────────────────────────
+
+  async getLoyaltySummary(start: string, end: string): Promise<LoyaltySummary> {
+    const db = await getDb()
+    const [
+      { count: totalMembers },
+      { data: balances },
+      { data: activeSales },
+      { data: discountRows },
+      { data: earnLogs },
+      { data: redeemLogs },
+    ] = await Promise.all([
+      db.from('members').select('*', { count: 'exact', head: true }),
+      db.from('members').select('points_balance'),
+      db.from('sales')
+        .select('member_id')
+        .not('member_id', 'is', null)
+        .eq('status', 'completed')
+        .gte('created_at', start)
+        .lte('created_at', end),
+      db.from('sales')
+        .select('member_discount_baht')
+        .not('member_id', 'is', null)
+        .eq('status', 'completed')
+        .gte('created_at', start)
+        .lte('created_at', end),
+      db.from('member_points_log')
+        .select('points')
+        .eq('type', 'earn')
+        .gte('created_at', start)
+        .lte('created_at', end),
+      db.from('member_points_log')
+        .select('points')
+        .eq('type', 'redeem')
+        .gte('created_at', start)
+        .lte('created_at', end),
+    ])
+
+    const activeMembers   = new Set((activeSales ?? []).map((r: Record<string, unknown>) => r.member_id)).size
+    const pointsOutstanding = sumBy(balances ?? [], (r: Record<string, unknown>) => r.points_balance as number)
+    const discountGiven   = sumBy(discountRows ?? [], (r: Record<string, unknown>) => r.member_discount_baht as number)
+    const pointsIssued    = sumBy(earnLogs   ?? [], (r: Record<string, unknown>) => r.points as number)
+    const pointsRedeemed  = Math.abs(sumBy(redeemLogs ?? [], (r: Record<string, unknown>) => r.points as number))
+
+    return {
+      totalMembers:    totalMembers ?? 0,
+      activeMembers,
+      pointsIssued,
+      pointsRedeemed,
+      pointsOutstanding,
+      discountGiven,
+    }
+  },
+
+  async getTierStats(): Promise<TierStat[]> {
+    const db = await getDb()
+    const [{ data: tiers }, { data: members }] = await Promise.all([
+      db.from('membership_tiers').select('id, name, color').order('sort_order').order('min_spend_baht'),
+      db.from('members').select('tier_id'),
+    ])
+
+    const total  = (members ?? []).length
+    const counts = new Map<string | null, number>()
+    for (const m of members ?? []) {
+      const key = (m as Record<string, unknown>).tier_id as string | null
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+
+    const rows: TierStat[] = (tiers ?? []).map((t: Record<string, unknown>) => {
+      const count = counts.get(t.id as string) ?? 0
+      return {
+        tier_id:    t.id   as string,
+        tier_name:  t.name as string,
+        tier_color: t.color as string,
+        count,
+        pct: total > 0 ? money(chain(count).times(100).div(total)) : 0,
+      }
+    })
+
+    const noTierCount = counts.get(null) ?? 0
+    if (noTierCount > 0) {
+      rows.push({
+        tier_id:    null,
+        tier_name:  'ไม่มีระดับ',
+        tier_color: null,
+        count:      noTierCount,
+        pct:        total > 0 ? money(chain(noTierCount).times(100).div(total)) : 0,
+      })
+    }
+
+    return rows
+  },
+
+  async getTopMembers(limit = 10): Promise<TopMemberRow[]> {
+    const db = await getDb()
+    const { data } = await db
+      .from('members')
+      .select('id, member_no, name, total_spend_baht, points_balance, membership_tiers(name, color)')
+      .order('total_spend_baht', { ascending: false })
+      .limit(limit)
+    return (data ?? []).map((row: Record<string, unknown>) => ({
+      id:               row.id               as string,
+      member_no:        row.member_no        as string,
+      name:             row.name             as string,
+      total_spend_baht: Number(row.total_spend_baht),
+      points_balance:   Number(row.points_balance),
+      tier_name:        (row.membership_tiers as { name: string }  | null)?.name  ?? null,
+      tier_color:       (row.membership_tiers as { color: string } | null)?.color ?? null,
+    }))
   },
 }

@@ -50,6 +50,35 @@ export type MemberWithDetails = Member & {
   tier: MembershipTier | null
 }
 
+// ─── Loyalty report types ─────────────────────────────────────────────────────
+
+export type LoyaltySummary = {
+  totalMembers:      number
+  activeMembers:     number   // distinct members who purchased in the period
+  pointsIssued:      number   // earn points logged in the period
+  pointsRedeemed:    number   // redeem points (absolute) logged in the period
+  pointsOutstanding: number   // current total balance across all members (฿ liability)
+  discountGiven:     number   // ฿ member_discount_baht on completed sales in the period
+}
+
+export type TierStat = {
+  tier_id:    string | null
+  tier_name:  string
+  tier_color: string | null
+  count:      number
+  pct:        number   // % of total members
+}
+
+export type TopMemberRow = {
+  id:               string
+  member_no:        string
+  name:             string
+  tier_name:        string | null
+  tier_color:       string | null
+  total_spend_baht: number
+  points_balance:   number
+}
+
 // ─── Repository interface ─────────────────────────────────────────────────────
 
 export interface LoyaltyRepository {
@@ -73,4 +102,9 @@ export interface LoyaltyRepository {
   awardPointsFromSale(input: AwardPointsInput): Promise<string | null>
   adjustPoints(memberId: string, points: number, note: string): Promise<string | null>
   getPointsLog(memberId: string): Promise<MemberPointsLog[]>
+
+  // Report
+  getLoyaltySummary(start: string, end: string): Promise<LoyaltySummary>
+  getTierStats(): Promise<TierStat[]>
+  getTopMembers(limit?: number): Promise<TopMemberRow[]>
 }

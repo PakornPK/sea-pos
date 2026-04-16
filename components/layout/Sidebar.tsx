@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users,
   BarChart2, LogOut, UserCog, Settings, Building2, Shield, PackageOpen,
-  MapPin, ArrowLeftRight, CircleUserRound, FileText, SlidersHorizontal, Gauge, CreditCard, Star,
+  MapPin, ArrowLeftRight, CircleUserRound, FileText, SlidersHorizontal, Gauge, CreditCard, Star, PieChart,
 } from 'lucide-react'
 import type { Branch, UserRole } from '@/types/database'
 import { cn } from '@/lib/utils'
@@ -39,7 +39,8 @@ const CUSTOMER_SECTIONS: NavSection[] = [
     items: [
       { href: '/purchasing', label: 'จัดซื้อ',  icon: Truck,    roles: ['admin', 'manager', 'purchasing'] },
       { href: '/customers',  label: 'ลูกค้า',   icon: Users,    roles: ['admin', 'manager', 'cashier'] },
-      { href: '/members',    label: 'สมาชิก',   icon: Star,     roles: ['admin', 'manager', 'cashier'] },
+      { href: '/members',         label: 'สมาชิก',        icon: Star,      roles: ['admin', 'manager', 'cashier'] },
+      { href: '/members/report',  label: 'รายงานสมาชิก',  icon: PieChart,  roles: ['admin', 'manager'] },
       { href: '/reports',    label: 'รายงาน',   icon: BarChart2, roles: ['admin', 'manager'] },
     ],
   },

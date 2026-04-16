@@ -52,6 +52,9 @@ export type {
   AwardPointsInput,
   MemberListRow,
   MemberWithDetails,
+  LoyaltySummary,
+  TierStat,
+  TopMemberRow,
 } from './loyalty'
 export type {
   AnalyticsRepository,
