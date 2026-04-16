@@ -78,6 +78,7 @@ Query primitives used:
 | `setStatus` (admin) | UPDATE | `id = :id` | set `status = :enum` | |
 | `setPlan` (admin) | UPDATE | `id = :id` | set `plan = :text` (FK plans.code) | |
 | `createWithOwner` (admin) | multi-step | — | (1) create auth user (2) `INSERT companies` `{name, owner_id, plan='free', status='active'}` returning id (3) upsert profile `{id=userId, role='admin', full_name, company_id=new}`. Compensating delete of auth user on rollback. | |
+| `updateBillingInfo` (admin) | UPDATE | `id = :id` | set `{tax_id, address, contact_email, contact_phone}` | admin client |
 
 ### 2.2 `plans`
 
@@ -86,7 +87,9 @@ Query primitives used:
 | `listActive` | SELECT | `is_active = true` | `*` order by `sort_order ASC` |
 | `listAll` | SELECT | none | `*` order by `sort_order ASC` |
 | `getByCode` | SELECT | `code = :code` | `*` `maybeSingle` |
-| `update` | UPDATE | `code = :code` | set all of `{name, description, max_products, max_users, max_branches, monthly_price_baht, sort_order, is_active}` |
+| `update` | UPDATE | `code = :code` | set all of `{name, description, max_products, max_users, max_branches, monthly_price_baht, yearly_price_baht, sort_order, is_active}` |
+
+> `listAllWithUsage` returns `PlanWithUsage = Plan & { company_count: number }` (in-memory join with companies count per plan code).
 
 ### 2.3 `profiles` (admin client only)
 
@@ -197,6 +200,55 @@ Query primitives used:
 | `listItemsWithProduct` | SELECT | `po_id = :id` | `id, product_id, quantity_ordered, quantity_received, unit_cost, product:products(name, sku)` |
 | `replaceItems` | DELETE + INSERT | `po_id = :id`; then bulk insert `[{po_id, product_id, quantity_ordered, unit_cost}, …]` | — |
 
+### 2.13 `platform_settings` (singleton)
+
+| Op | Verb | Filter | Select / Set |
+| --- | --- | --- | --- |
+| `getSettings` | SELECT | `code = 'default'` | `*` `maybeSingle` |
+| `updateSettings` | UPDATE | `code = 'default'` | set `{seller_name, seller_tax_id, seller_address, seller_phone, seller_email, vat_enabled, vat_rate_pct, bank_name, bank_account_name, bank_account_no, promptpay_id, invoice_prefix}` |
+
+### 2.14 `subscriptions`
+
+| Op | Verb | Filter | Select / Set |
+| --- | --- | --- | --- |
+| `listSubscriptions` | SELECT | `status != 'cancelled'` | `*, companies!inner(name), plans!inner(name)` order by `created_at DESC` |
+| `getSubscriptionByCompany` | SELECT | `company_id = :id AND status != 'cancelled'` | `*` `maybeSingle` |
+| `createSubscription` | INSERT | — | `{company_id, plan_code, status, billing_cycle, current_period_start, current_period_end, notes}` returning `id` |
+| `updateSubscription` | UPDATE | `id = :id` | set `{status, billing_cycle, current_period_start, current_period_end, overdue_months, notes}` |
+
+### 2.15 `subscription_payments`
+
+| Op | Verb | Filter | Select / Set |
+| --- | --- | --- | --- |
+| `listPaymentsBySubscription` | SELECT | `subscription_id = :id` | `*` order by `paid_at DESC` |
+| `recordPayment` | INSERT | — | `{subscription_id, company_id, amount_baht, paid_at, method, reference_no, note, period_start, period_end, receipt_path}` returning `id` |
+
+### 2.16 `platform_invoices`
+
+| Op | Verb | Filter | Select / Set |
+| --- | --- | --- | --- |
+| `listInvoices` | SELECT | optional `company_id = :id`, optional `status = :enum` | `id, invoice_no, company_id, issued_at, due_at, status, buyer_name, total_baht, vat_baht, subtotal_baht` order by `issued_at DESC` |
+| `getInvoice` | SELECT | `id = :id` | `*` `maybeSingle` |
+| `issueInvoice` | INSERT | — | Fetches `platform_settings` + company for snapshots, computes VAT from lines; returns `{id, invoice_no}` |
+| `updateInvoiceStatus` | UPDATE | `id = :id` | set `{status, void_reason, voided_at}` |
+
+### 2.17 `getPlatformSummary` (dashboard aggregate)
+
+Single method that queries `companies`, `subscriptions`, `plans`, and `subscription_payments` in parallel. Returns:
+
+| Field | Description |
+| --- | --- |
+| `totalCompanies` | COUNT of all companies |
+| `activeCompanies` | COUNT where status = 'active' |
+| `suspendedCompanies` | COUNT where status = 'suspended' |
+| `pendingCompanies` | COUNT where status = 'pending' |
+| `mrrBaht` | MRR from active subscriptions — monthly: `monthly_price_baht`; yearly: `yearly_price_baht / 12` |
+| `revenueThisMonthBaht` | SUM of `subscription_payments.amount_baht` for current calendar month |
+| `overdueCount` | COUNT of subscriptions with `overdue_months > 0` |
+| `statusBreakdown` | Array of `{status, count}` |
+| `recentPayments` | Latest N payments with company name |
+| `attentionCompanies` | Companies with `status IN ('past_due','suspended')` or `overdue_months > 0` |
+
 ---
 
 ## 3. RPCs (stored procedures)
@@ -236,6 +288,11 @@ Must run in one transaction:
 5. If every item of the parent PO now has `quantity_received >= quantity_ordered`:
    `UPDATE purchase_orders SET status='received', received_at=now() WHERE id = po_id`
 
+### 3.4 `next_invoice_no()`
+Called by: `issueInvoice` inside `BillingRepository`.
+
+SECURITY DEFINER function. Atomically increments `platform_settings.invoice_seq`, resetting to `1` on a new calendar year. Returns the formatted invoice number string: `{invoice_prefix}-{YYYY}-{NNNN}` (e.g. `INV-2026-0001`).
+
 ---
 
 ## 4. Auth API
@@ -246,7 +303,7 @@ supports the operations below.
 ### 4.1 User-facing
 | Call | Params | Returns |
 | --- | --- | --- |
-| `signInWithPassword` | `{email, password}` | `null` on success (sets session cookie); else error string |
+| `signInWithPassword` | `{email, password}`, `rememberMe?: boolean` (default `true`) | `null` on success (sets session cookie); else error string. When `rememberMe=false`, auth cookies are re-set without `maxAge` → become session cookies that expire on browser close |
 | `signOut` | — | `null` / error string (clears session) |
 | `signUp` | `{email, password, options.data: { full_name, company_name }}` | `null` / error string. On success, triggers `handle_new_user` (see §5.1) |
 
@@ -341,7 +398,8 @@ Public URL format: `{STORAGE_BASE}/storage/v1/object/public/{bucket}/{path}`
 - `products` bucket → URL written to `products.image_url`
 - `company-assets` bucket → URL written to `companies.settings.logo_url`
   or `.letterhead_url`
-- Private buckets — no URL stored; short-lived signed URL is created on
+- `receipts` bucket — `subscription_payments.receipt_path` stores the object path; a signed URL is generated on demand via the `getReceiptUrl()` server action (1-hour expiry). Never stored permanently.
+- Other private buckets — no URL stored; short-lived signed URL is created on
   demand via `createDownloadUrl`.
 
 ---
@@ -451,11 +509,15 @@ sales:                     select[listRecent|listRecentPaginated|listForCustomer
 sale_items:                insert bulk, select[listItems|listItemsWithProduct]
 purchase_orders:           select[listRecent|listRecentPaginated|getById|getStatus], insert, update
 purchase_order_items:      select(listItemsWithProduct), delete+insert bulk
+platform_settings:         select[getSettings], update(settings)
+subscriptions:             select[listSubscriptions|getSubscriptionByCompany], insert, update
+subscription_payments:     select[listPaymentsBySubscription], insert(recordPayment)
+platform_invoices:         select[listInvoices|getInvoice], insert(issueInvoice), update(status)
 ```
 
 ### Tables (admin client, service role)
 ```
-companies:       select all, update(status|plan), insert (createWithOwner)
+companies:       select all, update(status|plan|billingInfo), insert (createWithOwner)
 profiles:        select count/list, update(profile), upsert, select(company_id)
 ```
 
@@ -464,11 +526,12 @@ profiles:        select count/list, update(profile), upsert, select(company_id)
 decrement_stock(product_id, quantity, sale_id, user_id)
 next_sku_for_category(category_id)
 receive_po_item(item_id, qty, user_id)
+next_invoice_no()  — sequential INV-YYYY-NNNN (SECURITY DEFINER, resets on new year)
 ```
 
 ### Auth
 ```
-signInWithPassword(email, password)
+signInWithPassword(email, password, rememberMe?)
 signOut()
 signUp(email, password, data={full_name, company_name})
 admin.createUser({email, password, email_confirm, user_metadata})

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { getActionUser } from '@/lib/auth'
 import { billingRepo, storageRepo } from '@/lib/repositories'
+import { getAdminDb } from '@/lib/repositories/supabase/db'
 import type { PaymentMethod } from '@/types/database'
 import type { InvoiceLine } from '@/types/database'
 
@@ -191,6 +192,33 @@ export async function issueInvoice(
 export async function getReceiptUrl(receiptPath: string): Promise<string | null> {
   await requirePlatformAdmin()
   return storageRepo.createSignedUrl('receipts', receiptPath, 3600)
+}
+
+// ─── Manual subscription tick ────────────────────────────────────────────────
+
+export type TickResult = {
+  processed: number
+  newly_past_due: number
+  newly_suspended: number
+} | null
+
+export async function runSubscriptionTick(): Promise<{ data: TickResult; error?: string }> {
+  try {
+    await requirePlatformAdmin()
+    const db = await getAdminDb()
+    const { data, error } = await db.rpc('run_subscription_tick')
+    if (error) return { data: null, error: error.message }
+    const row = Array.isArray(data) ? data[0] : data
+    return {
+      data: {
+        processed:        Number(row?.processed       ?? 0),
+        newly_past_due:   Number(row?.newly_past_due  ?? 0),
+        newly_suspended:  Number(row?.newly_suspended ?? 0),
+      },
+    }
+  } catch (e) {
+    return { data: null, error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
+  }
 }
 
 // ─── Void invoice ─────────────────────────────────────────────────────────────

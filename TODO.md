@@ -38,7 +38,7 @@ they belong to; ticks move up as they ship.
 - [x] **`StorageRepository` contract + adapter** — `upload`, `remove`, `getPublicUrl`, `createSignedUrl`, `listByCompany`. UI never touches Supabase storage directly.
 - [x] **Product images** — `ProductImageUpload` (form), `ProductThumb` (inline grid editor); thumbnails on POS grid + ProductTable; `next.config.ts` whitelists Supabase host
 - [x] **Company logo + letterhead** — `CompanyLogoUpload` on `/settings/company`; logo + meta render on receipt page
-- [ ] **Receipt attachments** — bucket + RLS ready; UI to attach scanned receipts to sales/POs is pending
+- [ ] **Receipt attachments (sales/POs)** — bucket + RLS ready; UI to attach scanned receipts to sales/POs is pending
 - [ ] **CSV import wizard** — bucket ready; need import UI for products/customers/suppliers
 - [ ] **Backup exports** — bucket ready; need scheduled export job + admin download list
 
@@ -50,16 +50,33 @@ they belong to; ticks move up as they ship.
 - [x] **`/platform/plans`** — platform admin edits name, description, price, and three limits (`max_products`, `max_users`, `max_branches`); each limit empty = unlimited
 - [x] **`CompanyPlanControls`** now loads plans from DB + shows ฿price + 3 limits per card
 
+### Shipped: Platform billing system
+- [x] **Platform billing system** — `subscriptions`, `subscription_payments`, `platform_invoices` tables (migrations 024–026)
+- [x] **Platform dashboard (`/platform`)** — KPI cards: total companies, MRR (yearly subs normalised), overdue count, suspended/pending. Status breakdown, attention list (past_due/suspended/overdue), recent payments feed
+- [x] **Platform settings (`/platform/settings`)** — `PlatformSettingsForm`: seller info, VAT toggle+rate, bank transfer details, PromptPay ID, invoice prefix
+- [x] **Thai tax invoice** — `/platform/invoices` list + `/platform/invoices/[id]` A4 print view (ใบกำกับภาษีเต็มรูปแบบ), frozen seller/buyer snapshots, VAT breakdown, signature lines
+- [x] **Payment receipt attachment** — slip upload on `RecordPaymentDialog` → private `receipts` bucket; "ดูสลิป" signed-URL button (1-hour expiry) on company detail
+- [x] **Yearly billing cycle** — `plans.yearly_price_baht`, `subscriptions.billing_cycle` (monthly/yearly toggle in `RecordPaymentDialog`); MRR normalises yearly as `yearly/12`
+- [x] **Remember Me on login** — "จดจำฉันในอุปกรณ์นี้" checkbox; when unchecked, auth cookies have no `maxAge` → expire on browser close
+- [x] **Company billing info** — `companies.tax_id`, `.address`, `.contact_email`, `.contact_phone`; editable in `CompanyBillingSection` on company detail page
+- [x] **`BillingRepository`** — `getSettings`, `updateSettings`, `listSubscriptions`, `getSubscriptionByCompany`, `createSubscription`, `updateSubscription`, `listPaymentsBySubscription`, `recordPayment`, `listInvoices`, `getInvoice`, `issueInvoice`, `updateInvoiceStatus`, `getPlatformSummary`
+
 ### Deferred beyond MVP1
 - [ ] **Flip to self-serve signup** — set `NEXT_PUBLIC_ENABLE_SIGNUP=true` + change `handle_new_user` to start new companies as `pending`
 - [ ] **Magic-link invitations** — email the invitee a sign-in link. Current flow: admin sets password, shares it out-of-band
 - [ ] **Company switcher** — for support staff with multiple company memberships (`company_members` join table)
-- [ ] **Stripe billing** — plan pricing is recorded but not charged; wire Stripe Checkout + webhook to flip `status` on payment events
-- [ ] **Platform dashboard** — cross-company MRR / active users / sales volume charts
 - [ ] **Impersonate-as-customer** — platform admins click into a company and operate as their admin for support (audit-logged)
 - [ ] **Legal & data residency** — per-company data export, GDPR delete, terms acceptance log
 - [ ] **Email verification** — turn on Supabase's `Confirm email` + build confirmation page
 - [ ] **Password reset flow** — `/forgot-password` + email link
+
+### Next priorities (billing follow-up)
+- [ ] **pg_cron automation** — monthly job: bump `overdue_months`, flip `past_due → suspended` after 3 months, sync `companies.status`. SQL function + `pg_cron.schedule()`
+- [ ] **Auto-subscription on company create** — `createWithOwner` should create a `subscriptions` row for the new company automatically
+- [ ] **Due-date email notification** — send invoice email to `companies.contact_email` when period ends (Resend stub)
+- [ ] **Subscription list page** `/platform/subscriptions` — all companies with status, cycle, due date, overdue count in one view
+- [ ] **Customer self-service billing** `/billing/invoices` — company admin sees their own invoices
+- [ ] **Audit log** — `audit_logs` table + generic `log_audit_event()` trigger on products/sales/companies/profiles/plans/subscriptions/platform_invoices. Read-only viewer at `/audit-log` and `/platform/audit`. Backend-only (triggers, no app-layer logging needed)
 
 ## Release 2 — Multi-branch (detailed plan)
 
@@ -368,14 +385,16 @@ moves per-branch (use `setval` per company+branch, or compute `MAX(receipt_no) +
 
 ## Cross-cutting infrastructure (ongoing)
 
-- [ ] **Audit log** — generic `audit_events(company_id, actor_id, action, entity_type, entity_id, diff jsonb)` — append-only, viewable in Admin
+- [ ] **Audit log** — generic `audit_events(company_id, actor_id, action, entity_type, entity_id, diff jsonb)` — append-only, viewable in Admin + `/platform/audit`
 - [ ] **Rate limiting** on Server Actions to block abuse (especially login, coupon redemption)
-- [ ] **Background jobs** — `pg_cron` or Supabase Edge Functions for: nightly reports, expired coupon cleanup, low-stock emails
+- [ ] **Background jobs** — `pg_cron` for: nightly reports, expired coupon cleanup, low-stock emails, billing overdue escalation
 - [ ] **i18n framework** — extract Thai strings to a message catalog; add English as second locale
-- [ ] **Print layouts** — proper 80mm thermal receipt + A4 invoice templates
+- [ ] **Print layouts** — proper 80mm thermal receipt (A4 tax invoice is done)
 - [ ] **Barcode scanning** in POS via `USB HID` or camera (QuaggaJS)
 - [ ] **Mobile-optimized POS** — current layout assumes desktop; tablet mode for counter staff
 - [ ] **API layer** — public REST/GraphQL for integrations (e-commerce sync, accounting)
+- [ ] **CSV import wizard** — product/customer/supplier import via `imports` bucket
+- [ ] **Backup exports** — scheduled pg_dump + admin download list
 
 ## Known tech debt
 

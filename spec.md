@@ -117,11 +117,13 @@ sea-pos/
 │   │   ├── company.ts                # updateCompanySettings
 │   │   ├── storage.ts                # uploadProductImage, removeProductImage, uploadCompanyAsset, removeCompanyAsset, createDownloadUrl
 │   │   ├── platform.ts               # createCompany, setCompanyStatus, setCompanyPlan
-│   │   └── plans.ts                  # updatePlan
+│   │   ├── plans.ts                  # updatePlan
+│   │   └── billing.ts                # updatePlatformSettings, updateCompanyBillingInfo, recordPayment, issueInvoice, voidInvoice, getReceiptUrl
 │   └── repositories/
 │       ├── contracts/                # TypeScript interfaces for every repo
 │       └── supabase/                 # Supabase implementations
-│           └── analytics.ts          # Revenue, stock value, VAT summary queries
+│           ├── analytics.ts          # Revenue, stock value, VAT summary queries
+│           └── billing.ts            # BillingRepository — platform settings, subscriptions, payments, invoices
 ├── components/
 │   ├── ui/                           # shadcn/ui primitives (badge, button, card, dialog, input, label, native-select, page-size-picker, pagination, separator, skeleton, table)
 │   ├── layout/
@@ -189,7 +191,12 @@ sea-pos/
 │   │   ├── CreateCompanyForm.tsx     # Platform admin creates company + first user
 │   │   ├── CompanyStatusControls.tsx # Activate / suspend / close controls
 │   │   ├── CompanyPlanControls.tsx   # Change company plan picker
-│   │   └── PlanEditor.tsx            # Edit plan tier inline
+│   │   ├── PlanEditor.tsx            # Edit plan tier inline (monthly + yearly price, savings badge)
+│   │   ├── PlatformSettingsForm.tsx  # Seller info, VAT toggle+rate, bank/PromptPay, invoice prefix
+│   │   ├── RecordPaymentDialog.tsx   # Monthly/yearly toggle, amount, method, reference, receipt slip upload
+│   │   ├── InvoiceList.tsx           # Table with status badges, void button, print link
+│   │   ├── InvoicePrint.tsx          # A4 print-ready Thai tax invoice (ใบกำกับภาษีเต็มรูปแบบ)
+│   │   └── CompanyBillingSection.tsx # Subscription card + payment history + billing info editor + invoice list
 │   └── loading/
 │       ├── PageSkeleton.tsx          # Full-page loading skeleton
 │       ├── TableSkeleton.tsx         # Table row skeletons
@@ -235,10 +242,14 @@ sea-pos/
         │   ├── company/page.tsx      # Company settings + logo + VAT config
         │   └── branches/page.tsx     # Branch management
         └── platform/
+            ├── page.tsx              # Platform dashboard — KPI cards, status breakdown, attention list, recent payments
             ├── companies/page.tsx    # All companies list (platform admin)
             ├── companies/new/page.tsx # Create company + first user
-            ├── companies/[id]/page.tsx # Company detail + status / plan controls
-            └── plans/page.tsx        # Subscription plan tier editor
+            ├── companies/[id]/page.tsx # Company detail + status / plan / billing controls
+            ├── plans/page.tsx        # Subscription plan tier editor (monthly + yearly pricing)
+            ├── invoices/page.tsx     # Invoice list with status badges, void, print
+            ├── invoices/[id]/page.tsx # A4 Thai tax invoice print view
+            └── settings/page.tsx     # Platform settings (seller info, VAT, banking)
     └── api/
         └── reports/export/route.ts  # GET: CSV export (sales, stock-movements, inventory, vat)
 ```
@@ -273,7 +284,7 @@ Platform admin: `platform@sea-pos.com` / `PlatformAdmin1234!`
 
 ## Database Schema
 
-> Migrations live in `supabase/001_schema.sql` → `supabase/023_track_stock.sql`. Demo data in `supabase/reset_and_demo.sql`.
+> Migrations live in `supabase/001_schema.sql` → `supabase/026_yearly_billing.sql`. Demo data in `supabase/reset_and_demo.sql`.
 
 ### Migration Log
 
@@ -302,6 +313,9 @@ Platform admin: `platform@sea-pos.com` / `PlatformAdmin1234!`
 | `021_held_sales.sql` | `held_sales` table (พักบิล) + branch-aware RLS |
 | `022_indexes.sql` | Performance indexes |
 | `023_track_stock.sql` | `products.track_stock BOOLEAN NOT NULL DEFAULT true` |
+| `024_billing.sql` | `platform_settings` (singleton seller/VAT/banking/invoice config), `subscriptions`, `subscription_payments`, `platform_invoices` (Thai tax invoice). Adds `companies.tax_id`, `.address`, `.contact_email`, `.contact_phone`. `next_invoice_no()` SECURITY DEFINER RPC |
+| `025_payment_receipt.sql` | `subscription_payments.receipt_path TEXT` — path in private `receipts` bucket |
+| `026_yearly_billing.sql` | `plans.yearly_price_baht NUMERIC(12,2)` (NULL = not available). `subscriptions.billing_cycle TEXT CHECK ('monthly','yearly') DEFAULT 'monthly'`. Seeds existing plans at 10× monthly |
 
 ### Entity-Relationship Diagram
 
@@ -310,6 +324,8 @@ erDiagram
   auth_users ||--o| profiles            : "1:1 account"
   companies  ||--o{ profiles            : "tenant users"
   companies  ||--o{ branches            : "locations"
+  companies  ||--o{ subscriptions       : billing
+  companies  ||--o{ platform_invoices   : invoiced
   companies  ||--o{ categories          : owns
   companies  ||--o{ products            : owns
   companies  ||--o{ customers           : owns
@@ -340,6 +356,10 @@ erDiagram
   stock_transfers   ||--o{ stock_transfer_items   : contains
   held_sales        ||--o{ held_sales             : parked
 
+  plans             ||--o{ subscriptions          : "plan tier"
+  subscriptions     ||--o{ subscription_payments  : "payment history"
+  platform_settings ||--|| platform_settings      : singleton
+
   auth_users ||--o{ user_branches       : "branch access"
   auth_users ||--o{ sales               : cashier_id
   auth_users ||--o{ purchase_orders     : created_by
@@ -360,6 +380,10 @@ erDiagram
 | plan | text | `free` \| `lite_pro` \| `standard_pro` \| `enterprise` |
 | status | text | `pending` \| `active` \| `suspended` \| `closed` |
 | settings | jsonb | `{ vatMode, vatRate, receiptHeader, receiptFooter, … }` |
+| tax_id | text \| null | Thai company tax ID (added in 024_billing) |
+| address | text \| null | Billing address |
+| contact_email | text \| null | Invoice delivery email |
+| contact_phone | text \| null | Billing contact phone |
 
 #### `profiles`
 | Column | Type | Notes |
@@ -483,6 +507,64 @@ Ledger invariant: `Σ stock_logs.change == product_stock.quantity` per `(product
 
 **RLS:** company-scoped baseline from `009_multitenancy.sql`, branch-tightened in `017_branch_rls.sql`. `is_company_admin()` and `is_platform_admin()` bypass the branch check for cross-branch reporting.
 
+#### `platform_settings` (singleton)
+| Column | Type | Notes |
+|--------|------|-------|
+| code | text | PK — always `'default'` |
+| seller_name | text | Platform seller's legal name (frozen on invoices) |
+| seller_tax_id | text \| null | |
+| seller_address | text \| null | |
+| seller_phone, seller_email | text \| null | |
+| vat_enabled | boolean | Whether to charge VAT on invoices |
+| vat_rate_pct | numeric(5,2) | Default `7.00` |
+| bank_name, bank_account_name, bank_account_no | text \| null | Wire transfer info |
+| promptpay_id | text \| null | PromptPay ID / phone |
+| invoice_prefix | text | Default `'INV'` |
+| invoice_seq | integer | Auto-incremented by `next_invoice_no()` RPC |
+
+#### `subscriptions`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| company_id | uuid | FK → companies |
+| plan_code | text | FK → plans.code |
+| status | text | `trialing` \| `active` \| `past_due` \| `suspended` \| `cancelled` |
+| billing_cycle | text | `monthly` \| `yearly` DEFAULT `'monthly'` |
+| current_period_start, current_period_end | timestamptz | Billing window |
+| overdue_months | integer | Incremented by pg_cron (planned) |
+| notes | text \| null | |
+
+#### `subscription_payments`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| subscription_id | uuid | FK → subscriptions |
+| company_id | uuid | FK (denormalised) |
+| amount_baht | numeric(12,2) | |
+| paid_at | timestamptz | |
+| method | text | `bank_transfer` \| `promptpay` \| `credit_card` \| `other` |
+| reference_no | text \| null | Bank ref / slip number |
+| note | text \| null | |
+| period_start, period_end | timestamptz | Coverage window |
+| receipt_path | text \| null | Path in private `receipts` bucket |
+| recorded_by | uuid \| null | FK → auth.users (platform admin who recorded) |
+
+#### `platform_invoices`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| invoice_no | text | UNIQUE — format `INV-YYYY-NNNN` from `next_invoice_no()` |
+| company_id | uuid | FK → companies |
+| issued_at | timestamptz | |
+| due_at | timestamptz \| null | |
+| status | text | `draft` \| `issued` \| `paid` \| `void` |
+| seller_snapshot | jsonb | Frozen seller info at time of issue |
+| buyer_snapshot | jsonb | Frozen buyer (company) info at time of issue |
+| lines | jsonb | `[{ description, qty, unit_price, subtotal }]` |
+| subtotal_baht, vat_baht, total_baht | numeric(12,2) | |
+| void_reason | text \| null | |
+| voided_at | timestamptz \| null | |
+
 ---
 
 ## Multi-tenancy
@@ -514,12 +596,14 @@ WITH CHECK (company_id = get_current_company_id() AND get_user_role() IN ('...')
 
 Plan tiers stored in the **`plans`** table (not hardcoded).
 
-| code | name | max_products | max_users | max_branches | monthly_price |
-|---|---|---|---|---|---|
-| `free` | ฟรี | 50 | 3 | 1 | ฿0 |
-| `lite_pro` | โปร Lite | 300 | 10 | 2 | ฿399 |
-| `standard_pro` | โปร Standard | 1,500 | 50 | 5 | ฿990 |
-| `enterprise` | องค์กร | unlimited | unlimited | unlimited | Contact us |
+| code | name | max_products | max_users | max_branches | monthly_price | yearly_price |
+|---|---|---|---|---|---|---|
+| `free` | ฟรี | 50 | 3 | 1 | ฿0 | — |
+| `lite_pro` | โปร Lite | 300 | 10 | 2 | ฿399 | ฿3,990 |
+| `standard_pro` | โปร Standard | 1,500 | 50 | 5 | ฿990 | ฿9,900 |
+| `enterprise` | องค์กร | unlimited | unlimited | unlimited | Contact us | Contact us |
+
+`yearly_price_baht` is NULL when yearly billing is not available for a tier. The yearly rate is seeded at 10× monthly (≈ 2 months free). The `plans` table also carries `yearly_price_baht NUMERIC(12,2)` (added in 026_yearly_billing).
 
 Enforcement in `lib/limits.ts`: `addProduct` and `createUser` call `checkProductLimit` / `checkUserLimit` before insert.
 
@@ -601,6 +685,7 @@ Each paginated table is wrapped in `<Suspense key={…}>` with `TableSkeleton` f
 - **Routes:** `/login`, `/signup` (when env flag on), `/blocked`
 - **Files:** `app/(auth)/login/page.tsx`, `components/auth/LoginForm.tsx`, `lib/actions/auth.ts`
 - Email/password via Supabase Auth. Session via HTTP-only cookies managed by `proxy.ts`. Full-row logout button in sidebar.
+- **Remember Me:** `LoginForm` shows "จดจำฉันในอุปกรณ์นี้" checkbox (defaultChecked). When unchecked, `signIn` action passes `rememberMe=false` to `supabaseAuthRepo.signInWithPassword`, which re-sets the Supabase `sb-*` auth cookies without `maxAge` so they become session cookies that expire on browser close.
 
 ### Dashboard
 
@@ -696,8 +781,15 @@ Each paginated table is wrapped in `<Suspense key={…}>` with `TableSkeleton` f
 
 ### Platform Admin *(is_platform_admin only)*
 
-- **Routes:** `/platform/companies`, `/platform/companies/new`, `/platform/companies/[id]`, `/platform/plans`
-- See all tenants; create company + first admin; activate/suspend/close a company; edit subscription plan tiers (name, price, limits — `NULL` = unlimited; mark inactive to hide from picker).
+- **Routes:** `/platform` (overview), `/platform/companies`, `/platform/companies/new`, `/platform/companies/[id]`, `/platform/plans`, `/platform/invoices`, `/platform/invoices/[id]`, `/platform/settings`
+- **Sidebar links (5):** ภาพรวม · บริษัทลูกค้า · แพ็กเกจ · ใบกำกับภาษี · ตั้งค่า
+- **Platform dashboard (`/platform`):** KPI cards — total companies, MRR (yearly subs normalised as yearly/12), overdue count, suspended/pending count. Subscription status breakdown. "Needs attention" list (past_due/suspended/overdue). Recent payments feed.
+- **Companies:** see all tenants; create company + first admin; activate/suspend/close; change plan. Company detail now includes `CompanyBillingSection` with subscription status, billing cycle, overdue months, payment history (with "ดูสลิป" signed-URL button), billing contact info editor, and invoice list.
+- **Plans (`/platform/plans`):** edit plan tiers — name, description, monthly price, yearly price (with "ประหยัด X%" badge), and limits (`NULL` = unlimited); mark inactive to hide from picker.
+- **Invoices (`/platform/invoices`):** `InvoiceList` table with status badge, void button, print link. `/platform/invoices/[id]` renders `InvoicePrint` — A4 Thai tax invoice (ใบกำกับภาษีเต็มรูปแบบ), frozen seller/buyer snapshots, line items, VAT breakdown, signature lines. Print via `window.print()`.
+- **Settings (`/platform/settings`):** `PlatformSettingsForm` — seller info, VAT toggle + rate, bank transfer details, PromptPay ID, invoice prefix.
+- **Billing server actions (`lib/actions/billing.ts`):** `updatePlatformSettings`, `updateCompanyBillingInfo`, `recordPayment` (uploads receipt slip to `receipts` bucket, auto-issues invoice, advances subscription period), `issueInvoice`, `voidInvoice`, `getReceiptUrl` (signed URL, 1-hour expiry).
+- **`BillingRepository`** (`lib/repositories/contracts/billing.ts` + `supabase/billing.ts`): `getSettings`, `updateSettings`, `listSubscriptions`, `getSubscriptionByCompany`, `createSubscription`, `updateSubscription`, `listPaymentsBySubscription`, `recordPayment`, `listInvoices`, `getInvoice`, `issueInvoice`, `updateInvoiceStatus`, `getPlatformSummary`.
 
 ---
 

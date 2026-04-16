@@ -151,6 +151,21 @@ export const supabaseCompanyRepo: CompanyRepository = {
       })
     }
 
+    // Create a trialing subscription for the new company (30-day trial).
+    const trialStart = new Date()
+    const trialEnd   = new Date(trialStart)
+    trialEnd.setDate(trialEnd.getDate() + 30)
+    await admin.from('subscriptions').insert({
+      company_id:           co.id,
+      plan_code:            'free',
+      status:               'trialing',
+      billing_cycle:        'monthly',
+      current_period_start: trialStart.toISOString(),
+      current_period_end:   trialEnd.toISOString(),
+      overdue_months:       0,
+      notes:                'Trial — created automatically on company onboarding',
+    })
+
     return { companyId: co.id, userId: userData.user.id }
   },
 }

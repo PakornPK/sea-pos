@@ -9,6 +9,7 @@ import { billingRepo } from '@/lib/repositories'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { SubscriptionTickButton } from '@/components/platform/SubscriptionTickButton'
 
 export const metadata: Metadata = {
   title: 'Platform Dashboard | SEA-POS',
@@ -52,9 +53,12 @@ export default async function PlatformDashboard() {
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}
-      <div>
-        <h1 className="text-[26px] font-bold tracking-tight">Platform Overview</h1>
-        <p className="text-[14px] text-muted-foreground mt-1">ภาพรวมบริษัทลูกค้าและรายได้</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight">Platform Overview</h1>
+          <p className="text-[14px] text-muted-foreground mt-1">ภาพรวมบริษัทลูกค้าและรายได้</p>
+        </div>
+        <SubscriptionTickButton />
       </div>
 
       {/* KPI row */}
