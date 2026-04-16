@@ -19,6 +19,7 @@ export type Plan = {
   max_users: number | null
   max_branches: number | null
   monthly_price_baht: number | null   // null = "Contact us"
+  yearly_price_baht:  number | null   // null = yearly option not available
   sort_order: number
   is_active: boolean
   created_at: string
@@ -368,12 +369,14 @@ export type PlatformSettings = {
 }
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'suspended' | 'cancelled'
+export type BillingCycle = 'monthly' | 'yearly'
 export type PaymentMethod = 'bank_transfer' | 'promptpay' | 'cash' | 'other'
 
 export type Subscription = {
   id:                   string
   company_id:           string
   plan_code:            string
+  billing_cycle:        BillingCycle
   started_at:           string
   current_period_start: string
   current_period_end:   string

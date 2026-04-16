@@ -14,6 +14,12 @@ function addMonths(date: Date, n: number): Date {
   return d
 }
 
+function addYears(date: Date, n: number): Date {
+  const d = new Date(date)
+  d.setFullYear(d.getFullYear() + n)
+  return d
+}
+
 function toDateInput(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
@@ -28,12 +34,13 @@ export function RecordPaymentDialog({
   companyName: string
 }) {
   const [open, setOpen] = useState(false)
+  const [cycle, setCycle] = useState<'monthly' | 'yearly'>(subscription.billing_cycle ?? 'monthly')
   const [state, formAction, pending] = useActionState(recordPayment, undefined)
 
   if (state?.success && open) setOpen(false)
 
   const today = new Date()
-  const nextEnd = addMonths(today, 1)
+  const nextEnd = cycle === 'yearly' ? addYears(today, 1) : addMonths(today, 1)
 
   if (!open) {
     return (
@@ -55,6 +62,26 @@ export function RecordPaymentDialog({
       <form action={formAction} className="p-5 space-y-4">
         <input type="hidden" name="subscription_id" value={subscription.id} />
         <input type="hidden" name="company_id" value={companyId} />
+        <input type="hidden" name="billing_cycle" value={cycle} />
+
+        {/* Billing cycle toggle */}
+        <div className="flex items-center gap-1 rounded-xl bg-muted p-1 w-fit text-[13px]">
+          {(['monthly', 'yearly'] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCycle(c)}
+              disabled={pending}
+              className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                cycle === c
+                  ? 'bg-background shadow-sm text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {c === 'monthly' ? 'รายเดือน' : 'รายปี'}
+            </button>
+          ))}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">

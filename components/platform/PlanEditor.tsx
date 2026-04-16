@@ -14,10 +14,16 @@ function formatLimit(n: number | null): string {
   return n === null ? 'ไม่จำกัด' : n.toLocaleString('th-TH')
 }
 
-function formatPrice(n: number | null): string {
+function formatPrice(n: number | null, suffix = '/เดือน'): string {
   if (n === null) return 'ติดต่อเรา'
   if (n === 0)    return 'ฟรี'
-  return `฿${n.toLocaleString('th-TH')}/เดือน`
+  return `฿${n.toLocaleString('th-TH')}${suffix}`
+}
+
+function yearlySavingsPct(monthly: number | null, yearly: number | null): number | null {
+  if (!monthly || !yearly) return null
+  const saving = (monthly * 12 - yearly) / (monthly * 12) * 100
+  return saving > 0 ? Math.round(saving) : null
 }
 
 export function PlanEditor({ plan }: { plan: PlanWithUsage }) {
@@ -60,8 +66,19 @@ export function PlanEditor({ plan }: { plan: PlanWithUsage }) {
         </div>
 
         {/* Stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-y divide-border/40">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 divide-x divide-y divide-border/40">
           <Stat label="ราคา/เดือน" value={formatPrice(plan.monthly_price_baht)} highlight />
+          <div className="flex flex-col gap-0.5 px-5 py-3">
+            <span className="text-[11px] text-muted-foreground">ราคา/ปี</span>
+            <span className="text-[14px] font-semibold tabular-nums">
+              {formatPrice(plan.yearly_price_baht, '/ปี')}
+            </span>
+            {yearlySavingsPct(plan.monthly_price_baht, plan.yearly_price_baht) !== null && (
+              <span className="text-[10px] font-medium text-green-600">
+                ประหยัด {yearlySavingsPct(plan.monthly_price_baht, plan.yearly_price_baht)}%
+              </span>
+            )}
+          </div>
           <Stat label="สินค้าสูงสุด" value={formatLimit(plan.max_products)} />
           <Stat label="ผู้ใช้งานสูงสุด" value={formatLimit(plan.max_users)} />
           <Stat label="สาขาสูงสุด" value={formatLimit(plan.max_branches)} />
@@ -111,6 +128,32 @@ export function PlanEditor({ plan }: { plan: PlanWithUsage }) {
               disabled={pending}
               placeholder="เว้นว่าง = ติดต่อเรา"
             />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`yprice-${plan.code}`}>
+              ราคาต่อปี (฿)
+              <span className="ml-1 text-[11px] font-normal text-muted-foreground">เว้นว่าง = ไม่มีรายปี</span>
+            </Label>
+            <Input
+              id={`yprice-${plan.code}`}
+              name="yearly_price_baht"
+              type="number"
+              min={0}
+              step="0.01"
+              defaultValue={plan.yearly_price_baht ?? ''}
+              disabled={pending}
+              placeholder={plan.monthly_price_baht ? String(Math.round((plan.monthly_price_baht ?? 0) * 10)) : 'ไม่มีรายปี'}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 justify-end pb-0.5">
+            {plan.monthly_price_baht && plan.yearly_price_baht && (
+              <p className="text-[12px] text-green-600 font-medium">
+                ประหยัด {yearlySavingsPct(plan.monthly_price_baht, plan.yearly_price_baht)}% เทียบรายเดือน
+              </p>
+            )}
           </div>
         </div>
 

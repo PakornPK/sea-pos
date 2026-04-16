@@ -33,6 +33,7 @@ function parsePlanFields(formData: FormData) {
     name,
     description: String(formData.get('description') ?? '').trim() || null,
     monthly_price_baht: parsePrice(formData.get('monthly_price_baht')),
+    yearly_price_baht:  parsePrice(formData.get('yearly_price_baht')),
     max_products: parseLimit(formData.get('max_products')),
     max_users:    parseLimit(formData.get('max_users')),
     max_branches: parseLimit(formData.get('max_branches')),

@@ -42,6 +42,7 @@ export type {
   IssueInvoiceInput,
   InvoiceListRow,
   SubscriptionListRow,
+  PlatformDashboardSummary,
 } from './billing'
 export type {
   AnalyticsRepository,

@@ -119,9 +119,11 @@ export async function recordPayment(
 
     // Bump subscription back to active, reset overdue counter, advance period
     const sub = await billingRepo.getSubscriptionByCompany(companyId)
+    const billingCycle = (String(formData.get('billing_cycle') ?? 'monthly')) as 'monthly' | 'yearly'
     if (sub) {
       await billingRepo.updateSubscription(sub.id, {
         status:               'active',
+        billing_cycle:        billingCycle,
         current_period_start: periodStart,
         current_period_end:   periodEnd,
         overdue_months:       0,

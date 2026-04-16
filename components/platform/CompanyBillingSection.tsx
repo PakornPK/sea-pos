@@ -182,8 +182,8 @@ export function CompanyBillingSection({
               <div className="grid grid-cols-2 gap-y-2 text-[13px]">
                 <span className="text-muted-foreground">แพ็กเกจ</span>
                 <span className="font-medium">{subscription.plan_code}</span>
-                <span className="text-muted-foreground">รอบบิลปัจจุบัน</span>
-                <span>{fmtDate(subscription.current_period_start)} – {fmtDate(subscription.current_period_end)}</span>
+                <span className="text-muted-foreground">รอบบิล</span>
+                <span>{subscription.billing_cycle === 'yearly' ? 'รายปี' : 'รายเดือน'} · {fmtDate(subscription.current_period_start)} – {fmtDate(subscription.current_period_end)}</span>
                 <span className="text-muted-foreground">เดือนค้างชำระ</span>
                 <span className={cn('font-medium', subscription.overdue_months > 0 && 'text-destructive')}>
                   {subscription.overdue_months} เดือน

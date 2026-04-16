@@ -55,6 +55,35 @@ export type SubscriptionListRow = Subscription & {
   plan_name:    string
 }
 
+// ─── Dashboard summary ───────────────────────────────────────────────────────
+
+export type PlatformDashboardSummary = {
+  totalCompanies:      number
+  activeCompanies:     number
+  suspendedCompanies:  number
+  pendingCompanies:    number
+  mrrBaht:             number   // sum of plan prices for active subs
+  revenueThisMonthBaht: number  // sum of payments paid this calendar month
+  overdueCount:        number   // subscriptions with overdue_months > 0
+  statusBreakdown:     { status: string; count: number }[]
+  recentPayments:      Array<{
+    id:           string
+    company_name: string
+    amount_baht:  number
+    method:       string
+    paid_at:      string
+    receipt_path: string | null
+  }>
+  attentionCompanies:  Array<{
+    id:           string
+    name:         string
+    status:       string
+    sub_status:   string
+    overdue_months: number
+    plan_code:    string
+  }>
+}
+
 // ─── Repository interface ─────────────────────────────────────────────────────
 
 export interface BillingRepository {
@@ -71,6 +100,9 @@ export interface BillingRepository {
   // Payments
   listPaymentsBySubscription(subscriptionId: string): Promise<SubscriptionPayment[]>
   recordPayment(input: RecordPaymentInput): Promise<{ id: string } | null>
+
+  // Dashboard
+  getPlatformSummary(): Promise<PlatformDashboardSummary>
 
   // Invoices
   listInvoices(opts?: { companyId?: string; status?: InvoiceStatus }): Promise<InvoiceListRow[]>

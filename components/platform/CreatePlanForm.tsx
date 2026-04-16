@@ -51,6 +51,16 @@ export function CreatePlanForm() {
             <Input id="new-price" name="monthly_price_baht" type="number" min={0} step="0.01" placeholder="เว้นว่าง = ติดต่อเรา" disabled={pending} />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-yprice">
+              ราคาต่อปี (฿)
+              <span className="ml-1 text-[11px] font-normal text-muted-foreground">เว้นว่าง = ไม่มีรายปี</span>
+            </Label>
+            <Input id="new-yprice" name="yearly_price_baht" type="number" min={0} step="0.01" placeholder="เช่น 3,990" disabled={pending} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="new-desc">คำอธิบาย</Label>
             <Input id="new-desc" name="description" placeholder="คำอธิบายสั้น ๆ" disabled={pending} />
           </div>

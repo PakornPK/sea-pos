@@ -7,6 +7,7 @@ export type PlanInput = {
   max_users: number | null
   max_branches: number | null
   monthly_price_baht: number | null
+  yearly_price_baht:  number | null
   sort_order: number
   is_active: boolean
 }
