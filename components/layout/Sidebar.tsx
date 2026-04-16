@@ -46,9 +46,10 @@ const CUSTOMER_SECTIONS: NavSection[] = [
   {
     label: 'ตั้งค่า',
     items: [
-      { href: '/users',              label: 'ผู้ใช้งาน', icon: UserCog,  roles: ['admin'] },
-      { href: '/settings/branches',  label: 'สาขา',      icon: MapPin,   roles: ['admin'] },
-      { href: '/settings/company',   label: 'บริษัท',    icon: Settings, roles: ['admin'] },
+      { href: '/users',                  label: 'ผู้ใช้งาน', icon: UserCog,  roles: ['admin'] },
+      { href: '/settings/branches',      label: 'สาขา',      icon: MapPin,   roles: ['admin'] },
+      { href: '/settings/membership',    label: 'แต้มสมาชิก', icon: Star,     roles: ['admin'] },
+      { href: '/settings/company',       label: 'บริษัท',    icon: Settings, roles: ['admin'] },
     ],
   },
 ]

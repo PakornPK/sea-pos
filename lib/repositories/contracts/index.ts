@@ -52,7 +52,6 @@ export type {
   AwardPointsInput,
   MemberListRow,
   MemberWithDetails,
-  MemberTreeRow,
 } from './loyalty'
 export type {
   AnalyticsRepository,

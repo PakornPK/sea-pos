@@ -196,10 +196,13 @@ export type Sale = {
   id: string
   receipt_no: number
   customer_id: string | null
+  member_id: string | null
   user_id: string
   total_amount: number
   subtotal_ex_vat: number
   vat_amount: number
+  member_discount_baht: number
+  redeem_points_used: number
   payment_method: 'cash' | 'card' | 'transfer'
   status: 'completed' | 'voided'
   created_at: string
@@ -452,11 +455,6 @@ export type PlatformInvoice = {
 
 // ─── Membership ────────────────────────────────────────────────────────────────
 
-export type MlmLevelConfig = {
-  level:    number
-  rate_pct: number
-}
-
 export type MembershipSettings = {
   company_id:          string
   enabled:             boolean
@@ -464,8 +462,6 @@ export type MembershipSettings = {
   baht_per_point:      number
   max_redeem_pct:      number
   points_expiry_days:  number | null
-  mlm_enabled:         boolean
-  mlm_levels:          MlmLevelConfig[]
   created_at:          string
   updated_at:          string
 }
@@ -482,33 +478,31 @@ export type MembershipTier = {
   created_at:        string
 }
 
-export type MemberPointsLogType = 'earn' | 'redeem' | 'expire' | 'commission' | 'adjust'
+export type MemberPointsLogType = 'earn' | 'redeem' | 'expire' | 'adjust'
 
 export type Member = {
-  id:                    string
-  company_id:            string
-  member_no:             string
-  name:                  string
-  phone:                 string | null
-  email:                 string | null
-  address:               string | null
-  tier_id:               string | null
-  points_balance:        number
-  total_spend_baht:      number
-  referred_by_member_id: string | null
-  enrolled_at:           string
-  created_at:            string
+  id:              string
+  company_id:      string
+  member_no:       string
+  name:            string
+  phone:           string | null
+  email:           string | null
+  address:         string | null
+  tier_id:         string | null
+  points_balance:  number
+  total_spend_baht: number
+  enrolled_at:     string
+  created_at:      string
 }
 
 export type MemberPointsLog = {
-  id:               string
-  company_id:       string
-  member_id:        string
-  type:             MemberPointsLogType
-  points:           number
-  balance_after:    number
-  sale_id:          string | null
-  source_member_id: string | null
-  note:             string | null
-  created_at:       string
+  id:           string
+  company_id:   string
+  member_id:    string
+  type:         MemberPointsLogType
+  points:       number
+  balance_after: number
+  sale_id:      string | null
+  note:         string | null
+  created_at:   string
 }

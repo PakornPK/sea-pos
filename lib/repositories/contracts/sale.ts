@@ -71,10 +71,13 @@ export interface SaleRepository {
   createHeader(input: {
     user_id: string
     customer_id: string | null
+    member_id?: string | null
     branch_id: string
     total_amount: number
     subtotal_ex_vat: number
     vat_amount: number
+    member_discount_baht?: number
+    redeem_points_used?: number
     payment_method: Sale['payment_method']
   }): Promise<{ id: string } | { error: string }>
   insertItems(

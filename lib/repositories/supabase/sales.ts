@@ -88,14 +88,17 @@ export const supabaseSaleRepo: SaleRepository = {
     const { data, error } = await db
       .from('sales')
       .insert({
-        user_id:         input.user_id,
-        customer_id:     input.customer_id,
-        branch_id:       input.branch_id,
-        total_amount:    input.total_amount,
-        subtotal_ex_vat: input.subtotal_ex_vat,
-        vat_amount:      input.vat_amount,
-        payment_method:  input.payment_method,
-        status:          'completed' as Sale['status'],
+        user_id:              input.user_id,
+        customer_id:          input.customer_id,
+        member_id:            input.member_id            ?? null,
+        branch_id:            input.branch_id,
+        total_amount:         input.total_amount,
+        subtotal_ex_vat:      input.subtotal_ex_vat,
+        vat_amount:           input.vat_amount,
+        member_discount_baht: input.member_discount_baht ?? 0,
+        redeem_points_used:   input.redeem_points_used   ?? 0,
+        payment_method:       input.payment_method,
+        status:               'completed' as Sale['status'],
       })
       .select('id')
       .single()

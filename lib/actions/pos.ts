@@ -3,11 +3,11 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, saleRepo, companyRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, saleRepo, companyRepo, loyaltyRepo } from '@/lib/repositories'
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
 import type { ProductWithStock } from '@/types/database'
 import { computeVat, getVatConfig } from '@/lib/vat'
-import { lineTotal } from '@/lib/money'
+import { chain, money, lineTotal } from '@/lib/money'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
@@ -57,9 +57,11 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   }
   if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
 
-  const cartJson = formData.get('cart') as string
+  const cartJson      = formData.get('cart')          as string
   const paymentMethod = formData.get('paymentMethod') as string
-  const customerId = (formData.get('customerId') as string) || null
+  const customerId    = (formData.get('customerId')   as string) || null
+  const memberId      = (formData.get('memberId')     as string) || null
+  const redeemPoints  = Number(formData.get('redeemPoints') ?? 0) || 0
 
   let cart: CartItem[]
   try { cart = JSON.parse(cartJson) }
@@ -88,14 +90,29 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     vatConfig,
   )
 
+  // Member discount: convert redeemPoints → baht using membership settings
+  let memberDiscountBaht = 0
+  if (memberId && redeemPoints > 0) {
+    const loyaltySettings = await loyaltyRepo.getSettings()
+    if (loyaltySettings) {
+      const maxDiscount = money(chain(breakdown.total).times(loyaltySettings.max_redeem_pct).div(100))
+      const pointsValue = money(chain(redeemPoints).times(loyaltySettings.baht_per_point))
+      memberDiscountBaht = Math.min(pointsValue, maxDiscount)
+    }
+  }
+  const finalTotal = Math.max(0, money(chain(breakdown.total).minus(memberDiscountBaht)))
+
   const header = await saleRepo.createHeader({
-    user_id: me.id,
-    customer_id: customerId,
-    branch_id: me.activeBranchId,
-    total_amount:    breakdown.total,
-    subtotal_ex_vat: breakdown.subtotalExVat,
-    vat_amount:      breakdown.vatAmount,
-    payment_method: paymentMethod as 'cash' | 'card' | 'transfer',
+    user_id:              me.id,
+    customer_id:          customerId,
+    member_id:            memberId,
+    branch_id:            me.activeBranchId,
+    total_amount:         finalTotal,
+    subtotal_ex_vat:      breakdown.subtotalExVat,
+    vat_amount:           breakdown.vatAmount,
+    member_discount_baht: memberDiscountBaht,
+    redeem_points_used:   redeemPoints,
+    payment_method:       paymentMethod as 'cash' | 'card' | 'transfer',
   })
   if ('error' in header) return { error: header.error }
 
@@ -123,6 +140,16 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     if (stockErr) {
       return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockErr}` }
     }
+  }
+
+  // Award points / process redemption for member after stock is confirmed
+  if (memberId) {
+    await loyaltyRepo.awardPointsFromSale({
+      member_id:     memberId,
+      amount_baht:   finalTotal,
+      sale_id:       header.id,
+      redeem_points: redeemPoints,
+    })
   }
 
   revalidatePath('/inventory')

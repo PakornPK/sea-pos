@@ -18,20 +18,15 @@ export async function updateMembershipSettings(
   formData: FormData
 ): Promise<LoyaltyState> {
   try {
-    await requirePage()
-    const mlmLevels: { level: number; rate_pct: number }[] = []
-    for (let i = 1; i <= 5; i++) {
-      const ratePct = Number(formData.get(`mlm_level_${i}`) ?? '')
-      if (ratePct > 0) mlmLevels.push({ level: i, rate_pct: ratePct })
-    }
+    const { me } = await requirePage()
+    if (!me.companyId) return { error: 'ไม่พบบริษัท' }
     const err = await loyaltyRepo.upsertSettings({
+      company_id:         me.companyId,
       enabled:            formData.get('enabled') === 'on',
-      points_per_baht:    Number(formData.get('points_per_baht')   ?? 1),
-      baht_per_point:     Number(formData.get('baht_per_point')    ?? 0.1),
-      max_redeem_pct:     Number(formData.get('max_redeem_pct')    ?? 20),
+      points_per_baht:    Number(formData.get('points_per_baht')    ?? 1),
+      baht_per_point:     Number(formData.get('baht_per_point')     ?? 0.1),
+      max_redeem_pct:     Number(formData.get('max_redeem_pct')     ?? 20),
       points_expiry_days: Number(formData.get('points_expiry_days') ?? '') || null,
-      mlm_enabled:        formData.get('mlm_enabled') === 'on',
-      mlm_levels:         mlmLevels,
     })
     if (err) return { error: err }
     revalidatePath('/settings/membership')
@@ -88,13 +83,12 @@ export async function enrollMember(
 ): Promise<LoyaltyState> {
   try {
     await requirePage()
-    const name               = String(formData.get('name')                   ?? '').trim()
-    const phone              = String(formData.get('phone')                  ?? '').trim() || null
-    const email              = String(formData.get('email')                  ?? '').trim() || null
-    const address            = String(formData.get('address')                ?? '').trim() || null
-    const referredByMemberNo = String(formData.get('referred_by_member_no') ?? '').trim() || null
+    const name    = String(formData.get('name')    ?? '').trim()
+    const phone   = String(formData.get('phone')   ?? '').trim() || null
+    const email   = String(formData.get('email')   ?? '').trim() || null
+    const address = String(formData.get('address') ?? '').trim() || null
     if (!name) return { error: 'กรุณาระบุชื่อ' }
-    const result = await loyaltyRepo.enrollMember({ name, phone, email, address, referred_by_member_no: referredByMemberNo })
+    const result = await loyaltyRepo.enrollMember({ name, phone, email, address })
     if (!result) return { error: 'สมัครสมาชิกไม่สำเร็จ' }
     revalidatePath('/members')
     return { success: true, id: result.id, member_no: result.member_no }
@@ -127,21 +121,36 @@ export async function adjustMemberPoints(
 
 // ─── POS: lookup member by phone (called client-side via server action) ───────
 
-export async function lookupMemberByPhone(
-  phone: string
-): Promise<{ id: string; member_no: string; name: string; tier_name: string | null; tier_color: string | null; points_balance: number; discount_pct: number } | null> {
+export type MemberLookupResult = {
+  id: string
+  member_no: string
+  name: string
+  tier_name: string | null
+  tier_color: string | null
+  points_balance: number
+  discount_pct: number
+  baht_per_point: number
+  max_redeem_pct: number
+}
+
+export async function lookupMemberByPhone(phone: string): Promise<MemberLookupResult | null> {
   try {
     await requirePage()
-    const member = await loyaltyRepo.findMemberByPhone(phone.trim())
+    const [member, settings] = await Promise.all([
+      loyaltyRepo.findMemberByPhone(phone.trim()),
+      loyaltyRepo.getSettings(),
+    ])
     if (!member) return null
     return {
       id:             member.id,
       member_no:      member.member_no,
       name:           member.name,
-      tier_name:      member.tier?.name        ?? null,
-      tier_color:     member.tier?.color       ?? null,
+      tier_name:      member.tier?.name         ?? null,
+      tier_color:     member.tier?.color        ?? null,
       points_balance: member.points_balance,
       discount_pct:   member.tier?.discount_pct ?? 0,
+      baht_per_point: settings ? Number(settings.baht_per_point) : 0.1,
+      max_redeem_pct: settings ? Number(settings.max_redeem_pct) : 0,
     }
   } catch {
     return null

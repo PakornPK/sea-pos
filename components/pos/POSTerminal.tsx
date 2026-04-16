@@ -15,12 +15,14 @@ import { createSale, searchInStockProducts, findProductByCode } from '@/lib/acti
 import { holdSale } from '@/lib/actions/heldSales'
 import { formatBaht } from '@/lib/format'
 import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
+import { MemberLookupPanel } from '@/components/pos/MemberLookupPanel'
 import { HeldSalesDrawer } from '@/components/pos/HeldSalesDrawer'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
 import type { HeldSale, ProductWithStock } from '@/types/database'
 import type { HeldSaleListRow } from '@/lib/repositories'
+import type { MemberLookupResult } from '@/lib/actions/loyalty'
 import { computeVat, type VatConfig } from '@/lib/vat'
-import { lineTotal } from '@/lib/money'
+import { chain, money, lineTotal } from '@/lib/money'
 
 type CartItem = {
   productId:  string
@@ -67,6 +69,8 @@ export function POSTerminal({
   const [cart, setCart] = useState<CartItem[]>([])
   const [payment, setPayment] = useState('cash')
   const [customer, setCustomer] = useState<PickerCustomer | null>(null)
+  const [member, setMember]           = useState<MemberLookupResult | null>(null)
+  const [redeemPoints, setRedeemPoints] = useState(0)
   const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(null)
   const [state, formAction, isPending] = useActionState(createSale, undefined)
 
@@ -233,6 +237,15 @@ export function POSTerminal({
     vatConfig,
   )
   const showVatRow = vatConfig.mode !== 'none' && breakdown.vatAmount > 0
+
+  // Member discount derived client-side (mirrored from server action — server enforces the cap)
+  const memberDiscountBaht = member && redeemPoints > 0 && member.baht_per_point > 0
+    ? Math.min(
+        money(chain(redeemPoints).times(member.baht_per_point)),
+        money(chain(breakdown.total).times(member.max_redeem_pct).div(100)),
+      )
+    : 0
+  const finalTotal = Math.max(0, money(chain(breakdown.total).minus(memberDiscountBaht)))
 
   return (
     <div className="flex h-full gap-3 overflow-hidden">
@@ -488,22 +501,41 @@ export function POSTerminal({
             </div>
           )}
 
+          {/* Member discount row */}
+          {memberDiscountBaht > 0 && (
+            <div className="flex justify-between text-[12px]">
+              <span className="text-muted-foreground">ส่วนลดแต้ม</span>
+              <span className="tabular-nums text-[oklch(0.5_0.18_145)] font-medium">
+                -{formatBaht(memberDiscountBaht)}
+              </span>
+            </div>
+          )}
+
           {/* Total */}
           <div className="flex items-baseline justify-between">
             <span className="text-[13px] text-muted-foreground">รวมทั้งสิ้น</span>
             <span className="text-[26px] font-bold tabular-nums tracking-tight">
-              {formatBaht(breakdown.total)}
+              {formatBaht(finalTotal)}
             </span>
           </div>
 
           <Separator />
 
           <form action={formAction} className="space-y-2.5">
-            <input type="hidden" name="cart" value={JSON.stringify(cart)} />
+            <input type="hidden" name="cart"          value={JSON.stringify(cart)} />
             <input type="hidden" name="paymentMethod" value={payment} />
-            <input type="hidden" name="customerId" value={customer?.id ?? ''} />
+            <input type="hidden" name="customerId"    value={customer?.id ?? ''} />
+            <input type="hidden" name="memberId"      value={member?.id ?? ''} />
+            <input type="hidden" name="redeemPoints"  value={redeemPoints} />
 
             <CustomerPicker customers={customers} selected={customer} onChange={setCustomer} />
+
+            <MemberLookupPanel
+              member={member}
+              redeemPoints={redeemPoints}
+              billTotal={breakdown.total}
+              onChange={(m, pts) => { setMember(m); setRedeemPoints(pts) }}
+            />
 
             {/* Payment method selector */}
             <div className="grid grid-cols-3 gap-1.5">
@@ -537,7 +569,7 @@ export function POSTerminal({
             >
               {isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> กำลังบันทึก...</>
-                : `ชำระเงิน ${cart.length > 0 ? formatBaht(breakdown.total) : ''}`
+                : `ชำระเงิน ${cart.length > 0 ? formatBaht(finalTotal) : ''}`
               }
             </Button>
 

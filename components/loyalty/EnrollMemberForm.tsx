@@ -47,16 +47,7 @@ export function EnrollMemberForm() {
           <Input id="enroll-addr" name="address" disabled={pending} />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="enroll-ref">
-            รหัสผู้แนะนำ
-            <span className="ml-1 text-[11px] font-normal text-muted-foreground">(ไม่บังคับ)</span>
-          </Label>
-          <Input id="enroll-ref" name="referred_by_member_no" placeholder="M000001"
-            disabled={pending} className="font-mono" />
-        </div>
-
-        {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+{state?.error && <p className="text-sm text-destructive">{state.error}</p>}
 
         <Button type="submit" disabled={pending} className="w-full gap-1.5">
           <UserPlus className="h-3.5 w-3.5" />

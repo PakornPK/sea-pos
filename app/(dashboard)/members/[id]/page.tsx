@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { ChevronLeft } from 'lucide-react'
 import { requirePage } from '@/lib/auth'
 import { loyaltyRepo } from '@/lib/repositories'
-import { Badge } from '@/components/ui/badge'
 import { AdjustPointsForm } from '@/components/loyalty/AdjustPointsForm'
 
 export const metadata: Metadata = { title: 'ข้อมูลสมาชิก | SEA-POS' }
@@ -30,16 +31,22 @@ function fmtDate(iso: string) {
 export default async function MemberDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePage()
   const { id } = await params
-  const [member, log, upline, downline] = await Promise.all([
+  const [member, log] = await Promise.all([
     loyaltyRepo.getMember(id),
     loyaltyRepo.getPointsLog(id),
-    loyaltyRepo.getUpline(id),
-    loyaltyRepo.getDownline(id, 3),
   ])
   if (!member) notFound()
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
+      <Link
+        href="/members"
+        className="flex w-fit items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        รายชื่อสมาชิก
+      </Link>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -70,9 +77,9 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Points log */}
-        <div className="flex flex-col gap-3">
+        <div className="lg:col-span-2 flex flex-col gap-3">
           <h2 className="font-semibold text-[14px]">ประวัติแต้ม</h2>
           <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 overflow-hidden">
             {log.length === 0 ? (
@@ -108,73 +115,15 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
           <AdjustPointsForm memberId={member.id} />
         </div>
 
-        <div className="flex flex-col gap-6">
-          {/* Upline */}
-          {upline.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <h2 className="font-semibold text-[14px]">สายงานขึ้น</h2>
-              <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 divide-y divide-border/40 overflow-hidden">
-                {upline.map((u) => (
-                  <div key={u.member_id} className="flex items-center gap-3 px-4 py-2.5">
-                    <span className="text-[11px] text-muted-foreground w-14">ระดับ {u.depth}</span>
-                    <div className="flex flex-1 items-center gap-2 min-w-0">
-                      <span className="font-medium truncate text-[13px]">{u.name}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">{u.member_no}</span>
-                    </div>
-                    {u.tier_name && u.tier_color && (
-                      <span
-                        className="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-                        style={{ backgroundColor: u.tier_color }}
-                      >
-                        {u.tier_name}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Downline */}
-          {downline.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <h2 className="font-semibold text-[14px]">สายงานลง <span className="text-[12px] font-normal text-muted-foreground">(3 ระดับ)</span></h2>
-              <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 divide-y divide-border/40 overflow-hidden">
-                {downline.map((d) => (
-                  <div key={d.member_id} className="flex items-center gap-3 px-4 py-2.5" style={{ paddingLeft: `${(d.depth) * 12 + 16}px` }}>
-                    <span className="text-[11px] text-muted-foreground w-14">ระดับ {d.depth}</span>
-                    <div className="flex flex-1 items-center gap-2 min-w-0">
-                      <span className="font-medium truncate text-[13px]">{d.name}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">{d.member_no}</span>
-                    </div>
-                    {d.tier_name && d.tier_color && (
-                      <span
-                        className="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-                        style={{ backgroundColor: d.tier_color }}
-                      >
-                        {d.tier_name}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Info */}
-          <div className="flex flex-col gap-3">
-            <h2 className="font-semibold text-[14px]">ข้อมูลสมาชิก</h2>
-            <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
-              <div className="grid grid-cols-2 gap-y-2 text-[13px]">
-                <span className="text-muted-foreground">วันสมัคร</span>
-                <span>{fmtDate(member.enrolled_at)}</span>
-                {member.referred_by_no && (
-                  <>
-                    <span className="text-muted-foreground">ผู้แนะนำ</span>
-                    <span className="font-mono text-[12px]">{member.referred_by_no}</span>
-                  </>
-                )}
-              </div>
+        {/* Info */}
+        <div className="flex flex-col gap-3">
+          <h2 className="font-semibold text-[14px]">ข้อมูลสมาชิก</h2>
+          <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-4">
+            <div className="grid grid-cols-2 gap-y-2 text-[13px]">
+              <span className="text-muted-foreground">วันสมัคร</span>
+              <span>{fmtDate(member.enrolled_at)}</span>
+              <span className="text-muted-foreground">ที่อยู่</span>
+              <span>{member.address ?? '—'}</span>
             </div>
           </div>
         </div>

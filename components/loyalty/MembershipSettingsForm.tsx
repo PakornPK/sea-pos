@@ -12,10 +12,6 @@ export function MembershipSettingsForm({ settings }: { settings: MembershipSetti
   const [state, formAction, pending] = useActionState(updateMembershipSettings, undefined)
   const s = settings
 
-  // Build mlm level map
-  const mlmMap: Record<number, number> = {}
-  for (const l of s?.mlm_levels ?? []) mlmMap[l.level] = l.rate_pct
-
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 overflow-hidden">
       <div className="px-5 py-4 border-b border-border/50">
@@ -57,35 +53,7 @@ export function MembershipSettingsForm({ settings }: { settings: MembershipSetti
             className="max-w-[200px]" disabled={pending} />
         </div>
 
-        {/* MLM section */}
-        <div className="border-t border-border/40 pt-4 space-y-3">
-          <label className="flex items-center gap-2 text-[13px] font-medium">
-            <input type="checkbox" name="mlm_enabled" defaultChecked={s?.mlm_enabled ?? false}
-              className="h-4 w-4 rounded border-input" disabled={pending} />
-            เปิดระบบ MLM (commission ขึ้นสายงาน)
-          </label>
-          <p className="text-[12px] text-muted-foreground">
-            เมื่อสมาชิกซื้อสินค้า ผู้แนะนำแต่ละระดับจะได้รับ commission เป็น % ของยอดซื้อเป็นแต้ม
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 5].map((level) => (
-              <div key={level} className="flex flex-col gap-1">
-                <Label htmlFor={`mlm-${level}`} className="text-[11px]">ระดับ {level} (%)</Label>
-                <Input
-                  id={`mlm-${level}`}
-                  name={`mlm_level_${level}`}
-                  type="number" min={0} max={100} step="0.1"
-                  defaultValue={mlmMap[level] ?? ''}
-                  placeholder="0"
-                  disabled={pending}
-                  className="text-[12px]"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+{state?.error && <p className="text-sm text-destructive">{state.error}</p>}
         {state?.success && <p className="text-sm text-green-600">บันทึกแล้ว</p>}
 
         <Button type="submit" size="sm" disabled={pending}>

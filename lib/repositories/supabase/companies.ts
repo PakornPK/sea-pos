@@ -151,6 +151,9 @@ export const supabaseCompanyRepo: CompanyRepository = {
       })
     }
 
+    // Seed membership settings with defaults for the new company.
+    await admin.from('membership_settings').insert({ company_id: co.id })
+
     // Create a trialing subscription for the new company (30-day trial).
     const trialStart = new Date()
     const trialEnd   = new Date(trialStart)

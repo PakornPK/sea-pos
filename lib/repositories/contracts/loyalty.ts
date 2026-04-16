@@ -3,43 +3,40 @@ import type {
   MembershipTier,
   Member,
   MemberPointsLog,
-  MlmLevelConfig,
 } from '@/types/database'
 
 // ─── Input types ──────────────────────────────────────────────────────────────
 
 export type MembershipSettingsInput = {
+  company_id?:         string   // required for upsert; injected from server action
   enabled?:            boolean
   points_per_baht?:    number
   baht_per_point?:     number
   max_redeem_pct?:     number
   points_expiry_days?: number | null
-  mlm_enabled?:        boolean
-  mlm_levels?:         MlmLevelConfig[]
 }
 
 export type MembershipTierInput = {
-  name:              string
-  color?:            string
-  min_spend_baht:    number
-  discount_pct?:     number
+  name:               string
+  color?:             string
+  min_spend_baht:     number
+  discount_pct?:      number
   points_multiplier?: number
-  sort_order?:       number
+  sort_order?:        number
 }
 
 export type EnrollMemberInput = {
-  name:                   string
-  phone?:                 string | null
-  email?:                 string | null
-  address?:               string | null
-  referred_by_member_no?: string | null
+  name:    string
+  phone?:  string | null
+  email?:  string | null
+  address?: string | null
 }
 
 export type AwardPointsInput = {
-  member_id:        string
-  amount_baht:      number   // sale total (before redemption)
-  sale_id:          string
-  redeem_points?:   number   // points buyer wants to spend
+  member_id:      string
+  amount_baht:    number   // final sale total (after any discount)
+  sale_id:        string
+  redeem_points?: number   // points the buyer chose to redeem
 }
 
 // ─── List row types ───────────────────────────────────────────────────────────
@@ -50,18 +47,7 @@ export type MemberListRow = Member & {
 }
 
 export type MemberWithDetails = Member & {
-  tier:           MembershipTier | null
-  referred_by_no: string | null   // member_no of referrer
-}
-
-export type MemberTreeRow = {
-  member_id:      string
-  member_no:      string
-  name:           string
-  depth:          number
-  tier_name:      string | null
-  tier_color:     string | null
-  points_balance: number
+  tier: MembershipTier | null
 }
 
 // ─── Repository interface ─────────────────────────────────────────────────────
@@ -87,8 +73,4 @@ export interface LoyaltyRepository {
   awardPointsFromSale(input: AwardPointsInput): Promise<string | null>
   adjustPoints(memberId: string, points: number, note: string): Promise<string | null>
   getPointsLog(memberId: string): Promise<MemberPointsLog[]>
-
-  // Tree
-  getDownline(memberId: string, maxDepth?: number): Promise<MemberTreeRow[]>
-  getUpline(memberId: string): Promise<MemberTreeRow[]>
 }
