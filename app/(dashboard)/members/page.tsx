@@ -4,9 +4,15 @@ import { UserPlus } from 'lucide-react'
 import { requirePage } from '@/lib/auth'
 import { loyaltyRepo } from '@/lib/repositories'
 import { buttonVariants } from '@/components/ui/button'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { parseSort, sortRows, sortToggleHref } from '@/lib/sort'
 import { cn } from '@/lib/utils'
+import type { MemberListRow } from '@/lib/repositories'
 
 export const metadata: Metadata = { title: 'สมาชิก | SEA-POS' }
+
+type SortCol = 'member_no' | 'name' | 'phone' | 'tier_name' | 'points_balance' | 'total_spend_baht'
+type Search = { sort?: string; dir?: string }
 
 function TierBadge({ name, color }: { name: string; color: string }) {
   return (
@@ -19,9 +25,24 @@ function TierBadge({ name, color }: { name: string; color: string }) {
   )
 }
 
-export default async function MembersPage() {
+export default async function MembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>
+}) {
   await requirePage()
-  const members = await loyaltyRepo.listMembers()
+  const sp = await searchParams
+  const { col, dir } = parseSort<SortCol>(sp, 'member_no', 'asc')
+
+  const members = sortRows(
+    await loyaltyRepo.listMembers(),
+    col as keyof MemberListRow,
+    dir,
+  )
+
+  function href(c: SortCol) {
+    return sortToggleHref('/members', sp as Record<string, string | undefined>, c, col, dir)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -43,12 +64,24 @@ export default async function MembersPage() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">เลขสมาชิก</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">ชื่อ</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">โทรศัพท์</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">ระดับ</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">แต้ม</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">ยอดซื้อรวม</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                <SortableHeader label="เลขสมาชิก" active={col === 'member_no'} dir={dir} href={href('member_no')} />
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                <SortableHeader label="ชื่อ" active={col === 'name'} dir={dir} href={href('name')} />
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                <SortableHeader label="โทรศัพท์" active={col === 'phone'} dir={dir} href={href('phone')} />
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                <SortableHeader label="ระดับ" active={col === 'tier_name'} dir={dir} href={href('tier_name')} />
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                <SortableHeader label="แต้ม" active={col === 'points_balance'} dir={dir} href={href('points_balance')} />
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                <SortableHeader label="ยอดซื้อรวม" active={col === 'total_spend_baht'} dir={dir} href={href('total_spend_baht')} />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/40">

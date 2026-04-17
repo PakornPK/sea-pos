@@ -5,6 +5,8 @@ import { Pencil, Trash2, UserPlus } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { sortRows, type SortDir } from '@/lib/sort'
 import { Button } from '@/components/ui/button'
 import { SupplierForm } from '@/components/purchasing/SupplierForm'
 import { deleteSupplier } from '@/lib/actions/suppliers'
@@ -15,12 +17,22 @@ type Props = {
   role: UserRole
 }
 
+type SortCol = 'name' | 'contact_name'
+
 export function SupplierTable({ suppliers, role }: Props) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState<SortCol>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const sorted = sortRows(suppliers, sortCol as keyof typeof suppliers[0], sortDir)
   const canDelete = role === 'admin'
 
   function handleDelete(id: string, name: string) {
@@ -60,15 +72,19 @@ export function SupplierTable({ suppliers, role }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ชื่อผู้จำหน่าย</TableHead>
-              <TableHead>ผู้ติดต่อ</TableHead>
+              <TableHead>
+                <SortableHeader label="ชื่อผู้จำหน่าย" active={sortCol === 'name'} dir={sortDir} onClick={() => toggleSort('name')} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label="ผู้ติดต่อ" active={sortCol === 'contact_name'} dir={sortDir} onClick={() => toggleSort('contact_name')} />
+              </TableHead>
               <TableHead>เบอร์โทร</TableHead>
               <TableHead>อีเมล</TableHead>
               <TableHead className="text-right">จัดการ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {suppliers.map((s) => {
+            {sorted.map((s) => {
               if (editingId === s.id) {
                 return (
                   <TableRow key={s.id}>

@@ -12,6 +12,8 @@ import {
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { parseSort, sortRows, sortToggleHref } from '@/lib/sort'
 import type { StockTransferStatus, UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
@@ -34,7 +36,8 @@ const STATUS_VARIANT: Record<StockTransferStatus, 'default' | 'secondary' | 'out
   cancelled:  'destructive',
 }
 
-type Search = { branch?: string }
+type SortCol = 'created_at' | 'status' | 'total_quantity'
+type Search = { branch?: string; sort?: string; dir?: string }
 
 export default async function TransfersPage({
   searchParams,
@@ -46,11 +49,18 @@ export default async function TransfersPage({
 
   const isAdmin = me.role === 'admin' || me.isPlatformAdmin
   const branchFilter = resolveBranchFilter(me, sp.branch)
+  const { col, dir } = parseSort<SortCol>(sp as Record<string, string | undefined>, 'created_at', 'desc')
 
-  const [rows, activeBranch] = await Promise.all([
+  const [rawRows, activeBranch] = await Promise.all([
     stockTransferRepo.list({ branchId: branchFilter }),
     me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
   ])
+
+  const rows = sortRows(rawRows, col as keyof typeof rawRows[0], dir)
+
+  function href(c: SortCol) {
+    return sortToggleHref('/inventory/transfers', sp as Record<string, string | undefined>, c, col, dir)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,11 +97,17 @@ export default async function TransfersPage({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>วันที่</TableHead>
+              <TableHead>
+                <SortableHeader label="วันที่" active={col === 'created_at'} dir={dir} href={href('created_at')} />
+              </TableHead>
               <TableHead>จาก → ไป</TableHead>
               <TableHead className="text-right">จำนวนรายการ</TableHead>
-              <TableHead className="text-right">ชิ้นรวม</TableHead>
-              <TableHead className="text-center">สถานะ</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader label="ชิ้นรวม" active={col === 'total_quantity'} dir={dir} href={href('total_quantity')} />
+              </TableHead>
+              <TableHead className="text-center">
+                <SortableHeader label="สถานะ" active={col === 'status'} dir={dir} href={href('status')} />
+              </TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>

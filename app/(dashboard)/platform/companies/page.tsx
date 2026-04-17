@@ -12,7 +12,11 @@ import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/format'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { parseSort, sortRows, sortToggleHref } from '@/lib/sort'
 import type { CompanyStatus } from '@/types/database'
+
+type CompanyRow = { id: string; name: string; owner_email: string | null; user_count: number; plan: string; status: CompanyStatus; created_at: string }
 
 export const metadata: Metadata = {
   title: 'บริษัทลูกค้า | SEA-POS Platform',
@@ -38,8 +42,16 @@ const PLAN_LABEL: Record<string, string> = {
   enterprise: 'องค์กร',
 }
 
-export default async function CompaniesPage() {
+type SortCol = 'name' | 'user_count' | 'created_at' | 'status'
+type Search = { sort?: string; dir?: string }
+
+export default async function CompaniesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>
+}) {
   await requirePlatformAdmin()
+  const sp = await searchParams
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,14 +70,19 @@ export default async function CompaniesPage() {
       </div>
 
       <Suspense fallback={<TableSkel />}>
-        <CompanyList />
+        <CompanyList sp={sp} />
       </Suspense>
     </div>
   )
 }
 
-async function CompanyList() {
-  const companies = await companyRepo.listAll()
+async function CompanyList({ sp }: { sp: Search }) {
+  const { col, dir } = parseSort<SortCol>(sp as Record<string, string | undefined>, 'name', 'asc')
+  const companies = sortRows(await companyRepo.listAll() as CompanyRow[], col as keyof CompanyRow, dir)
+
+  function href(c: SortCol) {
+    return sortToggleHref('/platform/companies', sp as Record<string, string | undefined>, c, col, dir)
+  }
 
   if (companies.length === 0) {
     return (
@@ -79,12 +96,20 @@ async function CompanyList() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>ชื่อบริษัท</TableHead>
+          <TableHead>
+            <SortableHeader label="ชื่อบริษัท" active={col === 'name'} dir={dir} href={href('name')} />
+          </TableHead>
           <TableHead>เจ้าของ</TableHead>
-          <TableHead className="text-center">ผู้ใช้</TableHead>
+          <TableHead className="text-center">
+            <SortableHeader label="ผู้ใช้" active={col === 'user_count'} dir={dir} href={href('user_count')} />
+          </TableHead>
           <TableHead className="text-center">แพ็กเกจ</TableHead>
-          <TableHead className="text-center">สถานะ</TableHead>
-          <TableHead>สมัครเมื่อ</TableHead>
+          <TableHead className="text-center">
+            <SortableHeader label="สถานะ" active={col === 'status'} dir={dir} href={href('status')} />
+          </TableHead>
+          <TableHead>
+            <SortableHeader label="สมัครเมื่อ" active={col === 'created_at'} dir={dir} href={href('created_at')} />
+          </TableHead>
           <TableHead className="text-center">ดู</TableHead>
         </TableRow>
       </TableHeader>

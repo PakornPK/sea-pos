@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils'
 import { formatBaht } from '@/lib/format'
 import { Plus, Filter, MapPin, Pencil } from 'lucide-react'
 import { useState } from 'react'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { sortRows, type SortDir } from '@/lib/sort'
 
 type ProductTableProps = {
   products: ProductWithStockAndCategory[]
@@ -27,12 +29,23 @@ type ProductTableProps = {
   isAllBranches?: boolean
 }
 
+type SortCol = 'name' | 'price' | 'stock'
+
 export function ProductTable({ products, categories, canAdjust = false, isAllBranches = false }: ProductTableProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState<SortCol>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
 
   const filtered = selectedCategory
     ? products.filter((p) => p.category_id === selectedCategory)
     : products
+
+  const sorted = sortRows(filtered, sortCol as keyof ProductWithStockAndCategory, sortDir)
 
   if (products.length === 0) {
     return (
@@ -87,11 +100,17 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
         <TableHeader>
           <TableRow>
             <TableHead className="w-14">รูป</TableHead>
-            <TableHead>ชื่อสินค้า</TableHead>
+            <TableHead>
+              <SortableHeader label="ชื่อสินค้า" active={sortCol === 'name'} dir={sortDir} onClick={() => toggleSort('name')} />
+            </TableHead>
             <TableHead>หมวดหมู่</TableHead>
             <TableHead>SKU</TableHead>
-            <TableHead className="text-right">ราคาขาย</TableHead>
-            <TableHead className="text-right">คงเหลือ</TableHead>
+            <TableHead className="text-right">
+              <SortableHeader label="ราคาขาย" active={sortCol === 'price'} dir={sortDir} onClick={() => toggleSort('price')} />
+            </TableHead>
+            <TableHead className="text-right">
+              <SortableHeader label="คงเหลือ" active={sortCol === 'stock'} dir={sortDir} onClick={() => toggleSort('stock')} />
+            </TableHead>
             <TableHead className="text-right">ขั้นต่ำ</TableHead>
             <TableHead className="text-center">สถานะ</TableHead>
             {canAdjust && <TableHead className="text-center">ปรับสต๊อก</TableHead>}
@@ -99,7 +118,7 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtered.map((product) => {
+          {sorted.map((product) => {
             const isLowStock = product.track_stock && product.stock <= product.min_stock
             const cat = typeof product.category === 'object' && product.category
               ? product.category as { id: string; name: string }

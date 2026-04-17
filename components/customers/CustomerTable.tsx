@@ -9,6 +9,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { CustomerForm } from '@/components/customers/CustomerForm'
 import { CustomerSearch } from '@/components/customers/CustomerSearch'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { sortRows, type SortDir } from '@/lib/sort'
 import { formatBaht, formatDate } from '@/lib/format'
 import type { UserRole } from '@/types/database'
 
@@ -31,8 +33,19 @@ type Props = {
   currentSearch: string
 }
 
+type SortCol = 'name' | 'total_spent' | 'order_count' | 'last_order_at'
+
 export function CustomerTable({ customers, canManage, currentSearch }: Props) {
   const [adding, setAdding] = useState(false)
+  const [sortCol, setSortCol] = useState<SortCol>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const sorted = sortRows(customers, sortCol as keyof CustomerRow, sortDir)
 
   return (
     <div className="flex flex-col gap-4">
@@ -56,16 +69,24 @@ export function CustomerTable({ customers, canManage, currentSearch }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ชื่อ</TableHead>
+              <TableHead>
+                <SortableHeader label="ชื่อ" active={sortCol === 'name'} dir={sortDir} onClick={() => toggleSort('name')} />
+              </TableHead>
               <TableHead>เบอร์โทร</TableHead>
               <TableHead>อีเมล</TableHead>
-              <TableHead className="text-right">จำนวนบิล</TableHead>
-              <TableHead className="text-right">ยอดซื้อรวม</TableHead>
-              <TableHead>ซื้อล่าสุด</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader label="จำนวนบิล" active={sortCol === 'order_count'} dir={sortDir} onClick={() => toggleSort('order_count')} />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader label="ยอดซื้อรวม" active={sortCol === 'total_spent'} dir={sortDir} onClick={() => toggleSort('total_spent')} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label="ซื้อล่าสุด" active={sortCol === 'last_order_at'} dir={sortDir} onClick={() => toggleSort('last_order_at')} />
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {customers.map((c) => (
+            {sorted.map((c) => (
               <TableRow key={c.id} className="cursor-pointer">
                 <TableCell className="font-medium">
                   <Link href={`/customers/${c.id}`} className="hover:underline">

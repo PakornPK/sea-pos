@@ -18,6 +18,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { formatReceiptNo, formatDateTime, formatBaht } from '@/lib/format'
 import { PAYMENT_LABEL, SALE_STATUS_LABEL, type PaymentMethod, type SaleStatus } from '@/lib/labels'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { parseSort, sortRows, sortToggleHref } from '@/lib/sort'
 import type { UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
@@ -26,7 +28,8 @@ export const metadata: Metadata = {
 
 const ALLOWED: UserRole[] = ['admin', 'manager']
 
-type Search = { page?: string; pageSize?: string; branch?: string }
+type SortCol = 'receipt_no' | 'created_at' | 'total_amount' | 'status'
+type Search = { page?: string; pageSize?: string; branch?: string; sort?: string; dir?: string }
 
 export default async function SalesListPage({
   searchParams,
@@ -57,10 +60,16 @@ async function SalesTable({ sp }: { sp: Search }) {
   const p = parsePageParams(sp)
   const branchFilter = resolveBranchFilter(me, sp.branch)
   const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+  const { col, dir } = parseSort<SortCol>(sp as Record<string, string | undefined>, 'created_at', 'desc')
+
   const [result, activeBranch] = await Promise.all([
     saleRepo.listRecentPaginated(p, { branchId: branchFilter }),
     me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
   ])
+
+  function href(c: SortCol) {
+    return sortToggleHref('/pos/sales', sp as Record<string, string | undefined>, c, col, dir)
+  }
 
   if (result.totalCount === 0) {
     return (
@@ -91,17 +100,25 @@ async function SalesTable({ sp }: { sp: Search }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>เลขที่ใบเสร็จ</TableHead>
-            <TableHead>วันที่</TableHead>
+            <TableHead>
+              <SortableHeader label="เลขที่ใบเสร็จ" active={col === 'receipt_no'} dir={dir} href={href('receipt_no')} />
+            </TableHead>
+            <TableHead>
+              <SortableHeader label="วันที่" active={col === 'created_at'} dir={dir} href={href('created_at')} />
+            </TableHead>
             <TableHead>ลูกค้า</TableHead>
             <TableHead>ชำระด้วย</TableHead>
-            <TableHead className="text-right">ยอดรวม</TableHead>
-            <TableHead className="text-center">สถานะ</TableHead>
+            <TableHead className="text-right">
+              <SortableHeader label="ยอดรวม" active={col === 'total_amount'} dir={dir} href={href('total_amount')} />
+            </TableHead>
+            <TableHead className="text-center">
+              <SortableHeader label="สถานะ" active={col === 'status'} dir={dir} href={href('status')} />
+            </TableHead>
             <TableHead className="text-center">ดู</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {result.rows.map((sale) => {
+          {sortRows(result.rows, col as keyof typeof result.rows[0], dir).map((sale) => {
             const customer = Array.isArray(sale.customer) ? sale.customer[0] : sale.customer
             const branch = Array.isArray(sale.branch) ? sale.branch[0] : sale.branch
             const status = sale.status as SaleStatus

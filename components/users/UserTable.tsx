@@ -5,6 +5,8 @@ import { MapPin, Pencil, Trash2, KeyRound, LogOut, X, Check, Star } from 'lucide
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { sortRows, type SortDir } from '@/lib/sort'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,12 +36,23 @@ type UserTableProps = {
   allBranches: Branch[]     // every branch in the company (for the editor)
 }
 
+type SortCol = 'email' | 'full_name' | 'role'
+
 export function UserTable({ users, currentUserId, allBranches }: UserTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
   const [branchEditingId, setBranchEditingId] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState<SortCol>('email')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const sorted = sortRows(users, sortCol as keyof UserRow, sortDir)
 
   function handleBranchSave(formData: FormData) {
     setError(null)
@@ -110,15 +123,21 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>อีเมล</TableHead>
-            <TableHead>ชื่อ-สกุล</TableHead>
-            <TableHead>บทบาท</TableHead>
+            <TableHead>
+              <SortableHeader label="อีเมล" active={sortCol === 'email'} dir={sortDir} onClick={() => toggleSort('email')} />
+            </TableHead>
+            <TableHead>
+              <SortableHeader label="ชื่อ-สกุล" active={sortCol === 'full_name'} dir={sortDir} onClick={() => toggleSort('full_name')} />
+            </TableHead>
+            <TableHead>
+              <SortableHeader label="บทบาท" active={sortCol === 'role'} dir={sortDir} onClick={() => toggleSort('role')} />
+            </TableHead>
             <TableHead>สาขา</TableHead>
             <TableHead className="text-right">จัดการ</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((u) => {
+          {sorted.map((u) => {
             const isMe = u.id === currentUserId
             const isEditing = editingId === u.id
             const isResetting = resettingId === u.id
