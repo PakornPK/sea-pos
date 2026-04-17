@@ -12,6 +12,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ImportButton } from '@/components/import/ImportButton'
 import type { UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
@@ -39,6 +40,7 @@ export default async function InventoryPage({
         <div className="flex items-center gap-2">
           {canManage && (
             <>
+              <ImportButton type="products" />
               <Link
                 href="/inventory/categories"
                 className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}

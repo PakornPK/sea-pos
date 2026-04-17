@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { parseSort, sortRows, sortToggleHref } from '@/lib/sort'
 import { cn } from '@/lib/utils'
+import { ImportButton } from '@/components/import/ImportButton'
 import type { MemberListRow } from '@/lib/repositories'
 
 export const metadata: Metadata = { title: 'สมาชิก | SEA-POS' }
@@ -51,13 +52,16 @@ export default async function MembersPage({
           <h1 className="text-[26px] font-bold tracking-tight">สมาชิก</h1>
           <p className="text-[14px] text-muted-foreground mt-1">{members.length} คน</p>
         </div>
-        <Link
-          href="/members/enroll"
-          className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}
-        >
-          <UserPlus className="h-3.5 w-3.5" />
-          สมัครสมาชิก
-        </Link>
+        <div className="flex items-center gap-2">
+          <ImportButton type="members" />
+          <Link
+            href="/members/enroll"
+            className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            สมัครสมาชิก
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 overflow-hidden">

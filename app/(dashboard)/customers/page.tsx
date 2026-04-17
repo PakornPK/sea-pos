@@ -7,6 +7,7 @@ import { add } from '@/lib/money'
 import { CustomerTable, type CustomerRow } from '@/components/customers/CustomerTable'
 import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
+import { ImportButton } from '@/components/import/ImportButton'
 import type { UserRole } from '@/types/database'
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default async function CustomersPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-[26px] font-bold tracking-tight">ลูกค้า</h1>
+        {canManage && <ImportButton type="customers" />}
       </div>
 
       <Suspense
