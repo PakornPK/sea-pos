@@ -15,7 +15,6 @@ export async function signIn(_prev: unknown, formData: FormData) {
   )
   if (error) return { error }
 
-  revalidatePath('/', 'layout')
   redirect('/')
 }
 

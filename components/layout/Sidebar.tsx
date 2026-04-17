@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTransition } from 'react'
 import {
   LayoutDashboard, Package, ShoppingCart, ScrollText, Truck, Users,
   BarChart2, LogOut, UserCog, Settings, Building2, Shield, PackageOpen,
@@ -102,6 +103,7 @@ export function Sidebar({ role, isPlatformAdmin, activeBranch, fullName, email }
 
   const isActive = (href: string) => href === activeHref
   const displayName = fullName.trim() || email
+  const [, startSignOut] = useTransition()
 
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
@@ -168,21 +170,20 @@ export function Sidebar({ role, isPlatformAdmin, activeBranch, fullName, email }
 
       {/* User row + logout */}
       <div className="border-t border-sidebar-border p-2">
-        <form action={signOut} className="w-full">
-          <button
-            type="submit"
-            title="ออกจากระบบ"
-            className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-destructive/10 hover:text-destructive group"
-          >
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
-              <CircleUserRound className="h-4 w-4" />
-            </div>
-            <span className="flex-1 truncate text-left text-[13px] font-medium text-foreground group-hover:text-destructive transition-colors">
-              {displayName}
-            </span>
-            <LogOut className="h-3.5 w-3.5 text-muted-foreground group-hover:text-destructive transition-colors" />
-          </button>
-        </form>
+        <button
+          type="button"
+          title="ออกจากระบบ"
+          onClick={() => startSignOut(() => { signOut() })}
+          className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-destructive/10 hover:text-destructive group"
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
+            <CircleUserRound className="h-4 w-4" />
+          </div>
+          <span className="flex-1 truncate text-left text-[13px] font-medium text-foreground group-hover:text-destructive transition-colors">
+            {displayName}
+          </span>
+          <LogOut className="h-3.5 w-3.5 text-muted-foreground group-hover:text-destructive transition-colors" />
+        </button>
       </div>
     </aside>
   )
