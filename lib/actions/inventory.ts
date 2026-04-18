@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, storageRepo, optionRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, storageRepo, optionRepo, productCostItemRepo } from '@/lib/repositories'
+import { chain, money } from '@/lib/money'
 import { checkProductLimit, formatLimitError } from '@/lib/limits'
 import { validateImageUpload, uniqueAssetName } from '@/lib/storage-validation'
 
@@ -46,6 +47,8 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const trackStock = formData.get('track_stock') === 'on'  // checkbox: checked='on', unchecked=null
   const barcode = (formData.get('barcode') as string | null)?.trim() || null
   const unit = (formData.get('unit') as string | null)?.trim() || 'ชิ้น'
+  const poUnit = (formData.get('po_unit') as string | null)?.trim() || null
+  const poConversion = parseFloat(formData.get('po_conversion') as string) || 1
   const rawImage = formData.get('image') as File | null
   const hasImage = !!rawImage && rawImage.size > 0
 
@@ -76,6 +79,8 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     price,
     cost,
     unit,
+    po_unit: poUnit,
+    po_conversion: poConversion,
     category_id: categoryId,
     vat_exempt: vatExempt,
     barcode,
@@ -101,6 +106,30 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     )
     if (!('error' in upload) && upload.publicUrl) {
       await productRepo.updateImageUrl(res.id, upload.publicUrl)
+    }
+  }
+
+  // Save BOM cost items if provided
+  const costItemsRaw = formData.get('cost_items') as string | null
+  if (costItemsRaw) {
+    try {
+      const items = JSON.parse(costItemsRaw) as Array<{
+        name: string; quantity: number; unit_cost: number; linked_product_id: string | null
+      }>
+      if (items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i]
+          await productCostItemRepo.add({
+            product_id: res.id, name: it.name, quantity: it.quantity,
+            unit_cost: it.unit_cost, linked_product_id: it.linked_product_id, sort_order: i,
+          })
+        }
+        // Sync products.cost to BOM total
+        const total = money(items.reduce((acc, it) => acc.plus(chain(it.quantity).times(it.unit_cost)), chain(0)))
+        await productRepo.update(res.id, { cost: total })
+      }
+    } catch {
+      // Malformed JSON — skip; product already created
     }
   }
 
@@ -131,7 +160,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
 
   revalidatePath('/inventory')
   revalidatePath('/pos')
-  redirect('/inventory')
+  redirect(`/inventory/${res.id}/edit`)
 }
 
 export async function quickCreateProduct(input: {
@@ -209,6 +238,8 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
   const trackStock = formData.get('track_stock') === 'on'
   const barcode = (formData.get('barcode') as string | null)?.trim() || null
   const unit = (formData.get('unit') as string | null)?.trim() || 'ชิ้น'
+  const poUnit = (formData.get('po_unit') as string | null)?.trim() || null
+  const poConversion = parseFloat(formData.get('po_conversion') as string) || 1
 
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
@@ -219,6 +250,8 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
     price,
     cost,
     unit,
+    po_unit: poUnit,
+    po_conversion: poConversion,
     category_id: categoryId,
     vat_exempt: vatExempt,
     barcode,
@@ -234,7 +267,55 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
 
   revalidatePath('/inventory')
   revalidatePath('/pos')
-  redirect('/inventory')
+  return { success: true as const }
+}
+
+// ── Product Cost Items (BOM) ──────────────────────────────────
+
+export async function addCostItem(_prev: unknown, formData: FormData) {
+  try {
+    await requireActionRole([...ADJUST_ROLES])
+    const productId       = formData.get('product_id') as string
+    const name            = (formData.get('name') as string).trim()
+    const quantity        = parseFloat(formData.get('quantity') as string) || 1
+    const unitCost        = parseFloat(formData.get('unit_cost') as string) || 0
+    const linkedProductId = (formData.get('linked_product_id') as string) || null
+
+    if (!name) return { error: 'กรุณาระบุชื่อรายการ' }
+
+    const res = await productCostItemRepo.add({
+      product_id: productId, name, quantity, unit_cost: unitCost,
+      linked_product_id: linkedProductId,
+    })
+    if ('error' in res) return { error: res.error }
+
+    await syncProductCost(productId)
+    revalidatePath(`/inventory/${productId}/edit`)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
+  }
+}
+
+export async function deleteCostItem(id: string, productId: string) {
+  try {
+    await requireActionRole([...ADJUST_ROLES])
+    const err = await productCostItemRepo.remove(id)
+    if (err) return { error: err }
+
+    await syncProductCost(productId)
+    revalidatePath(`/inventory/${productId}/edit`)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
+  }
+}
+
+/** Recompute products.cost = SUM(quantity × unit_cost) for all cost items. */
+async function syncProductCost(productId: string) {
+  const items = await productCostItemRepo.listForProduct(productId)
+  const total = money(
+    items.reduce((acc, it) => acc.plus(chain(it.quantity).times(it.unit_cost)), chain(0))
+  )
+  await productRepo.update(productId, { cost: total })
 }
 
 export async function deleteProduct(productId: string) {

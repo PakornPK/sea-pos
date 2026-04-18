@@ -19,7 +19,9 @@ export default async function AddProductPage() {
   ])
 
   const optionCatIds = new Set(
-    categories.filter((c) => c.category_type === 'option' || c.category_type === 'both').map((c) => c.id)
+    categories
+      .filter((c) => c.category_type === 'option' || c.category_type === 'both' || c.category_type === 'cost')
+      .map((c) => c.id)
   )
   const linkableProducts = allProducts.filter(
     (p) => !p.category_id || optionCatIds.has(p.category_id)

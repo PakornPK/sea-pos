@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireActionRole } from '@/lib/auth'
 import { purchaseOrderRepo, productRepo, companyRepo, type POLineInput } from '@/lib/repositories'
 import { computeVat, getVatConfig } from '@/lib/vat'
+import { chain, qty } from '@/lib/money'
 
 export type POState = { error?: string; success?: boolean } | undefined
 
@@ -206,11 +207,22 @@ export async function receivePurchaseOrder(
     if (!status) return { error: 'ไม่พบใบสั่งซื้อ' }
     if (status !== 'ordered') return { error: 'รับของได้เฉพาะใบสั่งซื้อสถานะ "สั่งซื้อแล้ว"' }
 
+    // Build po_conversion map for this PO's items
+    const allItems = await purchaseOrderRepo.listItemsWithProduct(id)
+    const conversionMap = new Map(
+      allItems.map((item) => {
+        const product = item.product as { po_conversion?: number } | null
+        return [item.id, product?.po_conversion ?? 1]
+      })
+    )
+
     for (const r of receipts) {
+      const poConversion = conversionMap.get(r.itemId) ?? 1
       const err = await purchaseOrderRepo.receiveItem({
-        itemId: r.itemId,
-        qty:    r.qty,
-        userId: me.id,
+        itemId:   r.itemId,
+        qty:      r.qty,
+        stockQty: qty(chain(r.qty).times(poConversion)),
+        userId:   me.id,
       })
       if (err) return { error: `รับของไม่สำเร็จ: ${err}` }
     }

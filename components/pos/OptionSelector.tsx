@@ -22,6 +22,7 @@ export function OptionSelector({ groups, selected, onChange }: Props) {
       option_name:       opt.name,
       price_delta:       opt.price_delta,
       linked_product_id: opt.linked_product_id ?? null,
+      quantity_per_use:  opt.quantity_per_use ?? 1,
     }
 
     if (group.multi_select) {

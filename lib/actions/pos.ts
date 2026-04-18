@@ -3,11 +3,11 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, saleRepo, companyRepo, loyaltyRepo, optionRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, saleRepo, companyRepo, loyaltyRepo, optionRepo, productCostItemRepo } from '@/lib/repositories'
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
 import type { ProductWithStock } from '@/types/database'
 import { computeVat, getVatConfig } from '@/lib/vat'
-import { chain, money, lineTotal } from '@/lib/money'
+import { chain, money, lineTotal, qty } from '@/lib/money'
 
 export type SaleState = { error: string } | undefined
 export type VoidState = { error?: string } | undefined
@@ -48,6 +48,7 @@ type CartOption = {
   option_name:       string
   price_delta:       number
   linked_product_id: string | null
+  quantity_per_use:  number
 }
 
 type CartItem = {
@@ -90,9 +91,15 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   const companySettings = (company?.settings ?? {}) as { allow_negative_stock?: boolean }
   const allowNegative = companySettings.allow_negative_stock !== false  // default true
   const productIds = cart.map((i) => i.productId)
-  const [exemptMap, trackStockMap] = await Promise.all([
+  // Include linked ingredient IDs so we can compute ingredient cost contribution
+  const linkedIds = Array.from(new Set(
+    cart.flatMap((i) => i.options.map((o) => o.linked_product_id).filter(Boolean) as string[])
+  ))
+  const allCostIds = Array.from(new Set([...productIds, ...linkedIds]))
+  const [exemptMap, trackStockMap, costMap] = await Promise.all([
     productRepo.vatExemptMap(productIds),
     productRepo.trackStockMap(productIds),
+    productRepo.costMap(allCostIds),
   ])
   const breakdown = computeVat(
     cart.map((i) => ({
@@ -131,12 +138,23 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
 
   const itemsResult = await saleRepo.insertItems(
     header.id,
-    cart.map((i) => ({
-      product_id: i.productId,
-      quantity:   i.quantity,
-      unit_price: i.price,
-      subtotal:   lineTotal(i.price, i.quantity),
-    }))
+    cart.map((i) => {
+      // Base cost from the product itself (cup, packaging, etc.)
+      const baseCost = chain(costMap[i.productId] ?? 0)
+      // Add ingredient cost from each linked option (e.g. 20g beans × ฿0.80/g)
+      const ingredientCost = (i.options ?? []).reduce((acc, o) => {
+        if (!o.linked_product_id) return acc
+        const ingCost = chain(costMap[o.linked_product_id] ?? 0)
+        return acc.plus(ingCost.times(o.quantity_per_use ?? 1))
+      }, chain(0))
+      return {
+        product_id:   i.productId,
+        quantity:     i.quantity,
+        unit_price:   i.price,
+        subtotal:     lineTotal(i.price, i.quantity),
+        cost_at_sale: money(baseCost.plus(ingredientCost)),
+      }
+    })
   )
   if ('error' in itemsResult) return { error: itemsResult.error }
 
@@ -157,7 +175,16 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     })
   )
 
-  // Deduct main product stock + linked option stock
+  // Fetch BOM items for all products in cart (fixed ingredients always consumed)
+  const bomItems = await productCostItemRepo.listForProducts(productIds)
+  // Group by product_id for quick lookup
+  const bomByProduct = new Map<string, typeof bomItems>()
+  for (const b of bomItems) {
+    if (!bomByProduct.has(b.product_id)) bomByProduct.set(b.product_id, [])
+    bomByProduct.get(b.product_id)!.push(b)
+  }
+
+  // Deduct main product stock + linked option stock + linked BOM stock
   const linkedStockMap = new Map<string, number>()
   for (const item of cart) {
     if (trackStockMap[item.productId] !== false) {
@@ -171,16 +198,26 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
       })
       if (stockErr) return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockErr}` }
     }
-    // Accumulate linked product deductions (multiple items may share the same linked product)
+    // Accumulate linked option deductions (customer-chosen)
     for (const opt of item.options ?? []) {
       if (!opt.linked_product_id) continue
+      const usage = qty(chain(opt.quantity_per_use ?? 1).times(item.quantity))
       linkedStockMap.set(
         opt.linked_product_id,
-        (linkedStockMap.get(opt.linked_product_id) ?? 0) + item.quantity,
+        qty(chain(linkedStockMap.get(opt.linked_product_id) ?? 0).plus(usage)),
+      )
+    }
+    // Accumulate BOM linked deductions (fixed ingredients always consumed)
+    for (const bom of bomByProduct.get(item.productId) ?? []) {
+      if (!bom.linked_product_id) continue
+      const usage = qty(chain(bom.quantity).times(item.quantity))
+      linkedStockMap.set(
+        bom.linked_product_id,
+        qty(chain(linkedStockMap.get(bom.linked_product_id) ?? 0).plus(usage)),
       )
     }
   }
-  // Resolve trackStock for linked products and deduct
+  // Resolve trackStock for all linked products and deduct
   if (linkedStockMap.size > 0) {
     const linkedIds = Array.from(linkedStockMap.keys())
     const linkedTrackMap = await productRepo.trackStockMap(linkedIds)
@@ -194,7 +231,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
         userId:        me.id,
         allowNegative,
       })
-      if (linkedErr) return { error: `อัปเดตสต๊อกตัวเลือก (${linkedId.slice(0, 8)}) ไม่สำเร็จ: ${linkedErr}` }
+      if (linkedErr) return { error: `อัปเดตสต๊อกส่วนประกอบ (${linkedId.slice(0, 8)}) ไม่สำเร็จ: ${linkedErr}` }
     }
   }
 
@@ -236,9 +273,10 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (!voidResult) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
 
     const voidNote = `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`
-    const [trackMap, linkedStock] = await Promise.all([
+    const [trackMap, linkedStock, bomItems] = await Promise.all([
       productRepo.trackStockMap(items.map((i) => i.product_id)),
       optionRepo.listLinkedStockForSale(saleId),
+      productCostItemRepo.listForProducts(items.map((i) => i.product_id)),
     ])
 
     // Restore main product stock
@@ -262,6 +300,34 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
           productId: linked_product_id,
           branchId:  saleBranchId,
           delta:     total_quantity,
+          reason:    voidNote,
+          userId:    me.id,
+        })
+      }
+    }
+
+    // Restore BOM linked stock (fixed ingredients)
+    if (bomItems.length > 0) {
+      // Accumulate total restore per linked product across all sale items
+      const bomRestoreMap = new Map<string, number>()
+      for (const item of items) {
+        for (const bom of bomItems.filter((b) => b.product_id === item.product_id)) {
+          if (!bom.linked_product_id) continue
+          const usage = qty(chain(bom.quantity).times(item.quantity))
+          bomRestoreMap.set(
+            bom.linked_product_id,
+            qty(chain(bomRestoreMap.get(bom.linked_product_id) ?? 0).plus(usage)),
+          )
+        }
+      }
+      const bomLinkedIds = Array.from(bomRestoreMap.keys())
+      const bomTrackMap = await productRepo.trackStockMap(bomLinkedIds)
+      for (const [linkedId, restoreQty] of bomRestoreMap) {
+        if (bomTrackMap[linkedId] === false) continue
+        await productStockRepo.adjust({
+          productId: linkedId,
+          branchId:  saleBranchId,
+          delta:     restoreQty,
           reason:    voidNote,
           userId:    me.id,
         })

@@ -23,6 +23,8 @@ export type TopProduct = {
   sku:        string | null
   revenue:    number
   quantity:   number
+  cogs:       number
+  margin_pct: number
 }
 
 export type LowStockItem = {
@@ -62,10 +64,13 @@ export type StockMovement = {
 }
 
 export type SalesByRangeSummary = {
-  totalRevenue: number
-  billCount:    number
-  voidedCount:  number
-  avgBill:      number
+  totalRevenue:  number
+  billCount:     number
+  voidedCount:   number
+  avgBill:       number
+  cogs:          number   // sum of cost_at_sale × quantity for completed sales
+  gross_profit:  number   // revenue - cogs (only for sales where cost is known)
+  profit_margin: number   // gross_profit / revenue * 100 (0 when revenue=0)
 }
 
 export type VatSummary = {

@@ -44,6 +44,7 @@ export function AddCategoryForm() {
             ['sale',   'ขาย (POS)'],
             ['option', 'ตัวเลือก (Modifier)'],
             ['both',   'ทั้งสอง'],
+            ['cost',   'วัตถุดิบ (BOM + ตัวเลือก)'],
           ] as const).map(([val, label]) => (
             <label key={val} className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name="category_type" value={val} defaultChecked={val === 'sale'} disabled={pending} />

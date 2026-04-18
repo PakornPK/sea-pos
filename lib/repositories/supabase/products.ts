@@ -393,4 +393,18 @@ export const supabaseProductRepo: ProductRepository = {
     }
     return out
   },
+
+  async costMap(productIds: string[]): Promise<Record<string, number>> {
+    if (!productIds.length) return {}
+    const db = await getDb()
+    const { data } = await db
+      .from('products')
+      .select('id, cost')
+      .in('id', productIds)
+    const map: Record<string, number> = {}
+    for (const row of (data ?? []) as Array<{ id: string; cost: number | null }>) {
+      map[row.id] = Number(row.cost ?? 0)
+    }
+    return map
+  },
 }

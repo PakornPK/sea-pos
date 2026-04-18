@@ -51,7 +51,7 @@ export type Profile = {
   created_at: string
 }
 
-export type CategoryType = 'sale' | 'option' | 'both'
+export type CategoryType = 'sale' | 'option' | 'both' | 'cost'
 
 export type Category = {
   id:            string
@@ -86,8 +86,35 @@ export type Product = {
   vat_exempt: boolean
   barcode: string | null
   track_stock: boolean          // false = always show in POS, never decrement stock
+  po_unit: string | null        // unit used in purchase orders (null = same as unit)
+  po_conversion: number         // stock units per 1 PO unit (e.g. 1000 for kg→g)
   created_at: string
 }
+
+// ─── Product Cost Items (BOM) ─────────────────────────────────────────────────
+
+export type ProductCostItem = {
+  id:                string
+  company_id:        string
+  product_id:        string
+  name:              string
+  quantity:          number
+  unit_cost:         number
+  linked_product_id: string | null
+  sort_order:        number
+  created_at:        string
+}
+
+export type ProductCostItemInsert = {
+  product_id:        string
+  name:              string
+  quantity:          number
+  unit_cost:         number
+  linked_product_id?: string | null
+  sort_order?:       number
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export type ProductWithCategory = Product & {
   category: Pick<Category, 'id' | 'name'> | null
@@ -220,6 +247,7 @@ export type SaleItem = {
   quantity: number
   unit_price: number
   subtotal: number
+  cost_at_sale: number | null
 }
 
 export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
@@ -288,6 +316,8 @@ export type ProductInsert = {
   vat_exempt?: boolean
   barcode?: string | null
   track_stock?: boolean
+  po_unit?: string | null
+  po_conversion?: number
   // Note: stock is seeded via productStockRepo.set(productId, branchId, qty)
   // in a follow-up call; it is no longer a column on products.
 }
@@ -329,6 +359,7 @@ export type SaleItemInsert = {
   quantity: number
   unit_price: number
   subtotal: number
+  cost_at_sale?: number | null
 }
 
 export type PurchaseOrderInsert = {
@@ -496,6 +527,7 @@ export type SelectedOption = {
   option_name:       string
   price_delta:       number
   linked_product_id: string | null
+  quantity_per_use:  number
 }
 
 export type SaleItemOption = {

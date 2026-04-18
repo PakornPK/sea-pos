@@ -2,7 +2,7 @@
 
 import { useActionState, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ImagePlus, Plus, Trash2, X } from 'lucide-react'
+import { ImagePlus, Link2, Plus, Trash2, X } from 'lucide-react'
 import { addProduct } from '@/lib/actions/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,12 +10,15 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { chain, money } from '@/lib/money'
+import { formatBaht } from '@/lib/format'
 import type { Category, Product } from '@/types/database'
 
 type ActionState = { error: string } | undefined
 
-type DraftOption = { name: string; price_delta: number; linked_product_id: string | null }
-type DraftGroup  = {
+type DraftCostItem = { name: string; quantity: number; unit_cost: number; linked_product_id: string | null }
+type DraftOption   = { name: string; price_delta: number; linked_product_id: string | null }
+type DraftGroup    = {
   name:         string
   required:     boolean
   multi_select: boolean
@@ -25,11 +28,17 @@ type DraftGroup  = {
 type AddProductFormProps = {
   categories:  Category[]
   allProducts: Product[]
-  /** Pre-filtered to option/both categories for the stock-link picker */
+  /** Pre-filtered to option/both categories for the option stock-link picker */
   linkableProducts: Product[]
 }
 
 export function AddProductForm({ categories, allProducts, linkableProducts }: AddProductFormProps) {
+  const costCatIds = new Set(
+    categories.filter((c) => c.category_type === 'cost').map((c) => c.id)
+  )
+  const bomLinkableProducts = allProducts.filter(
+    (p) => p.category_id && costCatIds.has(p.category_id)
+  )
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     addProduct,
     undefined
@@ -37,6 +46,38 @@ export function AddProductForm({ categories, allProducts, linkableProducts }: Ad
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [trackStock, setTrackStock] = useState(true)
+
+  // ── Draft cost items (BOM) ────────────────────────────────────
+  const [costItems, setCostItems]   = useState<DraftCostItem[]>([])
+  const [costForm, setCostForm]     = useState({ quantity: '1', unit_cost: '0', linked_product_id: '' })
+
+  const bomTotal = money(costItems.reduce((acc, it) => acc.plus(chain(it.quantity).times(it.unit_cost)), chain(0)))
+
+  function addCostItemDraft() {
+    if (!costForm.linked_product_id) return
+    const linked = bomLinkableProducts.find((p) => p.id === costForm.linked_product_id)
+    if (!linked) return
+    setCostItems((prev) => [...prev, {
+      name:              linked.name,
+      quantity:          parseFloat(costForm.quantity) || 1,
+      unit_cost:         parseFloat(costForm.unit_cost) || 0,
+      linked_product_id: costForm.linked_product_id,
+    }])
+    setCostForm({ quantity: '1', unit_cost: '0', linked_product_id: '' })
+  }
+
+  function removeCostItem(idx: number) {
+    setCostItems((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function handleLinkedCostProduct(linkedId: string) {
+    const linked = allProducts.find((p) => p.id === linkedId)
+    setCostForm((f) => ({
+      ...f,
+      linked_product_id: linkedId,
+      unit_cost: linkedId && linked ? String(linked.cost) : '0',
+    }))
+  }
 
   // ── Draft option groups (client-side only, serialized on submit) ──
   const [groups, setGroups] = useState<DraftGroup[]>([])
@@ -183,6 +224,48 @@ export function AddProductForm({ categories, allProducts, linkableProducts }: Ad
         </datalist>
       </div>
 
+      {/* PO unit conversion */}
+      <div className="rounded-lg border border-border/60 p-3 space-y-2 bg-muted/20">
+        <p className="text-[12px] font-medium text-muted-foreground">การแปลงหน่วยสั่งซื้อ</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="po_unit" className="text-[12px]">หน่วยใน PO</Label>
+            <Input
+              id="po_unit"
+              name="po_unit"
+              list="po-unit-suggestions"
+              placeholder="เช่น กก. (ว่าง = เหมือนหน่วยสต๊อก)"
+              className="h-8 text-[13px]"
+              disabled={pending}
+            />
+            <datalist id="po-unit-suggestions">
+              <option value="กก." />
+              <option value="ลัง" />
+              <option value="โหล" />
+              <option value="แพ็ค" />
+              <option value="ลิตร" />
+            </datalist>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="po_conversion" className="text-[12px]">1 หน่วย PO = ? หน่วยสต๊อก</Label>
+            <Input
+              id="po_conversion"
+              name="po_conversion"
+              type="number"
+              min="0.000001"
+              step="any"
+              defaultValue={1}
+              className="h-8 text-[13px]"
+              disabled={pending}
+              placeholder="1000"
+            />
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          ตัวอย่าง: สั่งซื้อเป็น กก. แต่ติดตามเป็น กรัม → PO unit = กก., conversion = 1000
+        </p>
+      </div>
+
       {/* Barcode */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="barcode">บาร์โค้ด</Label>
@@ -278,8 +361,103 @@ export function AddProductForm({ categories, allProducts, linkableProducts }: Ad
         ยกเว้น VAT สำหรับสินค้ารายการนี้
       </label>
 
-      {/* Hidden: serialized option groups sent with the form */}
+      {/* Hidden: serialized BOM + option groups sent with the form */}
+      <input type="hidden" name="cost_items"   value={JSON.stringify(costItems)} />
       <input type="hidden" name="option_groups" value={JSON.stringify(groups)} />
+
+      <Separator />
+
+      {/* ── BOM: Cost Structure ── */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <Label>โครงสร้างต้นทุน (BOM)</Label>
+          {costItems.length > 0 && (
+            <span className="text-xs text-muted-foreground">รวม {formatBaht(bomTotal)}</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground -mt-1">
+          เพิ่มรายการต้นทุนแต่ละชิ้น เช่น ถ้วย, วัตถุดิบ — จะคำนวณราคาทุนรวมให้อัตโนมัติ
+        </p>
+
+        {costItems.length > 0 && (
+          <div className="rounded-md border text-sm overflow-hidden">
+            <table className="w-full">
+              <tbody>
+                {costItems.map((it, idx) => {
+                  const linked = it.linked_product_id ? allProducts.find((p) => p.id === it.linked_product_id) : null
+                  return (
+                    <tr key={idx} className={idx > 0 ? 'border-t' : ''}>
+                      <td className="px-3 py-1.5">
+                        {it.name}
+                        {linked && (
+                          <span className="ml-1.5 text-xs text-muted-foreground inline-flex items-center gap-0.5">
+                            <Link2 className="h-3 w-3" />{linked.name}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-muted-foreground text-xs tabular-nums">
+                        {it.quantity} × {formatBaht(it.unit_cost)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-medium">
+                        {formatBaht(money(chain(it.quantity).times(it.unit_cost)))}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <button type="button" onClick={() => removeCostItem(idx)}
+                          className="text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Add cost item row */}
+        <div className="rounded-md border border-dashed p-3 space-y-2">
+          <select
+            className="flex h-8 w-full rounded-md border border-input bg-background px-3 text-[13px]"
+            value={costForm.linked_product_id}
+            onChange={(e) => handleLinkedCostProduct(e.target.value)}
+          >
+            <option value="">— เลือกสินค้า/วัตถุดิบ —</option>
+            {bomLinkableProducts.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''} — {p.unit}</option>
+            ))}
+          </select>
+          <div className="flex gap-2 items-end">
+            <div className="flex flex-col gap-1 flex-1">
+              <span className="text-[11px] text-muted-foreground">จำนวน</span>
+              <Input
+                type="number" min="0" step="any"
+                value={costForm.quantity}
+                onChange={(e) => setCostForm((f) => ({ ...f, quantity: e.target.value }))}
+                className="h-8 text-[13px]"
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1">
+              <span className="text-[11px] text-muted-foreground">ต้นทุน/หน่วย (฿)</span>
+              <Input
+                type="number" min="0" step="0.01"
+                value={costForm.unit_cost}
+                onChange={(e) => setCostForm((f) => ({ ...f, unit_cost: e.target.value }))}
+                className="h-8 text-[13px]"
+              />
+            </div>
+            <Button type="button" size="sm" variant="outline" className="h-8 px-2 self-end" onClick={addCostItemDraft}>
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {costItems.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            ราคาทุน (฿) ด้านบนจะถูกอัปเดตเป็น <strong>{formatBaht(bomTotal)}</strong> โดยอัตโนมัติเมื่อบันทึก
+          </p>
+        )}
+      </div>
 
       <Separator />
 

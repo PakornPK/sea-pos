@@ -88,6 +88,7 @@ export const supabaseOptionRepo: OptionRepository = {
       price_delta:       input.price_delta,
       sort_order:        input.sort_order ?? 0,
       linked_product_id: input.linked_product_id ?? null,
+      quantity_per_use:  input.quantity_per_use ?? 1,
     }
     if (input.id) {
       const { data } = await db

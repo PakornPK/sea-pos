@@ -175,7 +175,7 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                     </div>
                   ) : (
                     <span className={cn('tabular-nums', product.stock < 0 && 'text-destructive font-semibold')}>
-                      {product.stock}
+                      {product.stock} {product.unit}
                     </span>
                   )}
                 </TableCell>

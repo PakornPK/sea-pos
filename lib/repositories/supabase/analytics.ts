@@ -120,7 +120,7 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
     const since = daysAgo(days - 1).toISOString()
     let q = db
       .from('sale_items')
-      .select('product_id, quantity, subtotal, product:products(name, sku), sale:sales!inner(status, created_at, branch_id)')
+      .select('product_id, quantity, subtotal, cost_at_sale, product:products(name, sku), sale:sales!inner(status, created_at, branch_id)')
       .gte('sale.created_at', since)
       .eq('sale.status', 'completed')
     if (opts.branchId) q = q.eq('sale.branch_id', opts.branchId)
@@ -131,13 +131,16 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
       product_id: string
       quantity: number
       subtotal: number
+      cost_at_sale: number | null
       product: { name?: string; sku?: string | null } | Array<{ name?: string; sku?: string | null }> | null
     }>) {
       const prod = Array.isArray(r.product) ? r.product[0] : r.product
+      const rowCogs = r.cost_at_sale != null ? mul(r.cost_at_sale, r.quantity) : 0
       const existing = buckets.get(r.product_id)
       if (existing) {
         existing.revenue  = add(existing.revenue, r.subtotal)
         existing.quantity += Number(r.quantity)
+        existing.cogs     = add(existing.cogs, rowCogs)
       } else {
         buckets.set(r.product_id, {
           product_id: r.product_id,
@@ -145,12 +148,18 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
           sku: prod?.sku ?? null,
           revenue: Number(r.subtotal),
           quantity: Number(r.quantity),
+          cogs: rowCogs,
+          margin_pct: 0,
         })
       }
     }
     return Array.from(buckets.values())
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, limit)
+      .map((p) => ({
+        ...p,
+        margin_pct: p.revenue > 0 ? ((p.revenue - p.cogs) / p.revenue) * 100 : 0,
+      }))
   },
 
   async lowStock(limit = 10, opts = {}): Promise<LowStockItem[]> {
@@ -296,30 +305,52 @@ export const supabaseAnalyticsRepo: AnalyticsRepository = {
 
   async salesByRange(start: string, end: string, opts = {}): Promise<SalesByRangeSummary> {
     const db = await getDb()
-    let q = db
+    let salesQ = db
       .from('sales')
-      .select('total_amount, status')
+      .select('id, total_amount, status')
       .gte('created_at', start)
       .lte('created_at', end)
-    if (opts.branchId) q = q.eq('branch_id', opts.branchId)
-    const { data } = await q
+    if (opts.branchId) salesQ = salesQ.eq('branch_id', opts.branchId)
+    const { data: salesData } = await salesQ
 
     let totalRevenue = 0
     let billCount = 0
     let voidedCount = 0
-    for (const s of data ?? []) {
+    const completedIds: string[] = []
+    for (const s of salesData ?? []) {
       if (s.status === 'completed') {
         billCount += 1
         totalRevenue = add(totalRevenue, s.total_amount)
+        completedIds.push(s.id)
       } else if (s.status === 'voided') {
         voidedCount += 1
       }
     }
+
+    // Compute COGS from sale_items where cost_at_sale is known
+    let cogs = 0
+    if (completedIds.length > 0) {
+      const { data: itemsData } = await db
+        .from('sale_items')
+        .select('cost_at_sale, quantity')
+        .in('sale_id', completedIds)
+        .not('cost_at_sale', 'is', null)
+      for (const item of (itemsData ?? []) as Array<{ cost_at_sale: number; quantity: number }>) {
+        cogs = add(cogs, mul(item.cost_at_sale, item.quantity))
+      }
+    }
+
+    const gross_profit = add(totalRevenue, -cogs)
+    const profit_margin = totalRevenue > 0 ? (gross_profit / totalRevenue) * 100 : 0
+
     return {
       totalRevenue,
       billCount,
       voidedCount,
       avgBill: average(totalRevenue, billCount),
+      cogs,
+      gross_profit,
+      profit_margin,
     }
   },
 

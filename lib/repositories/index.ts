@@ -38,7 +38,8 @@ export const analyticsRepo     = repos.analytics
 export const heldSaleRepo      = repos.heldSale
 export const billingRepo       = repos.billing
 export const loyaltyRepo       = repos.loyalty
-export const optionRepo        = repos.option
+export const optionRepo           = repos.option
+export const productCostItemRepo  = repos.productCostItem
 
 // Also re-export contract types so callers never need to reach into contracts/
 export type {

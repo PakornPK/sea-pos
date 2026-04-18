@@ -73,6 +73,9 @@ export interface ProductRepository {
    * or service — stock is never decremented on sale.
    */
   trackStockMap(productIds: string[]): Promise<Record<string, boolean>>
+
+  /** Unit cost per product id. Used to snapshot COGS at sale time. */
+  costMap(productIds: string[]): Promise<Record<string, number>>
 }
 
 /**

@@ -119,19 +119,21 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
       }
 
       const prod: Product = {
-        id:          res.id,
-        sku:         res.sku ?? '',
-        name:        res.name,
-        price:       res.price,
-        cost:        res.cost,
-        min_stock:   res.min_stock,
-        category_id: res.category_id,
-        image_url:   imageUrl,
-        vat_exempt:  false,
-        barcode:     newBarcode.trim() || null,
-        track_stock: true,
-        unit:        'ชิ้น',
-        created_at:  new Date().toISOString(),
+        id:            res.id,
+        sku:           res.sku ?? '',
+        name:          res.name,
+        price:         res.price,
+        cost:          res.cost,
+        min_stock:     res.min_stock,
+        category_id:   res.category_id,
+        image_url:     imageUrl,
+        vat_exempt:    false,
+        barcode:       newBarcode.trim() || null,
+        track_stock:   true,
+        unit:          'ชิ้น',
+        po_unit:       null,
+        po_conversion: 1,
+        created_at:    new Date().toISOString(),
       }
       setLocalProducts((prev) => [...prev, prod].sort((a, b) => a.name.localeCompare(b.name)))
       emit([

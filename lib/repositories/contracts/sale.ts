@@ -89,7 +89,7 @@ export interface SaleRepository {
   }): Promise<{ id: string } | { error: string }>
   insertItems(
     saleId: string,
-    items: Array<{ product_id: string; quantity: number; unit_price: number; subtotal: number }>
+    items: Array<{ product_id: string; quantity: number; unit_price: number; subtotal: number; cost_at_sale?: number | null }>
   ): Promise<{ ids: string[] } | { error: string }>
   listItems(saleId: string): Promise<Pick<SaleItem, 'product_id' | 'quantity'>[]>
   listItemsWithProduct(saleId: string): Promise<SaleItemWithProduct[]>

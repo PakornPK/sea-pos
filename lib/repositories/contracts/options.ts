@@ -12,6 +12,7 @@ export type ProductOptionInput = {
   price_delta:        number
   sort_order?:        number
   linked_product_id?: string | null
+  quantity_per_use?:  number
 }
 
 export type SaleItemOptionInput = {

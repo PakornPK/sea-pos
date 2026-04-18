@@ -24,9 +24,11 @@ type Props = {
 
 export function OptionGroupManager({ productId, groups: initial, allProducts, categories }: Props) {
   const optionCatIds = new Set(
-    categories.filter((c) => c.category_type === 'option' || c.category_type === 'both').map((c) => c.id)
+    categories
+      .filter((c) => c.category_type === 'option' || c.category_type === 'both' || c.category_type === 'cost')
+      .map((c) => c.id)
   )
-  // Products eligible for stock linking: in an option/both category, or no category (uncategorized)
+  // Products eligible for stock linking: in an option/both/cost category, or uncategorized
   const linkableProducts = allProducts.filter(
     (p) => p.id !== productId && (!p.category_id || optionCatIds.has(p.category_id))
   )
@@ -45,7 +47,7 @@ export function OptionGroupManager({ productId, groups: initial, allProducts, ca
   const [addingGroup, setAddingGroup]             = useState(false)
 
   // ── Option form state per group ───────────────────────────────
-  const [optForms, setOptForms] = useState<Record<string, { name: string; delta: string; linkedProductId: string }>>({})
+  const [optForms, setOptForms] = useState<Record<string, { name: string; delta: string; linkedProductId: string; quantityPerUse: string }>>({})
 
   async function handleAddGroup() {
     const name = newGroupName.trim()
@@ -76,7 +78,7 @@ export function OptionGroupManager({ productId, groups: initial, allProducts, ca
   }
 
   async function handleAddOption(groupId: string) {
-    const form = optForms[groupId] ?? { name: '', delta: '0', linkedProductId: '' }
+    const form = optForms[groupId] ?? { name: '', delta: '0', linkedProductId: '', quantityPerUse: '1' }
     const name  = form.name.trim()
     if (!name) return
     const fd = new FormData()
@@ -86,9 +88,10 @@ export function OptionGroupManager({ productId, groups: initial, allProducts, ca
     fd.set('price_delta',       form.delta || '0')
     fd.set('sort_order',        String(groups.find((g) => g.id === groupId)?.options.length ?? 0))
     fd.set('linked_product_id', form.linkedProductId || '')
+    fd.set('quantity_per_use',  form.quantityPerUse || '1')
     const res = await saveOption(undefined, fd)
     if (res?.error) { alert(res.error); return }
-    setOptForms((prev) => ({ ...prev, [groupId]: { name: '', delta: '0', linkedProductId: '' } }))
+    setOptForms((prev) => ({ ...prev, [groupId]: { name: '', delta: '0', linkedProductId: '', quantityPerUse: '1' } }))
     router.refresh()
   }
 
@@ -172,7 +175,7 @@ export function OptionGroupManager({ productId, groups: initial, allProducts, ca
       {/* Existing groups */}
       {groups.map((group) => {
         const open     = expanded[group.id] ?? true
-        const optForm  = optForms[group.id] ?? { name: '', delta: '0', linkedProductId: '' }
+        const optForm  = optForms[group.id] ?? { name: '', delta: '0', linkedProductId: '', quantityPerUse: '1' }
         return (
           <div key={group.id} className="rounded-2xl border border-border overflow-hidden">
             {/* Group header */}
@@ -218,7 +221,7 @@ export function OptionGroupManager({ productId, groups: initial, allProducts, ca
                           <span className="flex-1">{opt.name}</span>
                           {linked && (
                             <span className="text-[11px] text-muted-foreground border rounded px-1.5 py-0.5">
-                              📦 {linked.name}
+                              📦 {linked.name}{opt.quantity_per_use !== 1 ? ` ×${opt.quantity_per_use}` : ''}
                             </span>
                           )}
                           {opt.price_delta !== 0 && (
@@ -285,6 +288,22 @@ export function OptionGroupManager({ productId, groups: initial, allProducts, ca
                       ))}
                     </select>
                   </div>
+                  {optForm.linkedProductId && (
+                    <div className="w-20 space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">ปริมาณ/ครั้ง</Label>
+                      <Input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        value={optForm.quantityPerUse}
+                        onChange={(e) => setOptForms((p) => ({
+                          ...p, [group.id]: { ...optForm, quantityPerUse: e.target.value },
+                        }))}
+                        className="h-8 text-[13px]"
+                        placeholder="1"
+                      />
+                    </div>
+                  )}
                   <Button
                     type="button"
                     size="sm"

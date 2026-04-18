@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import { updateProduct } from '@/lib/actions/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { Category, Product } from '@/types/database'
 
-type ActionState = { error: string } | undefined
+type ActionState = { error: string } | { success: true } | undefined
 
 type EditProductFormProps = {
   product: Product
@@ -73,6 +74,49 @@ export function EditProductForm({ product, categories }: EditProductFormProps) {
           <option value="เมตร" />
           <option value="ea" />
         </datalist>
+      </div>
+
+      {/* PO unit conversion */}
+      <div className="rounded-lg border border-border/60 p-3 space-y-2 bg-muted/20">
+        <p className="text-[12px] font-medium text-muted-foreground">การแปลงหน่วยสั่งซื้อ</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="po_unit" className="text-[12px]">หน่วยใน PO</Label>
+            <Input
+              id="po_unit"
+              name="po_unit"
+              list="po-unit-suggestions"
+              placeholder="เช่น กก. (ว่าง = เหมือนหน่วยสต๊อก)"
+              defaultValue={product.po_unit ?? ''}
+              className="h-8 text-[13px]"
+              disabled={pending}
+            />
+            <datalist id="po-unit-suggestions">
+              <option value="กก." />
+              <option value="ลัง" />
+              <option value="โหล" />
+              <option value="แพ็ค" />
+              <option value="ลิตร" />
+            </datalist>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="po_conversion" className="text-[12px]">1 หน่วย PO = ? หน่วยสต๊อก</Label>
+            <Input
+              id="po_conversion"
+              name="po_conversion"
+              type="number"
+              min="0.000001"
+              step="any"
+              defaultValue={product.po_conversion}
+              className="h-8 text-[13px]"
+              disabled={pending}
+              placeholder="1000"
+            />
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          ตัวอย่าง: สั่งซื้อเป็น กก. แต่ติดตามเป็น กรัม → PO unit = กก., conversion = 1000
+        </p>
       </div>
 
       {/* Barcode */}
@@ -170,11 +214,21 @@ export function EditProductForm({ product, categories }: EditProductFormProps) {
         ยกเว้น VAT สำหรับสินค้ารายการนี้
       </label>
 
-      {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {'error' in (state ?? {}) && (
+        <p className="text-sm text-destructive">{(state as { error: string }).error}</p>
+      )}
 
-      <Button type="submit" disabled={pending} className="self-start">
-        {pending ? 'กำลังบันทึก...' : 'บันทึก'}
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={pending} className="self-start">
+          {pending ? 'กำลังบันทึก...' : 'บันทึก'}
+        </Button>
+        {'success' in (state ?? {}) && !pending && (
+          <span className="flex items-center gap-1 text-sm text-green-600">
+            <CheckCircle2 className="h-4 w-4" />
+            บันทึกแล้ว
+          </span>
+        )}
+      </div>
     </form>
   )
 }

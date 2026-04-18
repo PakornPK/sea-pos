@@ -62,7 +62,7 @@ export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
     const db = await getDb()
     const { data } = await db
       .from('purchase_order_items')
-      .select('id, product_id, quantity_ordered, quantity_received, unit_cost, product:products(name, sku)')
+      .select('id, product_id, quantity_ordered, quantity_received, unit_cost, product:products(name, sku, unit, po_unit, po_conversion)')
       .eq('po_id', poId)
     return (data ?? []) as POItemWithProduct[]
   },
@@ -123,9 +123,10 @@ export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
   async receiveItem(input): Promise<string | null> {
     const db = await getDb()
     const { error } = await db.rpc('receive_po_item', {
-      p_item_id: input.itemId,
-      p_qty:     input.qty,
-      p_user_id: input.userId,
+      p_item_id:   input.itemId,
+      p_qty:       input.qty,
+      p_stock_qty: input.stockQty,
+      p_user_id:   input.userId,
     })
     return error?.message ?? null
   },

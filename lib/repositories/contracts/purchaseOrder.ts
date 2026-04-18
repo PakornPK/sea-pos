@@ -26,8 +26,8 @@ export type POItemWithProduct = {
   quantity_received: number
   unit_cost: number
   product:
-    | { name?: string; sku?: string | null }
-    | Array<{ name?: string; sku?: string | null }>
+    | { name?: string; sku?: string | null; unit?: string; po_unit?: string | null; po_conversion?: number }
+    | Array<{ name?: string; sku?: string | null; unit?: string; po_unit?: string | null; po_conversion?: number }>
     | null
 }
 
@@ -62,5 +62,5 @@ export interface PurchaseOrderRepository {
   ): Promise<string | null>
   confirm(id: string): Promise<string | null>
   cancel(id: string): Promise<string | null>
-  receiveItem(input: { itemId: string; qty: number; userId: string }): Promise<string | null>
+  receiveItem(input: { itemId: string; qty: number; stockQty: number; userId: string }): Promise<string | null>
 }

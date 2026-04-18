@@ -77,3 +77,13 @@ export function average(total: MoneyInput, count: number): number {
 /** Exact-precision intermediate. Use when chaining several operations without
  *  rounding in between. Call `.toNumber()` via `money()` at the boundary. */
 export function chain(x: MoneyInput): Decimal { return d(x) }
+
+/**
+ * Round to 3 decimal places — for stock quantities stored as NUMERIC(12,3).
+ * Use this instead of `money()` whenever calculating how much stock to
+ * add/subtract (e.g. 1 kg × 1000 conversion = 1000.000 g, 3 cups × 20g = 60.000 g).
+ */
+export const QTY_DP = 3
+export function qty(x: MoneyInput): number {
+  return d(x).toDecimalPlaces(QTY_DP, Decimal.ROUND_HALF_UP).toNumber()
+}

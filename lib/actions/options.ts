@@ -57,10 +57,11 @@ export async function saveOption(
     const priceDelta      = Number(formData.get('price_delta') ?? 0)
     const sortOrder       = Number(formData.get('sort_order') ?? 0)
     const linkedProductId = (formData.get('linked_product_id') as string) || null
+    const quantityPerUse = parseFloat(formData.get('quantity_per_use') as string) || 1
 
     if (!name) return { error: 'กรุณาระบุชื่อตัวเลือก' }
 
-    await optionRepo.saveOption(groupId, { id, name, price_delta: priceDelta, sort_order: sortOrder, linked_product_id: linkedProductId })
+    await optionRepo.saveOption(groupId, { id, name, price_delta: priceDelta, sort_order: sortOrder, linked_product_id: linkedProductId, quantity_per_use: quantityPerUse })
     revalidatePath(`/inventory/${productId}/edit`)
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }

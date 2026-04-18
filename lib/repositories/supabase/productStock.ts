@@ -1,4 +1,5 @@
 import type { ProductStockRepository } from '@/lib/repositories/contracts'
+import { chain, qty } from '@/lib/money'
 import { getDb } from './db'
 
 export const supabaseProductStockRepo: ProductStockRepository = {
@@ -61,7 +62,7 @@ export const supabaseProductStockRepo: ProductStockRepository = {
 
     const currentQty = (current?.quantity as number | undefined) ?? 0
     const companyId = (current?.company_id as string | undefined)
-    const newQty = currentQty + input.delta
+    const newQty = qty(chain(currentQty).plus(input.delta))
     if (newQty < 0) return 'สต๊อกไม่เพียงพอ'
 
     if (!companyId) {

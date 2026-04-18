@@ -11,6 +11,7 @@ const TYPE_LABELS: Record<CategoryType, string> = {
   sale:   'ขาย (POS)',
   option: 'ตัวเลือก',
   both:   'ทั้งสอง',
+  cost:   'วัตถุดิบ (BOM + ตัวเลือก)',
 }
 
 type Props = {
