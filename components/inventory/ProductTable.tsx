@@ -108,6 +108,7 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
             <TableHead className="text-right">
               <SortableHeader label="ราคาขาย" active={sortCol === 'price'} dir={sortDir} onClick={() => toggleSort('price')} />
             </TableHead>
+            <TableHead>หน่วย</TableHead>
             <TableHead className="text-right">
               <SortableHeader label="คงเหลือ" active={sortCol === 'stock'} dir={sortDir} onClick={() => toggleSort('stock')} />
             </TableHead>
@@ -146,6 +147,7 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                 <TableCell className="text-right tabular-nums">
                   {formatBaht(product.price)}
                 </TableCell>
+                <TableCell className="text-muted-foreground text-sm">{product.unit}</TableCell>
                 <TableCell className="text-right">
                   {!product.track_stock ? (
                     <span className="text-muted-foreground text-xs">—</span>

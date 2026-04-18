@@ -45,6 +45,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const vatExempt = formData.get('vat_exempt') === 'on'
   const trackStock = formData.get('track_stock') === 'on'  // checkbox: checked='on', unchecked=null
   const barcode = (formData.get('barcode') as string | null)?.trim() || null
+  const unit = (formData.get('unit') as string | null)?.trim() || 'ชิ้น'
   const rawImage = formData.get('image') as File | null
   const hasImage = !!rawImage && rawImage.size > 0
 
@@ -74,6 +75,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     min_stock: minStock,
     price,
     cost,
+    unit,
     category_id: categoryId,
     vat_exempt: vatExempt,
     barcode,
@@ -206,6 +208,7 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
   const vatExempt = formData.get('vat_exempt') === 'on'
   const trackStock = formData.get('track_stock') === 'on'
   const barcode = (formData.get('barcode') as string | null)?.trim() || null
+  const unit = (formData.get('unit') as string | null)?.trim() || 'ชิ้น'
 
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
@@ -215,6 +218,7 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
     min_stock: minStock,
     price,
     cost,
+    unit,
     category_id: categoryId,
     vat_exempt: vatExempt,
     barcode,

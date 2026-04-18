@@ -47,6 +47,34 @@ export function EditProductForm({ product, categories }: EditProductFormProps) {
         />
       </div>
 
+      {/* Unit */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="unit">หน่วย</Label>
+        <Input
+          id="unit"
+          name="unit"
+          list="unit-suggestions"
+          defaultValue={product.unit}
+          placeholder="เช่น ชิ้น, กก., ลิตร"
+          disabled={pending}
+        />
+        <datalist id="unit-suggestions">
+          <option value="ชิ้น" />
+          <option value="กล่อง" />
+          <option value="แพ็ค" />
+          <option value="ถุง" />
+          <option value="ขวด" />
+          <option value="กก." />
+          <option value="กรัม" />
+          <option value="ลิตร" />
+          <option value="มล." />
+          <option value="โหล" />
+          <option value="ม้วน" />
+          <option value="เมตร" />
+          <option value="ea" />
+        </datalist>
+      </div>
+
       {/* Barcode */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="barcode">บาร์โค้ด</Label>

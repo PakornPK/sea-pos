@@ -80,6 +80,7 @@ export type Product = {
   price: number
   cost: number
   min_stock: number
+  unit: string                  // unit of measure, e.g. ชิ้น, กก., ลิตร
   category_id: string | null
   image_url: string | null
   vat_exempt: boolean
@@ -281,6 +282,7 @@ export type ProductInsert = {
   price?: number
   cost?: number
   min_stock?: number
+  unit?: string
   category_id?: string | null
   image_url?: string | null
   vat_exempt?: boolean

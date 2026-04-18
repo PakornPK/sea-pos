@@ -138,7 +138,7 @@ export default async function ReceiptPage({
         {/* Line items */}
         <div className="space-y-2.5">
           {items.map((item) => {
-            const product = item.product as { name: string; sku: string | null } | null
+            const product = item.product as { name: string; sku: string | null; unit?: string } | null
             const opts = Array.isArray(item.sale_item_options) ? item.sale_item_options : []
             const basePrice = item.unit_price - opts.reduce((sum, o) => sum + o.price_delta, 0)
             return (
@@ -162,7 +162,7 @@ export default async function ReceiptPage({
                     </ul>
                   ) : (
                     <p className="text-muted-foreground text-xs">
-                      {item.quantity} × {formatBaht(item.unit_price)}
+                      {item.quantity} {product?.unit ?? 'ชิ้น'} × {formatBaht(item.unit_price)}
                     </p>
                   )}
                 </div>

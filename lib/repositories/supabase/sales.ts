@@ -129,7 +129,7 @@ export const supabaseSaleRepo: SaleRepository = {
     const db = await getDb()
     const { data } = await db
       .from('sale_items')
-      .select('*, product:products(name, sku), sale_item_options(group_name, option_name, price_delta)')
+      .select('*, product:products(name, sku, unit), sale_item_options(group_name, option_name, price_delta)')
       .eq('sale_id', saleId)
       .order('id')
     return (data ?? []) as SaleItemWithProduct[]

@@ -130,6 +130,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
         vat_exempt:  false,
         barcode:     newBarcode.trim() || null,
         track_stock: true,
+        unit:        'ชิ้น',
         created_at:  new Date().toISOString(),
       }
       setLocalProducts((prev) => [...prev, prod].sort((a, b) => a.name.localeCompare(b.name)))
