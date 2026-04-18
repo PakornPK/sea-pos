@@ -38,6 +38,7 @@ export function CompanySettingsForm({ company }: Props) {
     letterhead_url?: string
     vat_mode?: 'none' | 'included' | 'excluded'
     vat_rate?: number
+    allow_negative_stock?: boolean
   }
   const currentVatMode = settings.vat_mode ?? 'none'
   const currentVatRate = typeof settings.vat_rate === 'number' ? settings.vat_rate : 7
@@ -160,6 +161,36 @@ export function CompanySettingsForm({ company }: Props) {
             />
           </div>
         </div>
+      </section>
+
+      {/* Stock behaviour */}
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-sm">สต๊อก</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            ควบคุมการขายเมื่อสต๊อกหมด
+          </p>
+        </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="allow_negative_stock"
+            value="true"
+            defaultChecked={settings.allow_negative_stock !== false}
+            disabled={pending}
+            className="mt-0.5 h-4 w-4 shrink-0"
+          />
+          {/* Hidden fallback — checkbox value wins when checked because it appears first in DOM order */}
+          <input type="hidden" name="allow_negative_stock" value="false" />
+          <span className="text-sm leading-snug">
+            อนุญาตให้สต๊อกติดลบ
+            <span className="block text-xs text-muted-foreground mt-0.5">
+              เปิด (ค่าเริ่มต้น) — ขายได้แม้สต๊อกเป็น 0 แล้วแก้ทีหลัง
+              <br />
+              ปิด — บล็อกการขายทันทีถ้าสต๊อกไม่พอ
+            </span>
+          </span>
+        </label>
       </section>
 
       {/* Receipt customization */}

@@ -1,0 +1,6 @@
+-- Stock can go negative — this is a business decision, not a DB constraint.
+-- Real businesses (food service, cafés) allow negative stock and correct it later.
+-- The guard lives in application code, controlled by company setting
+-- `settings->>'allow_negative_stock'` (default: true = allow).
+--
+-- No schema changes needed here. This file documents the design decision.

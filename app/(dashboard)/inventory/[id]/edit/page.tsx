@@ -3,9 +3,11 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
-import { productRepo, categoryRepo } from '@/lib/repositories'
+import { productRepo, categoryRepo, optionRepo } from '@/lib/repositories'
 import { EditProductForm } from '@/components/inventory/EditProductForm'
 import { ProductImageUpload } from '@/components/inventory/ProductImageUpload'
+import { OptionGroupManager } from '@/components/inventory/OptionGroupManager'
+import { Separator } from '@/components/ui/separator'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -21,9 +23,11 @@ export default async function EditProductPage({
   await requirePageRole(['admin', 'manager'])
   const { id } = await params
 
-  const [product, categories] = await Promise.all([
+  const [product, categories, optionGroups, allProducts] = await Promise.all([
     productRepo.getById(id),
     categoryRepo.list(),
+    optionRepo.listForProduct(id),
+    productRepo.listAll(),
   ])
 
   if (!product) notFound()
@@ -40,6 +44,8 @@ export default async function EditProductPage({
       <div className="flex flex-col gap-6 max-w-md">
         <ProductImageUpload productId={product.id} currentUrl={product.image_url} />
         <EditProductForm product={product} categories={categories} />
+        <Separator />
+        <OptionGroupManager productId={product.id} groups={optionGroups} allProducts={allProducts} categories={categories} />
       </div>
     </div>
   )

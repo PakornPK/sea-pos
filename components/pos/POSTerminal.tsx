@@ -18,19 +18,27 @@ import { CustomerPicker, type PickerCustomer } from '@/components/customers/Cust
 import { MemberLookupPanel } from '@/components/pos/MemberLookupPanel'
 import { HeldSalesDrawer } from '@/components/pos/HeldSalesDrawer'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
-import type { HeldSale, ProductWithStock } from '@/types/database'
+import type { HeldSale, ProductWithStock, SelectedOption, OptionGroupWithOptions } from '@/types/database'
 import type { HeldSaleListRow } from '@/lib/repositories'
 import type { MemberLookupResult } from '@/lib/actions/loyalty'
 import { computeVat, type VatConfig } from '@/lib/vat'
 import { chain, money, lineTotal } from '@/lib/money'
 
 type CartItem = {
-  productId:  string
-  name:       string
-  price:      number
-  quantity:   number
-  vatExempt:  boolean
-  stock:      number   // -1 = untracked (infinite)
+  cartKey:   string          // productId[:optId,...] — unique per product+option combo
+  productId: string
+  name:      string
+  price:     number          // base price + sum of option deltas
+  quantity:  number
+  vatExempt: boolean
+  stock:     number          // -1 = untracked (infinite)
+  options:   SelectedOption[]
+}
+
+function makeCartKey(productId: string, options: SelectedOption[]): string {
+  if (!options.length) return productId
+  const ids = options.map((o) => o.option_id).sort().join(',')
+  return `${productId}:${ids}`
 }
 
 type POSTerminalProps = {
@@ -41,6 +49,7 @@ type POSTerminalProps = {
   customers:        PickerCustomer[]
   vatConfig:        VatConfig
   initialHeldSales: HeldSaleListRow[]
+  initialOptionsMap: Record<string, OptionGroupWithOptions[]>
 }
 
 /** Build a compact page list with ellipsis: [1, …, 4, 5, 6, …, 12]. */
@@ -64,6 +73,7 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
 
 export function POSTerminal({
   initialProducts, initialTotal, initialPage, pageSize, customers, vatConfig, initialHeldSales,
+  initialOptionsMap,
 }: POSTerminalProps) {
   // ── Cart (unchanged — user loves this part) ────────────────────
   const [cart, setCart] = useState<CartItem[]>([])
@@ -148,12 +158,14 @@ export function POSTerminal({
   function handleResume(snapshot: HeldSale) {
     setCart(
       snapshot.items.map((i) => ({
+        cartKey:   i.productId,
         productId: i.productId,
         name:      i.name,
         price:     i.price,
         quantity:  i.quantity,
         vatExempt: Boolean(i.vatExempt),
         stock:     -1,  // held sale snapshot has no live stock; server validates at checkout
+        options:   [],
       })),
     )
     // Customer on the held bill is re-selected from the picker list if present.
@@ -186,40 +198,41 @@ export function POSTerminal({
   }
 
   // ── Cart handlers ──────────────────────────────────────────────
-  function addToCart(product: ProductWithStock) {
-    const tracked = product.track_stock !== false
+  function addToCart(product: ProductWithStock, options: SelectedOption[] = [], unitPrice?: number) {
+    const tracked  = product.track_stock !== false
+    const cartKey  = makeCartKey(product.id, options)
+    const price    = unitPrice ?? product.price
     setCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id)
+      const existing = prev.find((i) => i.cartKey === cartKey)
       if (existing) {
-        // Cap quantity at stock only for tracked products.
         if (tracked && existing.quantity >= product.stock) return prev
         return prev.map((i) =>
-          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.cartKey === cartKey ? { ...i, quantity: i.quantity + 1 } : i
         )
       }
-      // Block adding tracked products with no stock.
       if (tracked && product.stock < 1) return prev
       return [
         ...prev,
         {
+          cartKey,
           productId: product.id,
           name:      product.name,
-          price:     product.price,
+          price,
           quantity:  1,
           vatExempt: Boolean(product.vat_exempt),
           stock:     product.track_stock === false ? -1 : product.stock,
+          options,
         },
       ]
     })
   }
 
-  function updateQty(productId: string, delta: number) {
+  function updateQty(cartKey: string, delta: number) {
     setCart((prev) =>
       prev
         .map((i) => {
-          if (i.productId !== productId) return i
+          if (i.cartKey !== cartKey) return i
           const next = i.quantity + delta
-          // Cap at available stock for tracked products (stock >= 0).
           if (delta > 0 && i.stock >= 0 && next > i.stock) return i
           return { ...i, quantity: next }
         })
@@ -227,8 +240,8 @@ export function POSTerminal({
     )
   }
 
-  function removeItem(productId: string) {
-    setCart((prev) => prev.filter((i) => i.productId !== productId))
+  function removeItem(cartKey: string) {
+    setCart((prev) => prev.filter((i) => i.cartKey !== cartKey))
   }
 
   const totalQty = cart.reduce((s, i) => s + i.quantity, 0)
@@ -295,11 +308,11 @@ export function POSTerminal({
           )}
 
           {products.map((product, idx) => {
-            const inCart = cart.find((i) => i.productId === product.id)
-            const inCartQty = inCart?.quantity ?? 0
-            const tracked = product.track_stock !== false
+            // Sum qty across all cart lines for this product (different options = different lines)
+            const inCartQty = cart.filter((i) => i.productId === product.id).reduce((s, i) => s + i.quantity, 0)
+            const tracked   = product.track_stock !== false
             const remaining = tracked ? product.stock - inCartQty : Infinity
-            const lowStock = tracked && product.stock > 0 && product.stock <= product.min_stock
+            const lowStock  = tracked && product.stock > 0 && product.stock <= product.min_stock
             return (
               <div
                 key={product.id}
@@ -310,7 +323,7 @@ export function POSTerminal({
                     : 'ring-1 ring-border/70 hover:shadow-md hover:ring-border'
                 )}
               >
-                {/* Detail info button — outside inner overflow-hidden so it always shows */}
+                {/* Detail info button */}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setDetailProduct(product) }}
@@ -327,10 +340,10 @@ export function POSTerminal({
                   </div>
                 )}
 
-                {/* Inner button: overflow-hidden + scale here so ring is unaffected */}
+                {/* Inner button */}
                 <button
                   type="button"
-                  onClick={() => addToCart(product)}
+                  onClick={() => product.has_options ? setDetailProduct(product) : addToCart(product)}
                   className="flex h-full w-full flex-col overflow-hidden rounded-2xl bg-card text-left active:scale-[0.97] transition-transform duration-100"
                 >
                   {/* Image */}
@@ -449,11 +462,18 @@ export function POSTerminal({
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.productId} className="rounded-xl bg-muted/40 px-3 py-2.5 space-y-2">
+              <div key={item.cartKey} className="rounded-xl bg-muted/40 px-3 py-2.5 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex-1 text-[13px] font-medium leading-snug">{item.name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium leading-snug">{item.name}</p>
+                    {item.options.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                        {item.options.map((o) => o.option_name).join(' · ')}
+                      </p>
+                    )}
+                  </div>
                   <button
-                    onClick={() => removeItem(item.productId)}
+                    onClick={() => removeItem(item.cartKey)}
                     className="mt-0.5 shrink-0 text-muted-foreground/50 hover:text-destructive transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -462,14 +482,14 @@ export function POSTerminal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-0.5">
                     <button
-                      onClick={() => updateQty(item.productId, -1)}
+                      onClick={() => updateQty(item.cartKey, -1)}
                       className="flex h-6 w-6 items-center justify-center rounded-full bg-background shadow-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
                     <span className="w-8 text-center text-[13px] font-semibold tabular-nums">{item.quantity}</span>
                     <button
-                      onClick={() => updateQty(item.productId, 1)}
+                      onClick={() => updateQty(item.cartKey, 1)}
                       disabled={item.stock >= 0 && item.quantity >= item.stock}
                       className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
@@ -603,7 +623,10 @@ export function POSTerminal({
         open={detailProduct !== null}
         onOpenChange={(open) => { if (!open) setDetailProduct(null) }}
         onAddToCart={addToCart}
-        inCartQty={detailProduct ? cart.find((i) => i.productId === detailProduct.id)?.quantity ?? 0 : 0}
+        inCartQty={detailProduct
+          ? cart.filter((i) => i.productId === detailProduct.id).reduce((s, i) => s + i.quantity, 0)
+          : 0}
+        preloadedOptions={detailProduct ? (initialOptionsMap[detailProduct.id] ?? null) : null}
       />
     </div>
   )

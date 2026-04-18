@@ -46,6 +46,7 @@ export const supabaseProductRepo: ProductRepository = {
     const db = await getDb()
 
     type RawRow = Product & {
+      has_options:   boolean
       product_stock: Array<{ quantity: number; branch_id: string }> | { quantity: number; branch_id: string } | null
       category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
     }
@@ -55,11 +56,11 @@ export const supabaseProductRepo: ProductRepository = {
       const effectiveVat = Boolean(r.vat_exempt) || Boolean(cat?.vat_exempt)
       const { product_stock: _ps, category: _c, ...rest } = r
       void _ps; void _c
-      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(r) }
+      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(r), has_options: Boolean(r.has_options) }
     }
 
-    const select = '*, category:categories(vat_exempt), product_stock!inner(quantity, branch_id)'
-    const selectLeft = '*, category:categories(vat_exempt), product_stock!left(quantity, branch_id)'
+    const select = '*, category:categories(vat_exempt, category_type), product_stock!inner(quantity, branch_id)'
+    const selectLeft = '*, category:categories(vat_exempt, category_type), product_stock!left(quantity, branch_id)'
 
     const searchTerm = opts.search?.trim().replace(/[%,]/g, '') ?? ''
 
@@ -89,8 +90,15 @@ export const supabaseProductRepo: ProductRepository = {
       })(),
     ])
 
-    const tracked = ((trackedRes.data ?? []) as unknown as RawRow[]).map(shapeRow)
-    const untracked = ((untrackedRes.data ?? []) as unknown as RawRow[]).map(shapeRow)
+    // Filter out products whose category is 'option'-only — those are modifier
+    // materials and should not appear in the POS product grid.
+    const isForSale = (r: RawRow) => {
+      const cat = Array.isArray(r.category) ? r.category[0] : r.category
+      return !cat || (cat as { category_type?: string }).category_type !== 'option'
+    }
+
+    const tracked = ((trackedRes.data ?? []) as unknown as RawRow[]).filter(isForSale).map(shapeRow)
+    const untracked = ((untrackedRes.data ?? []) as unknown as RawRow[]).filter(isForSale).map(shapeRow)
 
     // Merge and sort by name, then paginate in-memory.
     const all = [...untracked, ...tracked].sort((a, b) => a.name.localeCompare(b.name, 'th'))
@@ -122,13 +130,14 @@ export const supabaseProductRepo: ProductRepository = {
     const { data } = await q
     return (data ?? []).map((r) => {
       const row = r as unknown as ProductWithCategory & {
+        has_options:   boolean
         product_stock: Array<{ quantity: number; branch_id: string }> | null
       }
       // Filter the joined array to the branch of interest.
       const match = (row.product_stock ?? []).find((ps) => ps.branch_id === branchId)
       const { product_stock: _ps, ...rest } = row
       void _ps
-      return { ...rest, stock: match?.quantity ?? 0 }
+      return { ...rest, stock: match?.quantity ?? 0, has_options: Boolean(row.has_options) }
     })
   },
 
@@ -156,12 +165,13 @@ export const supabaseProductRepo: ProductRepository = {
     const { data, count } = await q
     const rows: ProductWithStockAndCategory[] = (data ?? []).map((r) => {
       const row = r as unknown as ProductWithCategory & {
+        has_options:   boolean
         product_stock: Array<{ quantity: number; branch_id: string }> | null
       }
       const match = (row.product_stock ?? []).find((ps) => ps.branch_id === opts.branchId)
       const { product_stock: _ps, ...rest } = row
       void _ps
-      return { ...rest, stock: match?.quantity ?? 0 }
+      return { ...rest, stock: match?.quantity ?? 0, has_options: Boolean(row.has_options) }
     })
     return packPaginated(rows, count ?? 0, p)
   },
@@ -191,6 +201,7 @@ export const supabaseProductRepo: ProductRepository = {
     const { data, count } = await q
     const rows: ProductWithStockAndCategory[] = (data ?? []).map((r) => {
       const row = r as unknown as ProductWithCategory & {
+        has_options:   boolean
         product_stock: Array<{
           quantity: number
           branch_id: string
@@ -213,6 +224,7 @@ export const supabaseProductRepo: ProductRepository = {
       return {
         ...rest,
         stock: total,
+        has_options: Boolean(row.has_options),
         stock_by_branch: breakdown.sort((a, b) => a.branch_code.localeCompare(b.branch_code)),
       }
     })
@@ -298,6 +310,7 @@ export const supabaseProductRepo: ProductRepository = {
     const shape = (data: unknown): ProductWithStock | null => {
       if (!data) return null
       const row = data as Product & {
+        has_options:   boolean
         product_stock: Array<{ quantity: number }> | { quantity: number } | null
         category: { vat_exempt?: boolean } | Array<{ vat_exempt?: boolean }> | null
       }
@@ -305,7 +318,7 @@ export const supabaseProductRepo: ProductRepository = {
       const effectiveVat = Boolean(row.vat_exempt) || Boolean(cat?.vat_exempt)
       const { product_stock: _ps, category: _c, ...rest } = row
       void _ps; void _c
-      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(row) }
+      return { ...rest, vat_exempt: effectiveVat, stock: flattenStock(row), has_options: Boolean(row.has_options) }
     }
 
     // For track_stock=true products: inner join gated on stock > 0.

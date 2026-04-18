@@ -162,6 +162,7 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                             className={cn(
                               'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] tabular-nums',
                               b.quantity === 0 && 'opacity-50',
+                              b.quantity < 0 && 'border-destructive text-destructive',
                             )}
                           >
                             <MapPin className="h-2.5 w-2.5" />
@@ -171,7 +172,9 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                       </div>
                     </div>
                   ) : (
-                    <span className="tabular-nums">{product.stock}</span>
+                    <span className={cn('tabular-nums', product.stock < 0 && 'text-destructive font-semibold')}>
+                      {product.stock}
+                    </span>
                   )}
                 </TableCell>
                 <TableCell className="text-right">
@@ -180,6 +183,8 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                 <TableCell className="text-center">
                   {!product.track_stock ? (
                     <Badge variant="outline">ไม่ติดตาม</Badge>
+                  ) : product.stock < 0 ? (
+                    <Badge variant="destructive">ติดลบ</Badge>
                   ) : isLowStock ? (
                     <Badge variant="warning">ใกล้หมด</Badge>
                   ) : (

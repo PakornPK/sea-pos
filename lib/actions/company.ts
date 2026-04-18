@@ -10,14 +10,16 @@ export type CompanyState = { error?: string; success?: boolean } | undefined
  * Company settings the admin can edit. Kept in a `settings` jsonb column on
  * `companies` so future fields can be added without migrations.
  */
-type CompanySettings = {
-  receipt_header?: string   // printed at top of every receipt
-  receipt_footer?: string   // printed at bottom
-  tax_id?:         string   // displayed on receipt if set
-  phone?:          string
-  address?:        string
-  vat_mode?:       'none' | 'included' | 'excluded'
-  vat_rate?:       number
+export type CompanySettings = {
+  receipt_header?:       string   // printed at top of every receipt
+  receipt_footer?:       string   // printed at bottom
+  tax_id?:               string   // displayed on receipt if set
+  phone?:                string
+  address?:              string
+  vat_mode?:             'none' | 'included' | 'excluded'
+  vat_rate?:             number
+  /** When false, sales that would push stock below 0 are blocked. Default: true. */
+  allow_negative_stock?: boolean
 }
 
 export async function updateCompanySettings(
@@ -40,13 +42,14 @@ export async function updateCompanySettings(
       : 7
 
     const formSettings: CompanySettings = {
-      receipt_header: String(formData.get('receipt_header') ?? '').trim() || undefined,
-      receipt_footer: String(formData.get('receipt_footer') ?? '').trim() || undefined,
-      tax_id:         String(formData.get('tax_id')         ?? '').trim() || undefined,
-      phone:          String(formData.get('phone')          ?? '').trim() || undefined,
-      address:        String(formData.get('address')        ?? '').trim() || undefined,
-      vat_mode:       vatMode,
-      vat_rate:       vatMode === 'none' ? undefined : vatRate,
+      receipt_header:       String(formData.get('receipt_header') ?? '').trim() || undefined,
+      receipt_footer:       String(formData.get('receipt_footer') ?? '').trim() || undefined,
+      tax_id:               String(formData.get('tax_id')         ?? '').trim() || undefined,
+      phone:                String(formData.get('phone')          ?? '').trim() || undefined,
+      address:              String(formData.get('address')        ?? '').trim() || undefined,
+      vat_mode:             vatMode,
+      vat_rate:             vatMode === 'none' ? undefined : vatRate,
+      allow_negative_stock: formData.get('allow_negative_stock') !== 'false',
     }
 
     // Read existing settings to preserve upload-managed fields (logo_url, letterhead_url).

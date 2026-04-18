@@ -106,12 +106,14 @@ export const supabaseSaleRepo: SaleRepository = {
     return { id: data.id }
   },
 
-  async insertItems(saleId, items): Promise<string | null> {
+  async insertItems(saleId, items): Promise<{ ids: string[] } | { error: string }> {
     const db = await getDb()
-    const { error } = await db
+    const { data, error } = await db
       .from('sale_items')
       .insert(items.map((i) => ({ sale_id: saleId, ...i })))
-    return error?.message ?? null
+      .select('id')
+    if (error || !data) return { error: error?.message ?? 'บันทึกรายการไม่สำเร็จ' }
+    return { ids: data.map((r) => r.id) }
   },
 
   async listItems(saleId: string) {
@@ -127,7 +129,7 @@ export const supabaseSaleRepo: SaleRepository = {
     const db = await getDb()
     const { data } = await db
       .from('sale_items')
-      .select('*, product:products(name, sku)')
+      .select('*, product:products(name, sku), sale_item_options(group_name, option_name, price_delta)')
       .eq('sale_id', saleId)
       .order('id')
     return (data ?? []) as SaleItemWithProduct[]

@@ -37,6 +37,21 @@ export function AddCategoryForm() {
       <p className="text-xs text-muted-foreground">
         หากระบุ ระบบจะออก SKU อัตโนมัติในรูปแบบ <code>PREFIX-0001</code> เมื่อสร้างสินค้าในหมวดหมู่นี้โดยไม่กรอก SKU เอง
       </p>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs">ประเภทหมวดหมู่</Label>
+        <div className="flex gap-3 text-sm">
+          {([
+            ['sale',   'ขาย (POS)'],
+            ['option', 'ตัวเลือก (Modifier)'],
+            ['both',   'ทั้งสอง'],
+          ] as const).map(([val, label]) => (
+            <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name="category_type" value={val} defaultChecked={val === 'sale'} disabled={pending} />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="vat_exempt" disabled={pending} className="h-4 w-4" />
         ยกเว้น VAT สำหรับสินค้าในหมวดหมู่นี้

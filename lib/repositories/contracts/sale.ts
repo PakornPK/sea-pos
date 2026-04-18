@@ -37,6 +37,12 @@ export type SaleDetail = {
     | null
 }
 
+export type SaleItemOption = {
+  group_name:  string
+  option_name: string
+  price_delta: number
+}
+
 export type SaleItemWithProduct = {
   id: string
   sale_id: string
@@ -48,6 +54,7 @@ export type SaleItemWithProduct = {
     | { name: string; sku: string | null }
     | { name: string; sku: string | null }[]
     | null
+  sale_item_options: SaleItemOption[]
 }
 
 export interface SaleRepository {
@@ -83,7 +90,7 @@ export interface SaleRepository {
   insertItems(
     saleId: string,
     items: Array<{ product_id: string; quantity: number; unit_price: number; subtotal: number }>
-  ): Promise<string | null>
+  ): Promise<{ ids: string[] } | { error: string }>
   listItems(saleId: string): Promise<Pick<SaleItem, 'product_id' | 'quantity'>[]>
   listItemsWithProduct(saleId: string): Promise<SaleItemWithProduct[]>
   markVoided(id: string): Promise<boolean | { error: string }>

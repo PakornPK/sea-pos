@@ -45,6 +45,12 @@ export type {
   PlatformDashboardSummary,
 } from './billing'
 export type {
+  OptionRepository,
+  OptionGroupInput,
+  ProductOptionInput,
+  SaleItemOptionInput,
+} from './options'
+export type {
   LoyaltyRepository,
   MembershipSettingsInput,
   MembershipTierInput,
@@ -91,6 +97,7 @@ import type { AnalyticsRepository }       from './analytics'
 import type { HeldSaleRepository }        from './heldSale'
 import type { BillingRepository }         from './billing'
 import type { LoyaltyRepository }         from './loyalty'
+import type { OptionRepository }          from './options'
 
 /** Aggregate type — an adapter implements all of these to be a valid backend. */
 export interface Repositories {
@@ -113,4 +120,5 @@ export interface Repositories {
   heldSale:      HeldSaleRepository
   billing:       BillingRepository
   loyalty:       LoyaltyRepository
+  option:        OptionRepository
 }

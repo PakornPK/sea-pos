@@ -4,21 +4,41 @@ import { useState, useTransition } from 'react'
 import { Check, Pencil, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { deleteCategory, updateCategoryPrefix, updateCategoryVatExempt } from '@/lib/actions/categories'
+import { deleteCategory, updateCategoryPrefix, updateCategoryVatExempt, updateCategoryType } from '@/lib/actions/categories'
+import type { CategoryType } from '@/types/database'
 
-type Props = {
-  id: string
-  name: string
-  prefix: string | null
-  vatExempt: boolean
+const TYPE_LABELS: Record<CategoryType, string> = {
+  sale:   'ขาย (POS)',
+  option: 'ตัวเลือก',
+  both:   'ทั้งสอง',
 }
 
-export function CategoryRow({ id, name, prefix, vatExempt }: Props) {
+type Props = {
+  id:           string
+  name:         string
+  prefix:       string | null
+  vatExempt:    boolean
+  categoryType: CategoryType
+}
+
+export function CategoryRow({ id, name, prefix, vatExempt, categoryType }: Props) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(prefix ?? '')
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [isExempt, setIsExempt] = useState(vatExempt)
+  const [catType, setCatType] = useState<CategoryType>(categoryType)
+
+  function handleTypeChange(next: CategoryType) {
+    setCatType(next)
+    startTransition(async () => {
+      try { await updateCategoryType(id, next) }
+      catch (e) {
+        setCatType(catType)
+        setError(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
+      }
+    })
+  }
 
   function toggleVat(next: boolean) {
     setError(null)
@@ -94,6 +114,22 @@ export function CategoryRow({ id, name, prefix, vatExempt }: Props) {
             </>
           )}
         </div>
+      </div>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+        <span>ประเภท:</span>
+        {(Object.keys(TYPE_LABELS) as CategoryType[]).map((val) => (
+          <label key={val} className="flex items-center gap-1 cursor-pointer">
+            <input
+              type="radio"
+              name={`cat-type-${id}`}
+              checked={catType === val}
+              onChange={() => handleTypeChange(val)}
+              disabled={pending}
+              className="h-3 w-3"
+            />
+            {TYPE_LABELS[val]}
+          </label>
+        ))}
       </div>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input

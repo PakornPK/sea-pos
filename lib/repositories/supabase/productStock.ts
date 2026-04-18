@@ -111,11 +111,12 @@ export const supabaseProductStockRepo: ProductStockRepository = {
   async decrement(input): Promise<string | null> {
     const db = await getDb()
     const { error } = await db.rpc('decrement_stock', {
-      p_product_id: input.productId,
-      p_branch_id:  input.branchId,
-      p_quantity:   input.quantity,
-      p_sale_id:    input.saleId,
-      p_user_id:    input.userId,
+      p_product_id:     input.productId,
+      p_branch_id:      input.branchId,
+      p_quantity:       input.quantity,
+      p_sale_id:        input.saleId,
+      p_user_id:        input.userId,
+      p_allow_negative: input.allowNegative ?? true,
     })
     return error?.message ?? null
   },

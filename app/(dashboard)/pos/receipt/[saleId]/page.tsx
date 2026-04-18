@@ -139,13 +139,32 @@ export default async function ReceiptPage({
         <div className="space-y-2.5">
           {items.map((item) => {
             const product = item.product as { name: string; sku: string | null } | null
+            const opts = Array.isArray(item.sale_item_options) ? item.sale_item_options : []
+            const basePrice = item.unit_price - opts.reduce((sum, o) => sum + o.price_delta, 0)
             return (
               <div key={item.id} className="flex items-start justify-between gap-2 text-sm">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium leading-snug">{product?.name ?? '—'}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {item.quantity} × {formatBaht(item.unit_price)}
+                  <p className="font-medium leading-snug">
+                    {product?.name ?? '—'} ×{item.quantity}
                   </p>
+                  {opts.length > 0 ? (
+                    <ul className="mt-0.5 space-y-0 text-xs text-muted-foreground">
+                      <li className="flex justify-between pr-1">
+                        <span>· {product?.name ?? '—'}</span>
+                        <span className="tabular-nums">{formatBaht(basePrice)}</span>
+                      </li>
+                      {opts.map((o, i) => (
+                        <li key={i} className="flex justify-between pr-1">
+                          <span>· {o.option_name}</span>
+                          <span className="tabular-nums">{formatBaht(o.price_delta)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">
+                      {item.quantity} × {formatBaht(item.unit_price)}
+                    </p>
+                  )}
                 </div>
                 <span className="tabular-nums font-medium shrink-0">
                   {formatBaht(item.subtotal)}

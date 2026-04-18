@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { requirePageRole } from '@/lib/auth'
-import { productRepo, companyRepo, customerRepo } from '@/lib/repositories'
+import { productRepo, companyRepo, customerRepo, optionRepo } from '@/lib/repositories'
 import { listHeldSales } from '@/lib/actions/heldSales'
 import { POSTerminal } from '@/components/pos/POSTerminal'
 import { DEFAULT_PAGE_SIZE } from '@/lib/pagination'
@@ -28,6 +28,14 @@ export default async function POSPage() {
   ])
   const vatConfig = company ? getVatConfig(company) : DEFAULT_VAT_CONFIG
 
+  // Preload option groups for all products with options on the initial page
+  const hasOptionsIds = initialPage.rows
+    .filter((p) => p.has_options)
+    .map((p) => p.id)
+  const initialOptionsMap = hasOptionsIds.length
+    ? await optionRepo.listForProducts(hasOptionsIds)
+    : {}
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <h1 className="shrink-0 text-[26px] font-bold tracking-tight">ขายสินค้า</h1>
@@ -40,6 +48,7 @@ export default async function POSPage() {
           customers={customers}
           vatConfig={vatConfig}
           initialHeldSales={initialHeldSales}
+          initialOptionsMap={initialOptionsMap}
         />
       </div>
     </div>

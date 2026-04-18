@@ -42,6 +42,13 @@ export const supabaseCategoryRepo: CategoryRepository = {
     return error?.message ?? null
   },
 
+  async updateCategoryType(id, categoryType): Promise<string | null> {
+    const db = await getDb()
+    const { error } = await db.from('categories')
+      .update({ category_type: categoryType }).eq('id', id)
+    return error?.message ?? null
+  },
+
   async delete(id: string): Promise<string | null> {
     const db = await getDb()
     const { error } = await db.from('categories').delete().eq('id', id)

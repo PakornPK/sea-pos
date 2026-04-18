@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, storageRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, storageRepo, optionRepo } from '@/lib/repositories'
 import { checkProductLimit, formatLimitError } from '@/lib/limits'
 import { validateImageUpload, uniqueAssetName } from '@/lib/storage-validation'
 
@@ -99,6 +99,31 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     )
     if (!('error' in upload) && upload.publicUrl) {
       await productRepo.updateImageUrl(res.id, upload.publicUrl)
+    }
+  }
+
+  // Save option groups if provided (JSON encoded in form field)
+  const optionGroupsRaw = formData.get('option_groups') as string | null
+  if (optionGroupsRaw && me.companyId) {
+    try {
+      const groups = JSON.parse(optionGroupsRaw) as Array<{
+        name: string
+        required: boolean
+        multi_select: boolean
+        options: Array<{ name: string; price_delta: number }>
+      }>
+      for (let gi = 0; gi < groups.length; gi++) {
+        const g = groups[gi]
+        const saved = await optionRepo.saveGroup(res.id, me.companyId, {
+          name: g.name, required: g.required, multi_select: g.multi_select, sort_order: gi,
+        })
+        for (let oi = 0; oi < g.options.length; oi++) {
+          const o = g.options[oi]
+          await optionRepo.saveOption(saved.id, { name: o.name, price_delta: o.price_delta, sort_order: oi })
+        }
+      }
+    } catch {
+      // Malformed JSON — skip silently; product is already created
     }
   }
 

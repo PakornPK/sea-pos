@@ -51,12 +51,15 @@ export type Profile = {
   created_at: string
 }
 
+export type CategoryType = 'sale' | 'option' | 'both'
+
 export type Category = {
-  id: string
-  name: string
-  sku_prefix: string | null
-  vat_exempt: boolean
-  created_at: string
+  id:            string
+  name:          string
+  sku_prefix:    string | null
+  vat_exempt:    boolean
+  category_type: CategoryType
+  created_at:    string
 }
 
 export type CategoryInsert = {
@@ -91,7 +94,8 @@ export type ProductWithCategory = Product & {
 
 /** Product joined with its stock at a specific branch. */
 export type ProductWithStock = Product & {
-  stock: number                // resolved from product_stock.quantity
+  stock:       number          // resolved from product_stock.quantity
+  has_options: boolean         // true when option_groups exist for this product
 }
 
 export type ProductWithStockAndCategory = ProductWithStock & {
@@ -451,6 +455,55 @@ export type PlatformInvoice = {
   issued_by:            string | null
   created_at:           string
   updated_at:           string
+}
+
+// ─── Product Options / Modifiers ─────────────────────────────────────────────
+
+export type OptionGroup = {
+  id:           string
+  company_id:   string
+  product_id:   string
+  name:         string
+  required:     boolean
+  multi_select: boolean
+  sort_order:   number
+  created_at:   string
+}
+
+export type ProductOption = {
+  id:                string
+  group_id:          string
+  name:              string
+  price_delta:       number
+  sort_order:        number
+  is_active:         boolean
+  created_at:        string
+  linked_product_id: string | null
+  quantity_per_use:  number
+}
+
+export type OptionGroupWithOptions = OptionGroup & {
+  options: ProductOption[]
+}
+
+/** Selected option captured at cart/sale time. */
+export type SelectedOption = {
+  group_id:          string
+  group_name:        string
+  option_id:         string
+  option_name:       string
+  price_delta:       number
+  linked_product_id: string | null
+}
+
+export type SaleItemOption = {
+  id:                string
+  sale_item_id:      string
+  option_id:         string | null
+  group_name:        string
+  option_name:       string
+  price_delta:       number
+  linked_product_id: string | null
 }
 
 // ─── Membership ────────────────────────────────────────────────────────────────

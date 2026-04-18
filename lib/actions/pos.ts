@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, saleRepo, companyRepo, loyaltyRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, saleRepo, companyRepo, loyaltyRepo, optionRepo } from '@/lib/repositories'
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
 import type { ProductWithStock } from '@/types/database'
 import { computeVat, getVatConfig } from '@/lib/vat'
@@ -41,13 +41,24 @@ export async function findProductByCode(code: string): Promise<ProductWithStock 
 const SELL_ROLES = ['admin', 'manager', 'cashier'] as const
 const VOID_ROLES = ['admin', 'manager'] as const
 
+type CartOption = {
+  group_id:          string
+  group_name:        string
+  option_id:         string
+  option_name:       string
+  price_delta:       number
+  linked_product_id: string | null
+}
+
 type CartItem = {
+  cartKey:   string
   productId: string
-  name: string
-  price: number
-  quantity: number
+  name:      string
+  price:     number
+  quantity:  number
   vatExempt?: boolean
-  trackStock?: boolean  // false = menu item / service; stock is never decremented
+  trackStock?: boolean
+  options:   CartOption[]
 }
 
 export async function createSale(_prev: SaleState, formData: FormData): Promise<SaleState> {
@@ -76,6 +87,8 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   // flags — a tampered payload could mis-state tax or skip stock checks.
   const company = me.companyId ? await companyRepo.getByIdCached(me.companyId) : null
   const vatConfig = getVatConfig(company)
+  const companySettings = (company?.settings ?? {}) as { allow_negative_stock?: boolean }
+  const allowNegative = companySettings.allow_negative_stock !== false  // default true
   const productIds = cart.map((i) => i.productId)
   const [exemptMap, trackStockMap] = await Promise.all([
     productRepo.vatExemptMap(productIds),
@@ -116,29 +129,72 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   })
   if ('error' in header) return { error: header.error }
 
-  const itemsError = await saleRepo.insertItems(
+  const itemsResult = await saleRepo.insertItems(
     header.id,
     cart.map((i) => ({
       product_id: i.productId,
-      quantity: i.quantity,
+      quantity:   i.quantity,
       unit_price: i.price,
-      subtotal: lineTotal(i.price, i.quantity),
+      subtotal:   lineTotal(i.price, i.quantity),
     }))
   )
-  if (itemsError) return { error: itemsError }
+  if ('error' in itemsResult) return { error: itemsResult.error }
 
-  for (const item of cart) {
-    // Skip decrement for untracked products (menu items, services).
-    if (trackStockMap[item.productId] === false) continue
-    const stockErr = await productStockRepo.decrement({
-      productId: item.productId,
-      branchId:  me.activeBranchId,
-      quantity:  item.quantity,
-      saleId:    header.id,
-      userId:    me.id,
+  // Save selected options per sale item (snapshot includes linked_product_id)
+  await Promise.all(
+    cart.map((item, idx) => {
+      if (!item.options?.length) return Promise.resolve()
+      return optionRepo.insertSaleItemOptions(
+        itemsResult.ids[idx],
+        item.options.map((o) => ({
+          option_id:         o.option_id,
+          group_name:        o.group_name,
+          option_name:       o.option_name,
+          price_delta:       o.price_delta,
+          linked_product_id: o.linked_product_id ?? null,
+        }))
+      )
     })
-    if (stockErr) {
-      return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockErr}` }
+  )
+
+  // Deduct main product stock + linked option stock
+  const linkedStockMap = new Map<string, number>()
+  for (const item of cart) {
+    if (trackStockMap[item.productId] !== false) {
+      const stockErr = await productStockRepo.decrement({
+        productId:     item.productId,
+        branchId:      me.activeBranchId,
+        quantity:      item.quantity,
+        saleId:        header.id,
+        userId:        me.id,
+        allowNegative,
+      })
+      if (stockErr) return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockErr}` }
+    }
+    // Accumulate linked product deductions (multiple items may share the same linked product)
+    for (const opt of item.options ?? []) {
+      if (!opt.linked_product_id) continue
+      linkedStockMap.set(
+        opt.linked_product_id,
+        (linkedStockMap.get(opt.linked_product_id) ?? 0) + item.quantity,
+      )
+    }
+  }
+  // Resolve trackStock for linked products and deduct
+  if (linkedStockMap.size > 0) {
+    const linkedIds = Array.from(linkedStockMap.keys())
+    const linkedTrackMap = await productRepo.trackStockMap(linkedIds)
+    for (const [linkedId, qty] of linkedStockMap) {
+      if (linkedTrackMap[linkedId] === false) continue
+      const linkedErr = await productStockRepo.decrement({
+        productId:     linkedId,
+        branchId:      me.activeBranchId,
+        quantity:      qty,
+        saleId:        header.id,
+        userId:        me.id,
+        allowNegative,
+      })
+      if (linkedErr) return { error: `อัปเดตสต๊อกตัวเลือก (${linkedId.slice(0, 8)}) ไม่สำเร็จ: ${linkedErr}` }
     }
   }
 
@@ -179,17 +235,37 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
     if (typeof voidResult !== 'boolean') return { error: voidResult.error }
     if (!voidResult) return { error: 'ออเดอร์นี้ถูกยกเลิกแล้ว หรือไม่พบรายการ' }
 
-    const trackMap = await productRepo.trackStockMap(items.map((i) => i.product_id))
+    const voidNote = `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`
+    const [trackMap, linkedStock] = await Promise.all([
+      productRepo.trackStockMap(items.map((i) => i.product_id)),
+      optionRepo.listLinkedStockForSale(saleId),
+    ])
+
+    // Restore main product stock
     for (const item of items) {
-      // Don't restore stock for untracked products (menu items / services).
       if (trackMap[item.product_id] === false) continue
       await productStockRepo.adjust({
         productId: item.product_id,
         branchId:  saleBranchId,
         delta:     item.quantity,
-        reason:    `ยกเลิกออเดอร์ #${saleId.slice(0, 8).toUpperCase()} — ${reason}`,
+        reason:    voidNote,
         userId:    me.id,
       })
+    }
+
+    // Restore linked option stock
+    if (linkedStock.length > 0) {
+      const linkedTrackMap = await productRepo.trackStockMap(linkedStock.map((r) => r.linked_product_id))
+      for (const { linked_product_id, total_quantity } of linkedStock) {
+        if (linkedTrackMap[linked_product_id] === false) continue
+        await productStockRepo.adjust({
+          productId: linked_product_id,
+          branchId:  saleBranchId,
+          delta:     total_quantity,
+          reason:    voidNote,
+          userId:    me.id,
+        })
+      }
     }
 
     revalidatePath('/inventory')

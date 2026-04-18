@@ -107,11 +107,13 @@ export interface ProductStockRepository {
 
   /** Atomic stock decrement for sales — calls the `decrement_stock` RPC. */
   decrement(input: {
-    productId: string
-    branchId:  string
-    quantity:  number
-    saleId:    string
-    userId:    string
+    productId:      string
+    branchId:       string
+    quantity:       number
+    saleId:         string
+    userId:         string
+    /** Allow stock to go below 0. Defaults to true (warn in UI, don't block sale). */
+    allowNegative?: boolean
   }): Promise<string | null>
 
   /** Stock rows for a single product across every branch. */

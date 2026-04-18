@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireActionRole } from '@/lib/auth'
 import { categoryRepo } from '@/lib/repositories'
+import type { CategoryType } from '@/types/database'
 
 export type CategoryState = { error: string } | undefined
 
@@ -21,10 +22,15 @@ export async function addCategory(
     const name = (formData.get('name') as string).trim()
     if (!name) return { error: 'กรุณาระบุชื่อหมวดหมู่' }
 
+    const rawType = formData.get('category_type') as string | null
+    const category_type: CategoryType =
+      rawType === 'option' ? 'option' : rawType === 'both' ? 'both' : 'sale'
+
     const error = await categoryRepo.create({
       name,
-      sku_prefix: cleanPrefix(formData.get('sku_prefix') as string | null),
-      vat_exempt: formData.get('vat_exempt') === 'on',
+      sku_prefix:    cleanPrefix(formData.get('sku_prefix') as string | null),
+      vat_exempt:    formData.get('vat_exempt') === 'on',
+      category_type,
     })
     if (error) return { error }
 
@@ -50,6 +56,16 @@ export async function updateCategoryVatExempt(categoryId: string, vatExempt: boo
   if (error) throw new Error(error)
   revalidatePath('/inventory/categories')
   revalidatePath('/inventory')
+  if (me.companyId) revalidateTag(`categories:${me.companyId}`, {})
+}
+
+export async function updateCategoryType(categoryId: string, categoryType: CategoryType) {
+  const { me } = await requireActionRole([...MANAGE_ROLES])
+  const error = await categoryRepo.updateCategoryType(categoryId, categoryType)
+  if (error) throw new Error(error)
+  revalidatePath('/inventory/categories')
+  revalidatePath('/inventory')
+  revalidatePath('/pos')
   if (me.companyId) revalidateTag(`categories:${me.companyId}`, {})
 }
 

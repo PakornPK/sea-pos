@@ -29,6 +29,7 @@ import { supabaseAnalyticsRepo }     from './analytics'
 import { supabaseHeldSaleRepo }      from './heldSales'
 import { supabaseBillingRepo }       from './billing'
 import { supabaseLoyaltyRepo }       from './loyalty'
+import { supabaseOptionRepo }        from './options'
 
 export const supabaseRepos: Repositories = {
   company:       supabaseCompanyRepo,
@@ -50,4 +51,5 @@ export const supabaseRepos: Repositories = {
   heldSale:      supabaseHeldSaleRepo,
   billing:       supabaseBillingRepo,
   loyalty:       supabaseLoyaltyRepo,
+  option:        supabaseOptionRepo,
 }
