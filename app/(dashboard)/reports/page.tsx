@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { requirePageRole } from '@/lib/auth'
-import { analyticsRepo, companyRepo, productRepo, productCostItemRepo } from '@/lib/repositories'
+import { analyticsRepo, companyRepo, productRepo, productCostItemRepo, optionRepo } from '@/lib/repositories'
 import { resolveBranchFilter } from '@/lib/branch-filter'
 import { getVatConfig } from '@/lib/vat'
 import { formatBaht, formatDateTime } from '@/lib/format'
@@ -364,7 +364,11 @@ async function CostStructureReport({ selectedProductId }: { selectedProductId: s
   await requirePageRole(ALLOWED)
   const products = await productRepo.listAll()
   const productIds = products.map((p) => p.id)
-  const allCostItems = await productCostItemRepo.listForProducts(productIds)
+
+  const [allCostItems, optionGroups] = await Promise.all([
+    productCostItemRepo.listForProducts(productIds),
+    selectedProductId ? optionRepo.listForProduct(selectedProductId) : Promise.resolve([]),
+  ])
 
   // Index cost items by product_id
   const itemsByProduct = new Map<string, typeof allCostItems>()
@@ -374,99 +378,245 @@ async function CostStructureReport({ selectedProductId }: { selectedProductId: s
     itemsByProduct.set(item.product_id, list)
   }
 
+  // Index product cost (used for option ingredient lookup)
+  const productCostMap = new Map(products.map((p) => [p.id, p.cost]))
   // Index product names for linked_product_id lookup
   const productNameMap = new Map(products.map((p) => [p.id, p.name]))
 
-  // Products that have at least 1 BOM item — these populate the picker
-  const productsWithBom = products.filter((p) => (itemsByProduct.get(p.id)?.length ?? 0) > 0)
+  // All products for the picker, sorted by name
+  const sortedProducts = [...products].sort((a, b) => a.name.localeCompare(b.name, 'th'))
 
   const selected = selectedProductId
-    ? productsWithBom.find((p) => p.id === selectedProductId) ?? null
+    ? (products.find((p) => p.id === selectedProductId) ?? null)
     : null
+
+  const selectedItems = selected ? (itemsByProduct.get(selected.id) ?? []) : []
+  const hasBom = selectedItems.length > 0
+  // Show all option groups (even those without linked ingredients)
+  const groupsWithLinks = optionGroups
+
+  // Server-side debug log — check your terminal
+  if (selectedProductId) {
+    console.log('[BOM Report] product:', selected?.name, '| BOM items:', selectedItems.length, '| option groups:', optionGroups.length, '| groups detail:', JSON.stringify(optionGroups.map(g => ({ id: g.id, name: g.name, options: g.options.length }))))
+  }
 
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h3 className="font-semibold text-sm">โครงสร้างต้นทุนสินค้า (BOM)</h3>
-        {productsWithBom.length > 0 && (
-          <CostProductPicker
-            products={productsWithBom.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
-            currentId={selectedProductId}
-          />
-        )}
+        <CostProductPicker
+          products={sortedProducts.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
+          currentId={selectedProductId}
+        />
       </div>
 
-      {productsWithBom.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          ยังไม่มีสินค้าที่กำหนดโครงสร้างต้นทุน
-        </p>
-      ) : !selected ? (
+      {!selected ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           เลือกสินค้าด้านบนเพื่อดูโครงสร้างต้นทุน
         </p>
+      ) : (!hasBom && groupsWithLinks.length === 0) ? (
+        <div className="py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{selected.name}</span> ยังไม่ได้กำหนดส่วนประกอบต้นทุน
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            ตั้งค่าได้ที่หน้าแก้ไขสินค้า → ส่วน &quot;โครงสร้างต้นทุน&quot; หรือ &quot;ตัวเลือกสินค้า&quot;
+          </p>
+        </div>
       ) : (() => {
-        const items = itemsByProduct.get(selected.id) ?? []
-        const totalCost = items.reduce((acc, it) => acc + it.quantity * it.unit_cost, 0)
-        const margin = selected.price > 0 ? ((selected.price - totalCost) / selected.price) * 100 : null
-        const marginColor = margin === null ? '' : margin > 0 ? 'text-emerald-600' : 'text-red-600'
+        const bomTotal = selectedItems.reduce((acc, it) => acc + it.quantity * it.unit_cost, 0)
+
+        // For margin range: use min/max option cost across required groups
+        // For header range: find best and worst margin across all option combos in required groups.
+        // Sell price = base + price_delta, cost = BOM + ingredient cost.
+        const requiredGroups = groupsWithLinks.filter((g) => g.required)
+        // Compute per-option (margin = sell - cost) for each option in each required group,
+        // then pick min/max margin scenario.
+        let minMargin: number | null = null
+        let maxMargin: number | null = null
+        if (requiredGroups.length > 0 && selected.price > 0) {
+          for (const g of requiredGroups) {
+            for (const o of g.options) {
+              const ingCost = o.linked_product_id
+                ? (productCostMap.get(o.linked_product_id) ?? 0) * (o.quantity_per_use ?? 1)
+                : 0
+              const totalCost = bomTotal + ingCost
+              const sellPrice = selected.price + (o.price_delta ?? 0)
+              const m = sellPrice > 0 ? ((sellPrice - totalCost) / sellPrice) * 100 : 0
+              if (minMargin === null || m < minMargin) minMargin = m
+              if (maxMargin === null || m > maxMargin) maxMargin = m
+            }
+          }
+        } else if (selected.price > 0) {
+          const m = ((selected.price - bomTotal) / selected.price) * 100
+          minMargin = m
+          maxMargin = m
+        }
+        const hasRange = minMargin !== null && maxMargin !== null && Math.abs(maxMargin - minMargin) > 0.01
+
         return (
-          <div>
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2 pb-3 border-b">
+          <div className="space-y-5">
+            {/* Header summary */}
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b">
               <div>
                 <span className="font-semibold">{selected.name}</span>
                 {selected.sku && (
                   <span className="ml-2 text-xs text-muted-foreground font-mono">{selected.sku}</span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-sm tabular-nums">
-                <span className="text-muted-foreground">ราคาขาย {formatBaht(selected.price)}</span>
-                <span>ต้นทุน BOM {formatBaht(totalCost)}</span>
-                {margin !== null && (
-                  <span className={`font-semibold ${marginColor}`}>Margin {margin.toFixed(1)}%</span>
+              <div className="flex items-center gap-4 text-sm tabular-nums flex-wrap">
+                <span className="text-muted-foreground">
+                  ราคาขาย {hasRange ? `${formatBaht(selected.price)}+` : formatBaht(selected.price)}
+                </span>
+                {hasBom && <span>BOM {formatBaht(bomTotal)}</span>}
+                {minMargin !== null && maxMargin !== null && (
+                  <span className={`font-semibold ${(minMargin > 0 ? minMargin : maxMargin) > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    Margin {hasRange ? `${minMargin.toFixed(1)}–${maxMargin.toFixed(1)}%` : `${maxMargin.toFixed(1)}%`}
+                  </span>
                 )}
               </div>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ส่วนประกอบ</TableHead>
-                  <TableHead className="text-right">จำนวน</TableHead>
-                  <TableHead className="text-right">ราคาทุน/หน่วย</TableHead>
-                  <TableHead className="text-right">รวม</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => {
-                  const subtotal = item.quantity * item.unit_cost
-                  const linkedName = item.linked_product_id
-                    ? productNameMap.get(item.linked_product_id)
-                    : null
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-sm">
-                        {item.name}
-                        {linkedName && linkedName !== item.name && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">({linkedName})</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">
-                        {item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(3)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">
-                        {formatBaht(item.unit_cost)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm font-medium">
-                        {formatBaht(subtotal)}
-                      </TableCell>
+
+            {/* Fixed BOM */}
+            {hasBom && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  ต้นทุนคงที่ (BOM)
+                </p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ส่วนประกอบ</TableHead>
+                      <TableHead className="text-right">จำนวน</TableHead>
+                      <TableHead className="text-right">ราคาทุน/หน่วย</TableHead>
+                      <TableHead className="text-right">รวม</TableHead>
                     </TableRow>
-                  )
-                })}
-                <TableRow className="border-t-2 font-semibold bg-muted/30">
-                  <TableCell colSpan={3} className="text-sm">รวมต้นทุน BOM</TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">{formatBaht(totalCost)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedItems.map((item) => {
+                      const subtotal = item.quantity * item.unit_cost
+                      const linkedName = item.linked_product_id
+                        ? productNameMap.get(item.linked_product_id)
+                        : null
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="text-sm">
+                            {item.name}
+                            {linkedName && linkedName !== item.name && (
+                              <span className="ml-1.5 text-xs text-muted-foreground">({linkedName})</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">
+                            {item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(3)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">
+                            {formatBaht(item.unit_cost)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-sm font-medium">
+                            {formatBaht(subtotal)}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    <TableRow className="border-t-2 font-semibold bg-muted/30">
+                      <TableCell colSpan={3} className="text-sm">รวม BOM</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{formatBaht(bomTotal)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {/* Variable cost from options */}
+            {groupsWithLinks.length === 0 && (
+              <p className="text-xs text-muted-foreground pt-2">
+                ไม่มีตัวเลือก (option groups: {optionGroups.length})
+              </p>
+            )}
+            {groupsWithLinks.map((group) => {
+              return (
+                <div key={group.id}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    ตัวเลือก: {group.name}
+                    <span className="ml-2 normal-case font-normal">
+                      ({group.required ? 'จำเป็น' : 'ไม่จำเป็น'} · {group.multi_select ? 'เลือกหลาย' : 'เลือกเดียว'})
+                    </span>
+                  </p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ตัวเลือก</TableHead>
+                        <TableHead>วัตถุดิบ</TableHead>
+                        <TableHead className="text-right">ปริมาณ</TableHead>
+                        <TableHead className="text-right">ต้นทุน/หน่วย</TableHead>
+                        <TableHead className="text-right">ต้นทุนตัวเลือก</TableHead>
+                        <TableHead className="text-right">ต้นทุนรวม</TableHead>
+                        <TableHead className="text-right">ราคาขาย</TableHead>
+                        <TableHead className="text-right">Margin</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.options.map((opt) => {
+                        const unitCost = opt.linked_product_id
+                          ? (productCostMap.get(opt.linked_product_id) ?? 0)
+                          : 0
+                        const ingCost = unitCost * (opt.quantity_per_use ?? 1)
+                        const noCostConfigured = opt.linked_product_id && unitCost === 0
+                        const totalWithOpt = bomTotal + ingCost
+                        const sellPrice = selected.price + (opt.price_delta ?? 0)
+                        const margin = sellPrice > 0
+                          ? ((sellPrice - totalWithOpt) / sellPrice) * 100
+                          : null
+                        const marginColor = margin === null ? '' : margin > 0 ? 'text-emerald-600' : 'text-red-600'
+                        const ingName = opt.linked_product_id
+                          ? productNameMap.get(opt.linked_product_id)
+                          : null
+                        return (
+                          <TableRow key={opt.id}>
+                            <TableCell className="text-sm font-medium">{opt.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {ingName ?? '—'}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-sm">
+                              {opt.linked_product_id
+                                ? ((opt.quantity_per_use ?? 1) % 1 === 0
+                                  ? opt.quantity_per_use ?? 1
+                                  : (opt.quantity_per_use ?? 1).toFixed(3))
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-sm">
+                              {opt.linked_product_id ? (
+                                <span className={noCostConfigured ? 'text-amber-500' : ''}>
+                                  {formatBaht(unitCost)}
+                                  {noCostConfigured && <span className="ml-1 text-[10px]">(!)</span>}
+                                </span>
+                              ) : '—'}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-sm">
+                              {opt.linked_product_id ? formatBaht(ingCost) : '—'}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-sm font-medium">
+                              {formatBaht(totalWithOpt)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-sm">
+                              {formatBaht(sellPrice)}
+                              {opt.price_delta !== 0 && (
+                                <span className="ml-1 text-[10px] text-muted-foreground">
+                                  ({opt.price_delta > 0 ? '+' : ''}{formatBaht(opt.price_delta)})
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className={`text-right tabular-nums text-sm font-semibold ${marginColor}`}>
+                              {margin !== null ? `${margin.toFixed(1)}%` : '—'}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )
+            })}
           </div>
         )
       })()}

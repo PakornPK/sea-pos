@@ -1,13 +1,18 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useActionState } from 'react'
-import { FileText, Printer, XCircle } from 'lucide-react'
+import { Printer, XCircle } from 'lucide-react'
 import { voidInvoice } from '@/lib/actions/billing'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import { sortRows, type SortDir } from '@/lib/sort'
 import { cn } from '@/lib/utils'
 import type { InvoiceListRow } from '@/lib/repositories'
+
+type SortCol = 'invoice_no' | 'buyer_name' | 'issued_at' | 'total_baht' | 'status'
 
 function statusLabel(s: InvoiceListRow['status']): { label: string; variant: 'default' | 'outline' | 'destructive' | 'secondary' } {
   if (s === 'issued') return { label: 'ออกแล้ว', variant: 'default' }
@@ -45,6 +50,14 @@ export function InvoiceList({
   invoices: InvoiceListRow[]
   showCompany?: boolean
 }) {
+  const [sortCol, setSortCol] = useState<SortCol>('issued_at')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
   if (invoices.length === 0) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-border/50 bg-muted/20 px-5 py-8 text-center text-[13px] text-muted-foreground">
@@ -53,21 +66,35 @@ export function InvoiceList({
     )
   }
 
+  const sorted = sortRows(invoices, sortCol as keyof InvoiceListRow, sortDir)
+
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 overflow-hidden">
       <table className="w-full text-[13px]">
         <thead>
           <tr className="border-b border-border/50 bg-muted/30">
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">เลขที่</th>
-            {showCompany && <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">บริษัท</th>}
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">วันที่ออก</th>
-            <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">ยอด</th>
-            <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">สถานะ</th>
+            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+              <SortableHeader label="เลขที่" active={sortCol === 'invoice_no'} dir={sortDir} onClick={() => toggleSort('invoice_no')} />
+            </th>
+            {showCompany && (
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+                <SortableHeader label="บริษัท" active={sortCol === 'buyer_name'} dir={sortDir} onClick={() => toggleSort('buyer_name')} />
+              </th>
+            )}
+            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+              <SortableHeader label="วันที่ออก" active={sortCol === 'issued_at'} dir={sortDir} onClick={() => toggleSort('issued_at')} />
+            </th>
+            <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">
+              <SortableHeader label="ยอด" active={sortCol === 'total_baht'} dir={sortDir} onClick={() => toggleSort('total_baht')} />
+            </th>
+            <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">
+              <SortableHeader label="สถานะ" active={sortCol === 'status'} dir={sortDir} onClick={() => toggleSort('status')} />
+            </th>
             <th className="px-4 py-2.5 text-right font-medium text-muted-foreground"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/40">
-          {invoices.map((inv) => {
+          {sorted.map((inv) => {
             const { label, variant } = statusLabel(inv.status)
             return (
               <tr key={inv.id} className={cn('hover:bg-muted/20', inv.status === 'void' && 'opacity-50')}>
