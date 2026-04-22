@@ -45,7 +45,9 @@ export type Company = {
 export type Profile = {
   id: string
   role: UserRole
-  full_name: string | null
+  first_name: string | null
+  last_name:  string | null
+  full_name:  string | null
   company_id: string | null
   is_platform_admin: boolean
   created_at: string
@@ -266,6 +268,7 @@ export type PurchaseOrder = {
   ordered_at: string | null
   received_at: string | null
   created_at: string
+  confirmed_by_user_id: string | null
 }
 
 export type PurchaseOrderItem = {

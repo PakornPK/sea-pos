@@ -39,9 +39,11 @@ export async function createUser(
     const { me } = await requireActionRole(['admin'])
     if (!me.companyId) return { error: 'ไม่พบข้อมูลบริษัทของคุณ' }
 
-    const email = String(formData.get('email') ?? '').trim().toLowerCase()
-    const password = String(formData.get('password') ?? '')
-    const full_name = String(formData.get('full_name') ?? '').trim() || null
+    const email      = String(formData.get('email') ?? '').trim().toLowerCase()
+    const password   = String(formData.get('password') ?? '')
+    const first_name = String(formData.get('first_name') ?? '').trim() || null
+    const last_name  = String(formData.get('last_name')  ?? '').trim() || null
+    const full_name  = [first_name, last_name].filter(Boolean).join(' ') || null
     const role = String(formData.get('role') ?? 'cashier') as UserRole
 
     if (!email) return { error: 'กรุณาระบุอีเมล' }
@@ -62,7 +64,7 @@ export async function createUser(
     if (usage?.reached) return { error: formatLimitError('user', usage) }
 
     const res = await userRepo.create({
-      email, password, role, full_name,
+      email, password, role, first_name, last_name, full_name,
       companyId: me.companyId,
     })
     if ('error' in res) return { error: res.error }
@@ -84,15 +86,17 @@ export async function createUser(
 export async function updateUser(formData: FormData): Promise<void> {
   const { me } = await requireActionRole(['admin'])
 
-  const id = String(formData.get('id') ?? '')
-  const role = String(formData.get('role') ?? '') as UserRole
-  const full_name = String(formData.get('full_name') ?? '').trim() || null
+  const id         = String(formData.get('id') ?? '')
+  const role       = String(formData.get('role') ?? '') as UserRole
+  const first_name = String(formData.get('first_name') ?? '').trim() || null
+  const last_name  = String(formData.get('last_name')  ?? '').trim() || null
+  const full_name  = [first_name, last_name].filter(Boolean).join(' ') || null
 
   if (!id) throw new Error('ไม่พบผู้ใช้')
   if (!VALID_ROLES.includes(role)) throw new Error('บทบาทไม่ถูกต้อง')
   await assertTargetInMyCompany(id, me.companyId)
 
-  const err = await userRepo.updateProfile(id, { role, full_name })
+  const err = await userRepo.updateProfile(id, { role, first_name, last_name, full_name })
   if (err) throw new Error(err)
 
   revalidatePath('/users')

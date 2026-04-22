@@ -34,7 +34,9 @@ export default async function UsersPage() {
     return {
       id: u.id,
       email: u.email,
-      full_name: u.full_name,
+      first_name: u.first_name,
+      last_name:  u.last_name,
+      full_name:  u.full_name,
       role: u.role,
       created_at: u.created_at,
       branches: userBranches,

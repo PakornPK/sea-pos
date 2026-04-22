@@ -157,10 +157,10 @@ export async function updatePurchaseOrder(
 }
 
 export async function confirmPurchaseOrder(id: string): Promise<void> {
-  await requireActionRole([...MANAGE_ROLES])
+  const { me } = await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
-  const err = await purchaseOrderRepo.confirm(id)
+  const err = await purchaseOrderRepo.confirm(id, me.id)
   if (err) throw new Error(err)
 
   revalidatePath('/purchasing')

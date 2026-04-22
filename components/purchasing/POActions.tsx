@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, XCircle, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   cancelPurchaseOrder, confirmPurchaseOrder,
@@ -35,24 +35,30 @@ export function POActions({ id, status }: Props) {
     })
   }
 
-  if (status === 'received' || status === 'cancelled') return null
+  const canMutate = status !== 'received' && status !== 'cancelled'
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="print:hidden flex flex-col items-end gap-2">
       <div className="flex gap-2">
-        {status === 'draft' && (
+        <Button size="sm" variant="outline" onClick={() => window.print()}>
+          <Printer className="mr-1 h-4 w-4" />
+          พิมพ์
+        </Button>
+        {canMutate && status === 'draft' && (
           <Button size="sm" onClick={handleConfirm} disabled={pending}>
             <CheckCircle2 className="mr-1 h-4 w-4" />
             ยืนยันสั่งซื้อ
           </Button>
         )}
-        <Button
-          size="sm" variant="outline" onClick={handleCancel}
-          disabled={pending} className="text-destructive"
-        >
-          <XCircle className="mr-1 h-4 w-4" />
-          ยกเลิก
-        </Button>
+        {canMutate && (
+          <Button
+            size="sm" variant="outline" onClick={handleCancel}
+            disabled={pending} className="text-destructive"
+          >
+            <XCircle className="mr-1 h-4 w-4" />
+            ยกเลิก
+          </Button>
+        )}
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

@@ -79,8 +79,13 @@ export function AddUserForm({ branches }: Props) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="full_name">ชื่อ-สกุล</Label>
-          <Input id="full_name" name="full_name" disabled={pending} />
+          <Label htmlFor="first_name">ชื่อ</Label>
+          <Input id="first_name" name="first_name" disabled={pending} />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="last_name">นามสกุล</Label>
+          <Input id="last_name" name="last_name" disabled={pending} />
         </div>
 
         <div className="flex flex-col gap-1.5">

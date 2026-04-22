@@ -327,3 +327,49 @@ export async function deleteProduct(productId: string) {
   revalidatePath('/inventory')
   revalidatePath('/pos')
 }
+
+export async function convertStockUnit(
+  productId: string,
+  newUnit: string,
+  factor: number,
+): Promise<{ success: true } | { error: string }> {
+  try {
+    const { me } = await requireActionRole([...ADJUST_ROLES])
+    if (!Number.isFinite(factor) || factor <= 0) return { error: 'ตัวคูณต้องมากกว่า 0' }
+
+    const trimmed = newUnit.trim()
+    if (!trimmed) return { error: 'กรุณาระบุหน่วยใหม่' }
+
+    const product = await productRepo.getById(productId)
+    if (!product) return { error: 'ไม่พบสินค้า' }
+
+    const oldUnit = product.unit ?? 'หน่วย'
+    const branchStocks = await productStockRepo.listForProduct(productId)
+
+    for (const row of branchStocks) {
+      const oldQty = row.quantity
+      const newQty = Math.round(oldQty * factor * 1000) / 1000
+      const delta = newQty - oldQty
+      if (delta === 0) continue
+      const err = await productStockRepo.adjust({
+        productId,
+        branchId: row.branch_id,
+        delta,
+        reason: `เปลี่ยนหน่วย: ${oldUnit} → ${trimmed} (×${factor})`,
+        userId: me.id,
+      })
+      if (err) return { error: `สาขา ${row.branch_name}: ${err}` }
+    }
+
+    const newMinStock = Math.round((product.min_stock ?? 0) * factor * 1000) / 1000
+    const err = await productRepo.update(productId, { unit: trimmed, min_stock: newMinStock })
+    if (err) return { error: err }
+
+    revalidatePath(`/inventory/${productId}/edit`)
+    revalidatePath('/inventory')
+    revalidatePath('/pos')
+    return { success: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
+  }
+}

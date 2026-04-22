@@ -12,6 +12,8 @@ export type ReceiveLine = {
   productSku: string | null
   ordered: number
   received: number
+  poUnit: string | null
+  poConversion: number
 }
 
 export function ReceiveForm({
@@ -42,9 +44,10 @@ export function ReceiveForm({
           <thead className="bg-muted/50 text-left">
             <tr>
               <th className="px-3 py-2 font-medium">สินค้า</th>
-              <th className="px-3 py-2 font-medium text-right w-28">สั่ง</th>
-              <th className="px-3 py-2 font-medium text-right w-28">รับแล้ว</th>
-              <th className="px-3 py-2 font-medium text-right w-28">คงเหลือ</th>
+              <th className="px-3 py-2 font-medium text-right w-16">หน่วย</th>
+              <th className="px-3 py-2 font-medium text-right w-24">สั่ง</th>
+              <th className="px-3 py-2 font-medium text-right w-24">รับแล้ว</th>
+              <th className="px-3 py-2 font-medium text-right w-24">คงเหลือ</th>
               <th className="px-3 py-2 font-medium text-right w-32">รับครั้งนี้</th>
             </tr>
           </thead>
@@ -57,6 +60,12 @@ export function ReceiveForm({
                     <div className="font-medium">{l.productName}</div>
                     {l.productSku && (
                       <div className="text-xs text-muted-foreground">{l.productSku}</div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right text-sm text-muted-foreground">
+                    {l.poUnit ?? '—'}
+                    {l.poConversion !== 1 && (
+                      <div className="text-[10px]">×{l.poConversion}</div>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{l.ordered}</td>

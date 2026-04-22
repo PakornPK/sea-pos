@@ -103,11 +103,15 @@ export const supabasePurchaseOrderRepo: PurchaseOrderRepository = {
     return error?.message ?? null
   },
 
-  async confirm(id: string): Promise<string | null> {
+  async confirm(id: string, confirmedByUserId: string): Promise<string | null> {
     const db = await getDb()
     const { error } = await db
       .from('purchase_orders')
-      .update({ status: 'ordered', ordered_at: new Date().toISOString() })
+      .update({
+        status: 'ordered',
+        ordered_at: new Date().toISOString(),
+        confirmed_by_user_id: confirmedByUserId,
+      })
       .eq('id', id)
       .eq('status', 'draft')
     return error?.message ?? null

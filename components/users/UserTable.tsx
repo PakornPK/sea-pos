@@ -22,10 +22,12 @@ import type { Branch, UserRole } from '@/types/database'
 export type UserRow = {
   id: string
   email: string
-  full_name: string | null
+  first_name: string | null
+  last_name:  string | null
+  full_name:  string | null
   role: UserRole
   created_at: string
-  branches: Branch[]        // assigned branches, default first
+  branches: Branch[]
   default_branch_id: string | null
 }
 
@@ -33,10 +35,10 @@ export type UserRow = {
 type UserTableProps = {
   users: UserRow[]
   currentUserId: string
-  allBranches: Branch[]     // every branch in the company (for the editor)
+  allBranches: Branch[]
 }
 
-type SortCol = 'email' | 'full_name' | 'role'
+type SortCol = 'email' | 'first_name' | 'role'
 
 export function UserTable({ users, currentUserId, allBranches }: UserTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -127,7 +129,7 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
               <SortableHeader label="อีเมล" active={sortCol === 'email'} dir={sortDir} onClick={() => toggleSort('email')} />
             </TableHead>
             <TableHead>
-              <SortableHeader label="ชื่อ-สกุล" active={sortCol === 'full_name'} dir={sortDir} onClick={() => toggleSort('full_name')} />
+              <SortableHeader label="ชื่อ-สกุล" active={sortCol === 'first_name'} dir={sortDir} onClick={() => toggleSort('first_name')} />
             </TableHead>
             <TableHead>
               <SortableHeader label="บทบาท" active={sortCol === 'role'} dir={sortDir} onClick={() => toggleSort('role')} />
@@ -152,12 +154,21 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
                         <Label className="text-xs">อีเมล</Label>
                         <Input value={u.email} disabled />
                       </div>
-                      <div className="flex-1 min-w-[180px]">
-                        <Label className="text-xs" htmlFor={`name-${u.id}`}>ชื่อ-สกุล</Label>
+                      <div className="flex-1 min-w-[130px]">
+                        <Label className="text-xs" htmlFor={`fn-${u.id}`}>ชื่อ</Label>
                         <Input
-                          id={`name-${u.id}`}
-                          name="full_name"
-                          defaultValue={u.full_name ?? ''}
+                          id={`fn-${u.id}`}
+                          name="first_name"
+                          defaultValue={u.first_name ?? ''}
+                          disabled={pending}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-[130px]">
+                        <Label className="text-xs" htmlFor={`ln-${u.id}`}>นามสกุล</Label>
+                        <Input
+                          id={`ln-${u.id}`}
+                          name="last_name"
+                          defaultValue={u.last_name ?? ''}
                           disabled={pending}
                         />
                       </div>
@@ -270,7 +281,12 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
                   {u.email}
                   {isMe && <span className="ml-2 text-xs text-muted-foreground">(คุณ)</span>}
                 </TableCell>
-                <TableCell>{u.full_name || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell>
+                  {(() => {
+                    const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.full_name
+                    return name || <span className="text-muted-foreground">—</span>
+                  })()}
+                </TableCell>
                 <TableCell>
                   <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{ROLE_LABELS[u.role]}</Badge>
                 </TableCell>

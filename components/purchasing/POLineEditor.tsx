@@ -66,6 +66,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
   }
 
   const productMap = new Map(localProducts.map((p) => [p.id, p]))
+  const selectedProduct = selectedProductId ? productMap.get(selectedProductId) : null
 
   function emit(next: POLine[]) {
     setLines(next)
@@ -182,7 +183,14 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
                   const pid = e.target.value
                   setSelectedProductId(pid)
                   const p = productMap.get(pid)
-                  if (p) setCost(Number(p.cost ?? 0))
+                  if (p) {
+                    const stockCost = Number(p.cost ?? 0)
+                    const conv = (p.po_unit && p.po_conversion && p.po_conversion !== 1)
+                      ? p.po_conversion
+                      : 1
+                    setCost(Math.round(stockCost * conv * 10000) / 10000)
+                    setQty(1)
+                  }
                 }}
               >
                 <option value="">— เลือกสินค้า —</option>
@@ -197,9 +205,16 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
               </NativeSelect>
             </div>
             <div className="col-span-2 flex flex-col gap-1">
-              <Label className="text-xs">จำนวน</Label>
+              <Label className="text-xs">
+                จำนวน{selectedProduct?.po_unit ? ` (${selectedProduct.po_unit})` : selectedProduct?.unit ? ` (${selectedProduct.unit})` : ''}
+              </Label>
               <Input type="number" min={1} value={qty || ''}
                 onChange={(e) => setQty(Number(e.target.value))} />
+              {selectedProduct?.po_unit && selectedProduct.po_conversion !== 1 && (
+                <p className="text-[10px] text-muted-foreground">
+                  1 {selectedProduct.po_unit} = {selectedProduct.po_conversion} {selectedProduct.unit}
+                </p>
+              )}
             </div>
             <div className="col-span-3 flex flex-col gap-1">
               <Label className="text-xs">ราคาทุน / หน่วย (฿)</Label>
@@ -376,7 +391,8 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
               <tr>
                 <th className="px-3 py-2 font-medium">สินค้า</th>
                 <th className="px-3 py-2 font-medium text-right w-24">จำนวน</th>
-                <th className="px-3 py-2 font-medium text-right w-32">ราคาทุน</th>
+                <th className="px-3 py-2 font-medium w-16">หน่วย</th>
+                <th className="px-3 py-2 font-medium text-right w-32">ราคาทุน/หน่วย</th>
                 <th className="px-3 py-2 font-medium text-right w-28">รวม</th>
                 <th className="px-3 py-2 w-10"></th>
               </tr>
@@ -384,6 +400,8 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
             <tbody>
               {lines.map((l) => {
                 const p = productMap.get(l.productId) ?? localProducts.find((pp) => pp.id === l.productId)
+                const poUnit = p?.po_unit || p?.unit || null
+                const hasConversion = p?.po_unit && p.po_conversion && p.po_conversion !== 1
                 return (
                   <tr key={l.productId} className="border-t">
                     <td className="px-3 py-2">
@@ -398,6 +416,14 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
                         onChange={(e) => updateLine(l.productId, { quantity: Number(e.target.value) })}
                         className="text-right"
                       />
+                    </td>
+                    <td className="px-3 py-2 text-sm">
+                      <span className="text-muted-foreground">{poUnit ?? '—'}</span>
+                      {hasConversion && (
+                        <div className="text-[10px] text-muted-foreground">
+                          ×{p!.po_conversion} {p!.unit}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <Input
@@ -426,21 +452,21 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
               {showVat ? (
                 <>
                   <tr className="text-muted-foreground">
-                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs">ยอดก่อน VAT</td>
+                    <td colSpan={4} className="px-3 py-1.5 text-right text-xs">ยอดก่อน VAT</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-xs">
                       {formatBaht(breakdown!.subtotalExVat)}
                     </td>
                     <td></td>
                   </tr>
                   <tr className="text-muted-foreground">
-                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs">VAT {vatConfig!.rate}%</td>
+                    <td colSpan={4} className="px-3 py-1.5 text-right text-xs">VAT {vatConfig!.rate}%</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-xs">
                       {formatBaht(breakdown!.vatAmount)}
                     </td>
                     <td></td>
                   </tr>
                   <tr className="border-t">
-                    <td colSpan={3} className="px-3 py-2 text-right font-medium">รวมทั้งสิ้น</td>
+                    <td colSpan={4} className="px-3 py-2 text-right font-medium">รวมทั้งสิ้น</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">
                       {formatBaht(breakdown!.total)}
                     </td>
@@ -449,7 +475,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
                 </>
               ) : (
                 <tr>
-                  <td colSpan={3} className="px-3 py-2 text-right font-medium">ยอดรวม</td>
+                  <td colSpan={4} className="px-3 py-2 text-right font-medium">ยอดรวม</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">
                     {formatBaht(total)}
                   </td>

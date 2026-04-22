@@ -60,7 +60,7 @@ export interface PurchaseOrderRepository {
       vat_amount: number
     }
   ): Promise<string | null>
-  confirm(id: string): Promise<string | null>
+  confirm(id: string, confirmedByUserId: string): Promise<string | null>
   cancel(id: string): Promise<string | null>
   receiveItem(input: { itemId: string; qty: number; stockQty: number; userId: string }): Promise<string | null>
 }

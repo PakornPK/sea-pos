@@ -4,11 +4,12 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requirePageRole } from '@/lib/auth'
 import {
-  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo, branchRepo, companyRepo,
+  purchaseOrderRepo, supplierRepo, productRepo, categoryRepo, branchRepo, companyRepo, userRepo,
 } from '@/lib/repositories'
 import { getVatConfig, computeVat } from '@/lib/vat'
 import { POForm } from '@/components/purchasing/POForm'
 import { POActions } from '@/components/purchasing/POActions'
+import { POSignature } from '@/components/purchasing/POSignature'
 import { ReceiveForm, type ReceiveLine } from '@/components/purchasing/ReceiveForm'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -28,7 +29,7 @@ export default async function PODetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  await requirePageRole(['admin', 'manager', 'purchasing'])
+  const { me } = await requirePageRole(['admin', 'manager', 'purchasing'])
 
   const [po, items, suppliers, products, categories, company] = await Promise.all([
     purchaseOrderRepo.getById(id),
@@ -42,7 +43,29 @@ export default async function PODetailPage({
 
   if (!po) notFound()
   const supplier = suppliers.find((s) => s.id === po.supplier_id)
-  const branch = po.branch_id ? await branchRepo.getById(po.branch_id) : null
+  const [branch, companyUsers] = await Promise.all([
+    po.branch_id ? branchRepo.getById(po.branch_id) : Promise.resolve(null),
+    me.companyId ? userRepo.listByCompany(me.companyId) : Promise.resolve([]),
+  ])
+
+  function userName(u: { first_name: string | null; last_name: string | null; full_name: string | null }) {
+    return [u.first_name, u.last_name].filter(Boolean).join(' ') || u.full_name || null
+  }
+
+  const PURCHASING_ROLES = new Set(['admin', 'manager', 'purchasing'])
+  const signerOptions = companyUsers
+    .filter((u) => PURCHASING_ROLES.has(u.role) || u.id === po.user_id)
+    .map((u) => ({
+      id: u.id,
+      name: userName(u),
+      email: u.email,
+    }))
+
+  // For confirmed/received POs, lock the signature to whoever approved it.
+  const confirmedByUser = po.confirmed_by_user_id
+    ? companyUsers.find((u) => u.id === po.confirmed_by_user_id) ?? null
+    : null
+  const lockedSignerName = confirmedByUser ? userName(confirmedByUser) : null
 
   const isDraft    = po.status === 'draft'
   const isOrdered  = po.status === 'ordered'
@@ -92,11 +115,13 @@ export default async function PODetailPage({
   const receiveLines: ReceiveLine[] = items.map((i) => {
     const prod = Array.isArray(i.product) ? i.product[0] : i.product
     return {
-      itemId:      i.id,
-      productName: prod?.name ?? '—',
-      productSku:  prod?.sku ?? null,
-      ordered:     i.quantity_ordered,
-      received:    i.quantity_received,
+      itemId:       i.id,
+      productName:  prod?.name ?? '—',
+      productSku:   prod?.sku ?? null,
+      ordered:      i.quantity_ordered,
+      received:     i.quantity_received,
+      poUnit:       prod?.po_unit ?? null,
+      poConversion: prod?.po_conversion ?? 1,
     }
   })
 
@@ -106,7 +131,7 @@ export default async function PODetailPage({
         <div className="flex items-center gap-3">
           <Link
             href="/purchasing"
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'print:hidden')}
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -172,7 +197,7 @@ export default async function PODetailPage({
 
       {/* Body: edit form for drafts, read-only lines for other statuses */}
       {isDraft ? (
-        <div>
+        <div className="print:hidden">
           <h2 className="text-[15px] font-semibold tracking-tight mb-3">แก้ไขใบสั่งซื้อ</h2>
           <POForm
             suppliers={suppliers}
@@ -195,15 +220,18 @@ export default async function PODetailPage({
               <thead className="border-b border-border/60 bg-muted/20 text-left">
                 <tr>
                   <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">สินค้า</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-24">สั่ง</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-20">สั่ง</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground w-16">หน่วย</th>
                   <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-24">รับแล้ว</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-32">ราคาทุน</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-32">ราคาทุน/หน่วย</th>
                   <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground text-right w-32">รวม</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((i) => {
                   const prod = Array.isArray(i.product) ? i.product[0] : i.product
+                  const poUnit = prod?.po_unit || prod?.unit || null
+                  const hasConversion = prod?.po_unit && prod.po_conversion && prod.po_conversion !== 1
                   return (
                     <tr key={i.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-2.5">
@@ -213,6 +241,12 @@ export default async function PODetailPage({
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{i.quantity_ordered}</td>
+                      <td className="px-3 py-2.5 text-sm text-muted-foreground">
+                        {poUnit ?? '—'}
+                        {hasConversion && (
+                          <div className="text-[10px]">×{prod!.po_conversion} {prod!.unit}</div>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
                         {i.quantity_received}
                         {i.quantity_received < i.quantity_ordered && (
@@ -235,19 +269,19 @@ export default async function PODetailPage({
                 {po.vat_amount > 0 ? (
                   <>
                     <tr className="text-muted-foreground">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-[12px]">ยอดก่อน VAT</td>
+                      <td colSpan={4} className="px-3 py-1.5 text-right text-[12px]">ยอดก่อน VAT</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-[12px]">
                         {formatBaht(po.subtotal_ex_vat)}
                       </td>
                     </tr>
                     <tr className="text-muted-foreground">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-[12px]">VAT ซื้อ</td>
+                      <td colSpan={4} className="px-3 py-1.5 text-right text-[12px]">VAT ซื้อ</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-[12px]">
                         {formatBaht(po.vat_amount)}
                       </td>
                     </tr>
                     <tr className="border-t border-border/60">
-                      <td colSpan={3} className="px-3 py-2.5 text-right font-medium">รวมทั้งสิ้น</td>
+                      <td colSpan={4} className="px-3 py-2.5 text-right font-medium">รวมทั้งสิ้น</td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
                         {formatBaht(po.total_amount)}
                       </td>
@@ -255,7 +289,7 @@ export default async function PODetailPage({
                   </>
                 ) : (
                   <tr>
-                    <td colSpan={3} className="px-3 py-2.5 text-right font-medium">ยอดรวม</td>
+                    <td colSpan={4} className="px-3 py-2.5 text-right font-medium">ยอดรวม</td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
                       {formatBaht(po.total_amount)}
                     </td>
@@ -269,11 +303,18 @@ export default async function PODetailPage({
 
       {/* Receive UI: only when status = ordered */}
       {isOrdered && (
-        <div>
+        <div className="print:hidden">
           <h2 className="text-[15px] font-semibold tracking-tight mb-3">รับของ</h2>
           <ReceiveForm id={po.id} lines={receiveLines} />
         </div>
       )}
+
+      <POSignature
+        poId={po.id}
+        creatorId={po.user_id}
+        signerOptions={signerOptions}
+        lockedSignerName={lockedSignerName}
+      />
     </div>
   )
 }

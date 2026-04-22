@@ -395,11 +395,6 @@ async function CostStructureReport({ selectedProductId }: { selectedProductId: s
   // Show all option groups (even those without linked ingredients)
   const groupsWithLinks = optionGroups
 
-  // Server-side debug log — check your terminal
-  if (selectedProductId) {
-    console.log('[BOM Report] product:', selected?.name, '| BOM items:', selectedItems.length, '| option groups:', optionGroups.length, '| groups detail:', JSON.stringify(optionGroups.map(g => ({ id: g.id, name: g.name, options: g.options.length }))))
-  }
-
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/60 p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -529,9 +524,7 @@ async function CostStructureReport({ selectedProductId }: { selectedProductId: s
 
             {/* Variable cost from options */}
             {groupsWithLinks.length === 0 && (
-              <p className="text-xs text-muted-foreground pt-2">
-                ไม่มีตัวเลือก (option groups: {optionGroups.length})
-              </p>
+              <p className="text-xs text-muted-foreground pt-2">ไม่มีตัวเลือก</p>
             )}
             {groupsWithLinks.map((group) => {
               return (

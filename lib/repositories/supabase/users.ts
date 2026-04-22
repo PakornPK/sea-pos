@@ -19,11 +19,11 @@ export const supabaseUserRepo: UserRepository = {
     const admin = getAdminDb()
     const [{ data: authData }, { data: profiles }] = await Promise.all([
       admin.auth.admin.listUsers({ perPage: 1000 }),
-      admin.from('profiles').select('id, role, full_name'),
+      admin.from('profiles').select('id, role, first_name, last_name, full_name'),
     ])
 
     const profileMap = new Map(
-      (profiles ?? []).map((p: { id: string; role?: string; full_name?: string | null }) =>
+      (profiles ?? []).map((p: { id: string; role?: string; first_name?: string | null; last_name?: string | null; full_name?: string | null }) =>
         [p.id, p]
       )
     )
@@ -35,7 +35,9 @@ export const supabaseUserRepo: UserRepository = {
         email: u.email ?? '',
         created_at: u.created_at,
         role: ((p?.role as UserRole) ?? 'cashier'),
-        full_name: (p?.full_name as string | null) ?? null,
+        first_name: (p?.first_name as string | null) ?? null,
+        last_name:  (p?.last_name  as string | null) ?? null,
+        full_name:  (p?.full_name  as string | null) ?? null,
       }
     }).sort((a, b) => a.email.localeCompare(b.email))
   },
@@ -44,23 +46,26 @@ export const supabaseUserRepo: UserRepository = {
     const admin = getAdminDb()
     // 1. Get the profile IDs for this company (service role — no RLS filter
     //    applies, but we explicitly filter by company_id).
-    const { data: profiles } = await admin
+    const { data: profiles, error: profilesErr } = await admin
       .from('profiles')
-      .select('id, role, full_name')
+      .select('id, role, first_name, last_name, full_name')
       .eq('company_id', companyId)
+
+    if (profilesErr) {
+      console.error('[userRepo.listByCompany] profiles query failed:', profilesErr.message)
+      return []
+    }
 
     const profileList = (profiles ?? []) as Array<{
       id: string
       role: string | null
-      full_name: string | null
+      first_name: string | null
+      last_name:  string | null
+      full_name:  string | null
     }>
     const idSet = new Set(profileList.map((p) => p.id))
     if (idSet.size === 0) return []
 
-    // 2. Fetch auth.users and join by id (only keep rows in idSet).
-    //    listUsers doesn't support filtering by id[], so we page through
-    //    and filter client-side. perPage=1000 is fine up to 1000 users
-    //    per auth project; we'll revisit when that ceiling matters.
     const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 })
 
     const rows: UserListRow[] = []
@@ -72,7 +77,9 @@ export const supabaseUserRepo: UserRepository = {
         email: u.email ?? '',
         created_at: u.created_at,
         role: ((p?.role as UserRole) ?? 'cashier'),
-        full_name: p?.full_name ?? null,
+        first_name: p?.first_name ?? null,
+        last_name:  p?.last_name  ?? null,
+        full_name:  p?.full_name  ?? null,
       })
     }
     return rows.sort((a, b) => a.email.localeCompare(b.email))
@@ -96,19 +103,21 @@ export const supabaseUserRepo: UserRepository = {
       // company_id tells handle_new_user to attach to this tenant instead
       // of spawning a fresh company for the invited user.
       user_metadata: {
-        role: input.role,
-        full_name: input.full_name,
+        role:       input.role,
+        first_name: input.first_name,
+        last_name:  input.last_name,
+        full_name:  input.full_name,
         company_id: input.companyId,
       },
     })
     if (error) return { error: error.message }
 
-    // Safety net: upsert the profile with the exact role + company, in case
-    // the trigger raced or the metadata key was ignored.
     await admin.from('profiles').upsert({
-      id: data.user.id,
-      role: input.role,
-      full_name: input.full_name,
+      id:         data.user.id,
+      role:       input.role,
+      first_name: input.first_name,
+      last_name:  input.last_name,
+      full_name:  input.full_name,
       company_id: input.companyId,
     })
     return { id: data.user.id }
