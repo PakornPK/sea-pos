@@ -3,7 +3,7 @@
 -- ⚠️  CAUTION: Deletes ALL product, sales, and customer data
 -- Safe to run multiple times (idempotent)
 --
--- Assumes migrations up to 042 have been applied.
+-- Assumes migrations up to 045 have been applied.
 -- ============================================================
 
 BEGIN;
@@ -298,13 +298,25 @@ BEGIN
     );
   END IF;
 
-  INSERT INTO public.profiles (id, role, full_name, company_id)
+  INSERT INTO public.profiles (id, role, first_name, last_name, full_name, company_id)
   SELECT u.id,
          CASE u.email
            WHEN 'admin@sea-pos.test'      THEN 'admin'
            WHEN 'manager@sea-pos.test'    THEN 'manager'
            WHEN 'cashier@sea-pos.test'    THEN 'cashier'
            WHEN 'purchasing@sea-pos.test' THEN 'purchasing'
+         END,
+         CASE u.email
+           WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแล'
+           WHEN 'manager@sea-pos.test'    THEN 'ผู้จัดการ'
+           WHEN 'cashier@sea-pos.test'    THEN 'พนักงาน'
+           WHEN 'purchasing@sea-pos.test' THEN 'เจ้าหน้าที่'
+         END,
+         CASE u.email
+           WHEN 'admin@sea-pos.test'      THEN 'ระบบ'
+           WHEN 'manager@sea-pos.test'    THEN 'ร้าน'
+           WHEN 'cashier@sea-pos.test'    THEN 'เก็บเงิน'
+           WHEN 'purchasing@sea-pos.test' THEN 'จัดซื้อ'
          END,
          CASE u.email
            WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแลระบบ'
@@ -322,6 +334,8 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE
     SET role       = EXCLUDED.role,
+        first_name = EXCLUDED.first_name,
+        last_name  = EXCLUDED.last_name,
         full_name  = EXCLUDED.full_name,
         company_id = EXCLUDED.company_id;
 END $$;
@@ -517,10 +531,12 @@ BEGIN
   INSERT INTO purchase_orders (
     id, supplier_id, user_id, branch_id, status,
     total_amount, subtotal_ex_vat, vat_amount, notes,
+    confirmed_by_user_id,
     ordered_at, received_at, created_at
   ) VALUES (
     v_po, v_supplier1, v_purchasing, v_branch, 'received',
     v_total, v_net, v_vat, 'ล็อตมาม่า + ข้าวกล่อง (demo seed)',
+    v_purchasing,
     NOW() - INTERVAL '7 days', NOW() - INTERVAL '5 days', NOW() - INTERVAL '7 days'
   );
   INSERT INTO purchase_order_items (po_id, product_id, quantity_ordered, quantity_received, unit_cost) VALUES
@@ -536,10 +552,12 @@ BEGIN
   INSERT INTO purchase_orders (
     id, supplier_id, user_id, branch_id, status,
     total_amount, subtotal_ex_vat, vat_amount, notes,
+    confirmed_by_user_id,
     ordered_at, received_at, created_at
   ) VALUES (
     v_po, v_supplier2, v_purchasing, v_branch, 'received',
     v_total, v_net, v_vat, 'ล็อตน้ำดื่ม (demo seed)',
+    v_purchasing,
     NOW() - INTERVAL '4 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '4 days'
   );
   INSERT INTO purchase_order_items (po_id, product_id, quantity_ordered, quantity_received, unit_cost) VALUES
@@ -555,10 +573,12 @@ BEGIN
   INSERT INTO purchase_orders (
     id, supplier_id, user_id, branch_id, status,
     total_amount, subtotal_ex_vat, vat_amount, notes,
+    confirmed_by_user_id,
     ordered_at, received_at, created_at
   ) VALUES (
     v_po, v_supplier1, v_purchasing, v_branch, 'received',
     v_total, v_net, v_vat, 'วัตถุดิบคาเฟ่ (demo seed)',
+    v_purchasing,
     NOW() - INTERVAL '5 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '5 days'
   );
   -- quantity_ordered/received in PO units (กก./ลิตร)
