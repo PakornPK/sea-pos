@@ -62,7 +62,7 @@ export const supabaseProductRepo: ProductRepository = {
     const select = '*, category:categories(vat_exempt, category_type), product_stock!inner(quantity, branch_id)'
     const selectLeft = '*, category:categories(vat_exempt, category_type), product_stock!left(quantity, branch_id)'
 
-    const searchTerm = opts.search?.trim().replace(/[%,]/g, '') ?? ''
+    const searchTerm = opts.search?.trim().slice(0, 100).replace(/[%,]/g, '') ?? ''
 
     // Two parallel queries:
     // A) tracked products (track_stock=true): must have stock > 0 at this branch
@@ -123,7 +123,7 @@ export const supabaseProductRepo: ProductRepository = {
 
     if (opts.categoryId) q = q.eq('category_id', opts.categoryId)
     if (opts.search?.trim()) {
-      const term = opts.search.trim().replace(/[%,]/g, '')
+      const term = opts.search.trim().slice(0, 100).replace(/[%,]/g, '')
       q = q.or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
     }
 
@@ -158,7 +158,7 @@ export const supabaseProductRepo: ProductRepository = {
 
     if (opts.categoryId) q = q.eq('category_id', opts.categoryId)
     if (opts.search?.trim()) {
-      const term = opts.search.trim().replace(/[%,]/g, '')
+      const term = opts.search.trim().slice(0, 100).replace(/[%,]/g, '')
       q = q.or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
     }
 
@@ -194,7 +194,7 @@ export const supabaseProductRepo: ProductRepository = {
 
     if (opts.categoryId) q = q.eq('category_id', opts.categoryId)
     if (opts.search?.trim()) {
-      const term = opts.search.trim().replace(/[%,]/g, '')
+      const term = opts.search.trim().slice(0, 100).replace(/[%,]/g, '')
       q = q.or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
     }
 

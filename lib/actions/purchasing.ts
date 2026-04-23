@@ -160,6 +160,10 @@ export async function confirmPurchaseOrder(id: string): Promise<void> {
   const { me } = await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
+  const status = await purchaseOrderRepo.getStatus(id)
+  if (!status) throw new Error('ไม่พบใบสั่งซื้อ')
+  if (status !== 'draft') throw new Error('ยืนยันได้เฉพาะใบสั่งซื้อที่เป็นฉบับร่างเท่านั้น')
+
   const err = await purchaseOrderRepo.confirm(id, me.id)
   if (err) throw new Error(err)
 

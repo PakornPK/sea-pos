@@ -42,7 +42,7 @@ export const supabaseCustomerRepo: CustomerRepository = {
       .order('name')
       .range(from, to)
 
-    const term = opts.search?.trim()
+    const term = opts.search?.trim().slice(0, 100)
     if (term) {
       const safe = term.replace(/[%_]/g, '\\$&')
       q = q.or(`name.ilike.%${safe}%,phone.ilike.%${safe}%,email.ilike.%${safe}%`)

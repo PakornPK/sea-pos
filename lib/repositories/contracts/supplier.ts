@@ -11,6 +11,7 @@ export type SupplierInput = {
 export interface SupplierRepository {
   list(): Promise<Supplier[]>
   listPaginated(p: PageParams): Promise<Paginated<Supplier>>
+  getById(id: string): Promise<Supplier | null>
   create(input: SupplierInput): Promise<string | null>
   update(id: string, input: SupplierInput): Promise<string | null>
   delete(id: string): Promise<string | null>

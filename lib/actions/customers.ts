@@ -49,6 +49,10 @@ export async function updateCustomer(
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบลูกค้า' }
 
+    // Verify ownership via RLS-scoped read before mutating.
+    const existing = await customerRepo.getById(id)
+    if (!existing) return { error: 'ไม่พบลูกค้า' }
+
     const payload = parseCustomerForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อลูกค้า' }
 
@@ -67,6 +71,9 @@ export async function updateCustomer(
 export async function deleteCustomer(id: string): Promise<void> {
   const { me } = await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบลูกค้า')
+
+  const existing = await customerRepo.getById(id)
+  if (!existing) throw new Error('ไม่พบลูกค้า')
 
   if (await customerRepo.hasSales(id)) {
     throw new Error('ไม่สามารถลบลูกค้าที่มีประวัติการขายได้')

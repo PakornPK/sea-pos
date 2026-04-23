@@ -46,6 +46,9 @@ export async function updateSupplier(
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบผู้จำหน่าย' }
 
+    const existing = await supplierRepo.getById(id)
+    if (!existing) return { error: 'ไม่พบผู้จำหน่าย' }
+
     const payload = parseForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อผู้จำหน่าย' }
 
@@ -62,6 +65,9 @@ export async function updateSupplier(
 export async function deleteSupplier(id: string): Promise<void> {
   await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบผู้จำหน่าย')
+
+  const existing = await supplierRepo.getById(id)
+  if (!existing) throw new Error('ไม่พบผู้จำหน่าย')
 
   if (await supplierRepo.hasOrders(id)) {
     throw new Error('ไม่สามารถลบผู้จำหน่ายที่มีใบสั่งซื้อได้')

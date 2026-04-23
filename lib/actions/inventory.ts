@@ -228,6 +228,9 @@ export async function quickCreateProduct(input: {
 export async function updateProduct(productId: string, _prev: unknown, formData: FormData) {
   const { me } = await requireActionRole([...ADJUST_ROLES])
 
+  const existing = await productRepo.getById(productId)
+  if (!existing) return { error: 'ไม่พบสินค้า' }
+
   const name = (formData.get('name') as string).trim()
   const sku = (formData.get('sku') as string | null)?.trim() ?? ''
   const minStock = parseInt(formData.get('min_stock') as string) || 0
@@ -320,6 +323,9 @@ async function syncProductCost(productId: string) {
 
 export async function deleteProduct(productId: string) {
   await requireActionRole(['admin'])
+
+  const existing = await productRepo.getById(productId)
+  if (!existing) return { error: 'ไม่พบสินค้า' }
 
   const error = await productRepo.delete(productId)
   if (error) return { error }

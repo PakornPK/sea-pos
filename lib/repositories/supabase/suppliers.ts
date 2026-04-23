@@ -21,6 +21,12 @@ export const supabaseSupplierRepo: SupplierRepository = {
     return packPaginated((data ?? []) as Supplier[], count ?? 0, p)
   },
 
+  async getById(id: string): Promise<Supplier | null> {
+    const db = await getDb()
+    const { data } = await db.from('suppliers').select('*').eq('id', id).single()
+    return (data as Supplier | null) ?? null
+  },
+
   async create(input: SupplierInput): Promise<string | null> {
     const db = await getDb()
     const { error } = await db.from('suppliers').insert(input)
