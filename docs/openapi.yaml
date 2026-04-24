@@ -1,0 +1,3534 @@
+openapi: 3.0.3
+info:
+  title: SEA-POS Supabase API
+  version: "2.0"
+  description: |
+    Complete API reference for the SEA-POS Supabase project, covering three
+    surface areas:
+
+    | Surface | Base path | Auth header |
+    |---------|-----------|-------------|
+    | PostgREST (database) | `/rest/v1/` | `apikey` + `Authorization: Bearer <jwt>` |
+    | Auth | `/auth/v1/` | `apikey` only (public); service_role key for admin endpoints |
+    | Storage | `/storage/v1/` | `apikey` + `Authorization: Bearer <jwt>` |
+
+    **Multi-tenancy:** RLS is enabled on every table. The JWT carries `company_id`
+    in user metadata; `get_current_company_id()` reads it as a session variable so
+    every query is automatically scoped to the caller's company.
+
+    ### PostgREST conventions
+    - Filter: `?col=eq.val`, `?col=ilike.%term%`, `?col=gte.0`, `?col=is.null`
+    - OR: `?or=(col1.eq.a,col2.eq.b)`
+    - Order: `?order=col.asc` or `?order=col.desc`
+    - Pagination: `Range: 0-49` header, response includes `Content-Range: 0-49/total`
+    - Column selection: `?select=id,name`
+    - FK embed: `?select=*,supplier:suppliers(name,phone)`
+    - Return row after write: `Prefer: return=representation`
+    - Upsert: POST with `Prefer: resolution=merge-duplicates`
+    - Single row: `Accept: application/vnd.pgrst.object+json`
+
+servers:
+  - url: "https://{projectRef}.supabase.co"
+    description: Supabase project
+    variables:
+      projectRef:
+        default: your-project-ref
+
+security:
+  - ApiKeyAuth: []
+    BearerAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: apikey
+      description: Supabase anon key — required on every request
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: User JWT from supabase.auth.getSession()
+    ServiceRoleAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: service_role secret key — bypasses RLS, used for admin endpoints only
+
+  parameters:
+    SelectParam:
+      name: select
+      in: query
+      schema:
+        type: string
+      description: "Columns to return. Use `*` for all. Supports FK embeds e.g. `*,supplier:suppliers(name)`."
+    OrderParam:
+      name: order
+      in: query
+      schema:
+        type: string
+      example: created_at.desc
+    RangeHeader:
+      name: Range
+      in: header
+      schema:
+        type: string
+        example: "0-49"
+      description: Zero-based inclusive range for pagination.
+    PreferReturn:
+      name: Prefer
+      in: header
+      schema:
+        type: string
+        enum:
+          - "return=representation"
+          - "return=minimal"
+          - "return=headers-only"
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    # ── Profiles ─────────────────────────────────────────────────
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [admin, manager, cashier, purchasing]
+        first_name:
+          type: string
+          nullable: true
+        last_name:
+          type: string
+          nullable: true
+        full_name:
+          type: string
+          nullable: true
+          description: Synced from first_name + last_name via DB trigger.
+        company_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_platform_admin:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Company ──────────────────────────────────────────────────
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          nullable: true
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+        plan:
+          type: string
+          description: FK to plans.code
+        status:
+          type: string
+          enum: [pending, active, suspended, closed]
+        settings:
+          type: object
+          description: "JSON config: vat_mode, vat_rate, allow_negative_stock, etc."
+        tax_id:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        contact_email:
+          type: string
+          nullable: true
+        contact_phone:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Plans & Billing ──────────────────────────────────────────
+    Plan:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        max_products:
+          type: integer
+          nullable: true
+          description: null means unlimited
+        max_users:
+          type: integer
+          nullable: true
+        max_branches:
+          type: integer
+          nullable: true
+        monthly_price_baht:
+          type: number
+          nullable: true
+        yearly_price_baht:
+          type: number
+          nullable: true
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        plan_code:
+          type: string
+        billing_cycle:
+          type: string
+          enum: [monthly, yearly]
+        started_at:
+          type: string
+          format: date-time
+        current_period_start:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+        due_date:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [trialing, active, past_due, suspended, cancelled]
+        overdue_months:
+          type: integer
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SubscriptionPayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscription_id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        amount_baht:
+          type: number
+        paid_at:
+          type: string
+          format: date-time
+        method:
+          type: string
+          enum: [bank_transfer, promptpay, cash, other]
+        reference_no:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        recorded_by:
+          type: string
+          format: uuid
+          nullable: true
+        receipt_path:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    PlatformSettings:
+      type: object
+      description: Singleton row (code = 'default'). Platform-wide billing config.
+      properties:
+        code:
+          type: string
+          enum: [default]
+        seller_name:
+          type: string
+        seller_tax_id:
+          type: string
+          nullable: true
+        seller_address:
+          type: string
+          nullable: true
+        seller_phone:
+          type: string
+          nullable: true
+        seller_email:
+          type: string
+          nullable: true
+        vat_enabled:
+          type: boolean
+        vat_rate_pct:
+          type: number
+        bank_name:
+          type: string
+          nullable: true
+        bank_account_name:
+          type: string
+          nullable: true
+        bank_account_no:
+          type: string
+          nullable: true
+        promptpay_id:
+          type: string
+          nullable: true
+        invoice_prefix:
+          type: string
+        invoice_year:
+          type: integer
+          nullable: true
+        invoice_seq:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+
+    PlatformInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoice_no:
+          type: string
+        company_id:
+          type: string
+          format: uuid
+        subscription_id:
+          type: string
+          format: uuid
+          nullable: true
+        payment_id:
+          type: string
+          format: uuid
+          nullable: true
+        issued_at:
+          type: string
+          format: date-time
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [draft, issued, void]
+        seller_name:
+          type: string
+        seller_tax_id:
+          type: string
+          nullable: true
+        buyer_name:
+          type: string
+        buyer_tax_id:
+          type: string
+          nullable: true
+        buyer_address:
+          type: string
+          nullable: true
+        buyer_contact_email:
+          type: string
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLine"
+        subtotal_baht:
+          type: number
+        vat_rate_pct:
+          type: number
+        vat_baht:
+          type: number
+        total_baht:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    InvoiceLine:
+      type: object
+      properties:
+        description:
+          type: string
+        qty:
+          type: number
+        unit_price_baht:
+          type: number
+        amount_baht:
+          type: number
+
+    # ── Branch ───────────────────────────────────────────────────
+    Branch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+          description: Short prefix used in receipt numbers e.g. B01
+        address:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        tax_id:
+          type: string
+          nullable: true
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    UserBranch:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        branch_id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Inventory ────────────────────────────────────────────────
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sku_prefix:
+          type: string
+          nullable: true
+        vat_exempt:
+          type: boolean
+        category_type:
+          type: string
+          enum: [sale, option, both, cost]
+        created_at:
+          type: string
+          format: date-time
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+          nullable: true
+        name:
+          type: string
+        price:
+          type: number
+        cost:
+          type: number
+        min_stock:
+          type: number
+        unit:
+          type: string
+          description: "Stock/display unit e.g. piece, kg, litre"
+        po_unit:
+          type: string
+          nullable: true
+          description: Purchase order unit. null means same as unit.
+        po_conversion:
+          type: number
+          description: Stock units per 1 PO unit. E.g. 1000 for kg to gram.
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        image_url:
+          type: string
+          nullable: true
+        vat_exempt:
+          type: boolean
+        barcode:
+          type: string
+          nullable: true
+        track_stock:
+          type: boolean
+          description: When false, product always shows in POS and stock is never decremented.
+        created_at:
+          type: string
+          format: date-time
+
+    ProductStock:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        branch_id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductCostItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        quantity:
+          type: number
+        unit_cost:
+          type: number
+        linked_product_id:
+          type: string
+          format: uuid
+          nullable: true
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    StockLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        branch_id:
+          type: string
+          format: uuid
+        change:
+          type: number
+          description: Positive = stock in, negative = stock out.
+        reason:
+          type: string
+          nullable: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    StockTransfer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        from_branch_id:
+          type: string
+          format: uuid
+        to_branch_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, in_transit, received, cancelled]
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        received_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    StockTransferItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        transfer_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        quantity_sent:
+          type: number
+        quantity_received:
+          type: number
+        receive_note:
+          type: string
+          nullable: true
+
+    OptionGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        required:
+          type: boolean
+        multi_select:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ProductOption:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        price_delta:
+          type: number
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        linked_product_id:
+          type: string
+          format: uuid
+          nullable: true
+        quantity_per_use:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+
+    # ── CRM ──────────────────────────────────────────────────────
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        contact_name:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── POS / Sales ───────────────────────────────────────────────
+    Sale:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        receipt_no:
+          type: integer
+        customer_id:
+          type: string
+          format: uuid
+          nullable: true
+        member_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_id:
+          type: string
+          format: uuid
+        branch_id:
+          type: string
+          format: uuid
+        total_amount:
+          type: number
+        subtotal_ex_vat:
+          type: number
+        vat_amount:
+          type: number
+        member_discount_baht:
+          type: number
+        redeem_points_used:
+          type: number
+        payment_method:
+          type: string
+          enum: [cash, card, transfer]
+        status:
+          type: string
+          enum: [completed, voided]
+        created_at:
+          type: string
+          format: date-time
+
+    SaleItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sale_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+        unit_price:
+          type: number
+          description: Price snapshot at time of sale.
+        subtotal:
+          type: number
+        cost_at_sale:
+          type: number
+          nullable: true
+
+    SaleItemInsert:
+      type: object
+      required: [sale_id, product_id, quantity, unit_price, subtotal]
+      properties:
+        sale_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+        unit_price:
+          type: number
+        subtotal:
+          type: number
+        cost_at_sale:
+          type: number
+          nullable: true
+
+    SaleItemOption:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sale_item_id:
+          type: string
+          format: uuid
+        option_id:
+          type: string
+          format: uuid
+          nullable: true
+        group_name:
+          type: string
+        option_name:
+          type: string
+        price_delta:
+          type: number
+        linked_product_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    HeldSale:
+      type: object
+      description: Parked bill awaiting payment. Items stored as JSONB.
+      properties:
+        id:
+          type: string
+          format: uuid
+        branch_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: string
+              name:
+                type: string
+              price:
+                type: number
+              quantity:
+                type: number
+              vatExempt:
+                type: boolean
+        note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Purchasing ────────────────────────────────────────────────
+    PurchaseOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        po_no:
+          type: integer
+        supplier_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        branch_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, ordered, received, cancelled]
+        total_amount:
+          type: number
+        subtotal_ex_vat:
+          type: number
+        vat_amount:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        confirmed_by_user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Set when status moves to ordered. Locks the printed signature.
+        ordered_at:
+          type: string
+          format: date-time
+          nullable: true
+        received_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    PurchaseOrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        po_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        quantity_ordered:
+          type: number
+        quantity_received:
+          type: number
+        unit_cost:
+          type: number
+          description: Cost per PO unit (not stock unit).
+
+    # ── Membership ────────────────────────────────────────────────
+    Member:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        member_no:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        tier_id:
+          type: string
+          format: uuid
+          nullable: true
+        points_balance:
+          type: number
+        total_spend_baht:
+          type: number
+        enrolled_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    MembershipTier:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          type: string
+        min_spend_baht:
+          type: number
+        discount_pct:
+          type: number
+        points_multiplier:
+          type: number
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    MembershipSettings:
+      type: object
+      description: Per-company singleton. company_id is the primary key.
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        points_per_baht:
+          type: number
+        baht_per_point:
+          type: number
+        max_redeem_pct:
+          type: number
+        points_expiry_days:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MemberPointsLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        member_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [earn, redeem, expire, adjust]
+        points:
+          type: number
+        balance_after:
+          type: number
+        sale_id:
+          type: string
+          format: uuid
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Auth API response shapes ───────────────────────────────────
+    AuthSession:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: bearer
+        expires_in:
+          type: integer
+          example: 3600
+        refresh_token:
+          type: string
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        aud:
+          type: string
+        role:
+          type: string
+        email:
+          type: string
+        email_confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        app_metadata:
+          type: object
+        user_metadata:
+          type: object
+
+    # ── Storage ───────────────────────────────────────────────────
+    StorageObject:
+      type: object
+      properties:
+        name:
+          type: string
+        bucket_id:
+          type: string
+        owner:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_accessed_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          nullable: true
+
+    # ── Errors ────────────────────────────────────────────────────
+    PostgRESTError:
+      type: object
+      properties:
+        code:
+          type: string
+        details:
+          type: string
+          nullable: true
+        hint:
+          type: string
+          nullable: true
+        message:
+          type: string
+
+    AuthError:
+      type: object
+      properties:
+        error:
+          type: string
+        error_description:
+          type: string
+
+  responses:
+    OK200Array:
+      description: Success
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              type: object
+    Created201:
+      description: Resource created successfully
+    NoContent204:
+      description: Success with no response body
+    Unauthorized401:
+      description: Missing or invalid JWT / apikey
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PostgRESTError"
+    Forbidden403:
+      description: RLS policy rejected the operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PostgRESTError"
+    BadRequest400:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthError"
+
+# =============================================================================
+# PATHS
+# =============================================================================
+paths:
+
+  # ===========================================================================
+  # AUTH API  /auth/v1/
+  # ===========================================================================
+
+  /auth/v1/signup:
+    post:
+      operationId: auth_signup
+      summary: Sign up new user
+      description: Creates an auth.users row and triggers handle_new_user to seed a profile.
+      tags: [Auth]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+                data:
+                  type: object
+                  description: "Stored as user_metadata. Keys: role, full_name, company_id."
+                  properties:
+                    role:
+                      type: string
+                      enum: [admin, manager, cashier, purchasing]
+                    full_name:
+                      type: string
+                    company_id:
+                      type: string
+                      format: uuid
+      responses:
+        "200":
+          description: User created. Session returned when email confirmation is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          description: Email already registered or invalid password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
+
+  /auth/v1/token:
+    post:
+      operationId: auth_token
+      summary: Sign in or refresh token
+      description: Use grant_type=password for email+password login. Use grant_type=refresh_token to rotate the session.
+      tags: [Auth]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: grant_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [password, refresh_token]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  title: PasswordGrant
+                  required: [email, password]
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                    password:
+                      type: string
+                - type: object
+                  title: RefreshTokenGrant
+                  required: [refresh_token]
+                  properties:
+                    refresh_token:
+                      type: string
+      responses:
+        "200":
+          description: Authentication successful, session returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          description: Invalid credentials or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
+
+  /auth/v1/logout:
+    post:
+      operationId: auth_logout
+      summary: Sign out
+      description: Invalidates the current session.
+      tags: [Auth]
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [global, local, others]
+            default: global
+      responses:
+        "204":
+          description: Signed out successfully
+
+  /auth/v1/user:
+    get:
+      operationId: auth_get_user
+      summary: Get current user
+      description: Returns the user record associated with the Bearer JWT.
+      tags: [Auth]
+      responses:
+        "200":
+          description: Current authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+    put:
+      operationId: auth_update_user
+      summary: Update current user
+      description: Updates email, password, or user_metadata for the authenticated user.
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                data:
+                  type: object
+                  description: Merged into user_metadata.
+      responses:
+        "200":
+          description: Updated user record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+
+  /auth/v1/recover:
+    post:
+      operationId: auth_recover
+      summary: Send password reset email
+      tags: [Auth]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Password reset email sent
+
+  # ── Auth Admin (service_role key required) ───────────────────
+  /auth/v1/admin/users:
+    get:
+      operationId: auth_admin_list_users
+      summary: List all auth users
+      description: Requires service_role key. Returns paginated list of all users in the project.
+      tags: [Auth-Admin]
+      security:
+        - ApiKeyAuth: []
+          ServiceRoleAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuthUser"
+    post:
+      operationId: auth_admin_create_user
+      summary: Create user without email confirmation
+      description: Requires service_role key. Used when an admin creates accounts for staff.
+      tags: [Auth-Admin]
+      security:
+        - ApiKeyAuth: []
+          ServiceRoleAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                email_confirm:
+                  type: boolean
+                  default: true
+                user_metadata:
+                  type: object
+                  properties:
+                    role:
+                      type: string
+                      enum: [admin, manager, cashier, purchasing]
+                    full_name:
+                      type: string
+                    company_id:
+                      type: string
+                      format: uuid
+      responses:
+        "200":
+          description: Created user record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "400":
+          description: Email already exists or invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
+
+  /auth/v1/admin/users/{id}:
+    put:
+      operationId: auth_admin_update_user
+      summary: Update user by ID
+      description: Requires service_role key. Can update email, password, or metadata.
+      tags: [Auth-Admin]
+      security:
+        - ApiKeyAuth: []
+          ServiceRoleAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                user_metadata:
+                  type: object
+      responses:
+        "200":
+          description: Updated user record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+    delete:
+      operationId: auth_admin_delete_user
+      summary: Delete user by ID
+      description: Requires service_role key. Permanently deletes the auth user.
+      tags: [Auth-Admin]
+      security:
+        - ApiKeyAuth: []
+          ServiceRoleAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User deleted successfully
+
+  # ===========================================================================
+  # STORAGE API  /storage/v1/
+  # Buckets: products (public), company-assets (public),
+  #          receipts (private), imports (private), exports (private)
+  # All paths tenant-scoped: {companyId}/{relativePath}
+  # ===========================================================================
+
+  /storage/v1/object/{bucket}/{path}:
+    post:
+      operationId: storage_upload
+      summary: Upload file
+      description: |
+        Upload a file to a bucket. Path must start with `{companyId}/`.
+        Add header `x-upsert: true` to overwrite an existing object.
+      tags: [Storage]
+      parameters:
+        - name: bucket
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [products, company-assets, receipts, imports, exports]
+          example: products
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "99999999-0000-0000-0000-000000000001/product-abc/image.webp"
+        - name: x-upsert
+          in: header
+          schema:
+            type: string
+            enum: ["true", "false"]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Key:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+    get:
+      operationId: storage_download_private
+      summary: Download file from private bucket
+      description: Returns raw file bytes. For public buckets use the CDN URL from getPublicUrl instead.
+      tags: [Storage]
+      parameters:
+        - name: bucket
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+    delete:
+      operationId: storage_delete
+      summary: Delete file
+      tags: [Storage]
+      parameters:
+        - name: bucket
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File deleted
+
+  /storage/v1/object/public/{bucket}/{path}:
+    get:
+      operationId: storage_download_public
+      summary: Download file from public bucket (no auth required)
+      description: CDN-served endpoint for the products and company-assets buckets.
+      tags: [Storage]
+      security: []
+      parameters:
+        - name: bucket
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [products, company-assets]
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /storage/v1/object/sign/{bucket}/{path}:
+    post:
+      operationId: storage_create_signed_url
+      summary: Create signed URL for private file
+      description: Use for receipts, imports, and exports buckets.
+      tags: [Storage]
+      parameters:
+        - name: bucket
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [receipts, imports, exports]
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expiresIn]
+              properties:
+                expiresIn:
+                  type: integer
+                  description: Seconds until the URL expires.
+                  example: 3600
+      responses:
+        "200":
+          description: Signed URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signedURL:
+                    type: string
+
+  /storage/v1/object/list/{bucket}:
+    post:
+      operationId: storage_list
+      summary: List objects in a bucket folder
+      tags: [Storage]
+      parameters:
+        - name: bucket
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [products, company-assets, receipts, imports, exports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prefix:
+                  type: string
+                  description: "Folder prefix e.g. {companyId}/"
+                limit:
+                  type: integer
+                  default: 100
+                offset:
+                  type: integer
+                  default: 0
+                sortBy:
+                  type: object
+                  properties:
+                    column:
+                      type: string
+                      enum: [name, created_at, updated_at, last_accessed_at]
+                    order:
+                      type: string
+                      enum: [asc, desc]
+      responses:
+        "200":
+          description: List of storage objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StorageObject"
+
+  # ===========================================================================
+  # REST API  /rest/v1/  — Tables
+  # ===========================================================================
+
+  # ── Profiles ─────────────────────────────────────────────────
+  /rest/v1/profiles:
+    get:
+      operationId: profiles_list
+      summary: List profiles
+      description: RLS — own row always visible; admin sees all profiles in the company.
+      tags: [Profiles]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: id
+          in: query
+          schema:
+            type: string
+          example: "eq.00000000-0000-0000-0000-000000000001"
+        - name: company_id
+          in: query
+          schema:
+            type: string
+          example: "eq.99999999-0000-0000-0000-000000000001"
+        - name: role
+          in: query
+          schema:
+            type: string
+          example: "eq.cashier"
+      responses:
+        "200":
+          description: Array of profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+    patch:
+      operationId: profiles_update
+      summary: Update profile
+      description: Admin only (RLS). Must filter by id.
+      tags: [Profiles]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "eq.00000000-0000-0000-0000-000000000001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                  nullable: true
+                last_name:
+                  type: string
+                  nullable: true
+                role:
+                  type: string
+                  enum: [admin, manager, cashier, purchasing]
+      responses:
+        "204":
+          description: Profile updated
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/Forbidden403"
+
+  # ── Companies ─────────────────────────────────────────────────
+  /rest/v1/companies:
+    get:
+      operationId: companies_get
+      summary: Get current company
+      description: RLS scopes the result to the caller's company. Returns one row.
+      tags: [Companies]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+      responses:
+        "200":
+          description: Company record for the authenticated user's tenant
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Company"
+    patch:
+      operationId: companies_update
+      summary: Update company
+      description: Admin only.
+      tags: [Companies]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "eq.99999999-0000-0000-0000-000000000001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                settings:
+                  type: object
+                tax_id:
+                  type: string
+                  nullable: true
+                address:
+                  type: string
+                  nullable: true
+                contact_email:
+                  type: string
+                  nullable: true
+                contact_phone:
+                  type: string
+                  nullable: true
+      responses:
+        "204":
+          description: Company updated
+
+  # ── Plans ─────────────────────────────────────────────────────
+  /rest/v1/plans:
+    get:
+      operationId: plans_list
+      summary: List subscription plans
+      description: Readable by all authenticated users. Write requires platform admin.
+      tags: [Billing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: is_active
+          in: query
+          schema:
+            type: string
+          example: "eq.true"
+        - name: order
+          in: query
+          schema:
+            type: string
+          example: "sort_order.asc"
+      responses:
+        "200":
+          description: Array of subscription plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+
+  # ── Subscriptions ─────────────────────────────────────────────
+  /rest/v1/subscriptions:
+    get:
+      operationId: subscriptions_get
+      summary: Get company subscription
+      tags: [Billing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: company_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+          example: "eq.active"
+      responses:
+        "200":
+          description: Subscription records for the current company
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+
+  /rest/v1/subscription_payments:
+    get:
+      operationId: subscription_payments_list
+      summary: List subscription payments
+      tags: [Billing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: subscription_id
+          in: query
+          schema:
+            type: string
+        - name: company_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of subscription payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubscriptionPayment"
+
+  /rest/v1/platform_settings:
+    get:
+      operationId: platform_settings_get
+      summary: Get platform billing settings
+      description: Platform admin only. Returns one row (code = default).
+      tags: [Billing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+      responses:
+        "200":
+          description: Platform settings singleton
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformSettings"
+    patch:
+      operationId: platform_settings_update
+      summary: Update platform settings
+      description: Platform admin only.
+      tags: [Billing]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "eq.default"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformSettings"
+      responses:
+        "204":
+          description: Settings updated
+
+  /rest/v1/platform_invoices:
+    get:
+      operationId: platform_invoices_list
+      summary: List platform invoices
+      tags: [Billing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: company_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+          example: "eq.issued"
+      responses:
+        "200":
+          description: Array of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformInvoice"
+
+  # ── Branches ──────────────────────────────────────────────────
+  /rest/v1/branches:
+    get:
+      operationId: branches_list
+      summary: List branches
+      tags: [Branches]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - name: is_default
+          in: query
+          schema:
+            type: string
+          example: "eq.true"
+      responses:
+        "200":
+          description: Array of branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Branch"
+    post:
+      operationId: branches_create
+      summary: Create branch
+      description: Admin only.
+      tags: [Branches]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Branch"
+      responses:
+        "201":
+          description: Branch created
+
+  /rest/v1/branches/{id}:
+    patch:
+      operationId: branches_update
+      summary: Update branch
+      description: Admin only.
+      tags: [Branches]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Branch"
+      responses:
+        "204":
+          description: Branch updated
+    delete:
+      operationId: branches_delete
+      summary: Delete branch
+      description: Admin only.
+      tags: [Branches]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Branch deleted
+
+  /rest/v1/user_branches:
+    get:
+      operationId: user_branches_list
+      summary: List user-branch assignments
+      tags: [Branches]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of user-branch assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserBranch"
+    post:
+      operationId: user_branches_assign
+      summary: Assign user to branch
+      tags: [Branches]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, branch_id]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                branch_id:
+                  type: string
+                  format: uuid
+                is_default:
+                  type: boolean
+                  default: false
+      responses:
+        "201":
+          description: User assigned to branch
+    delete:
+      operationId: user_branches_remove
+      summary: Remove user from branch
+      tags: [Branches]
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Assignment removed
+
+  # ── Categories ────────────────────────────────────────────────
+  /rest/v1/categories:
+    get:
+      operationId: categories_list
+      summary: List categories
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - name: category_type
+          in: query
+          schema:
+            type: string
+          example: "eq.sale"
+      responses:
+        "200":
+          description: Array of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: categories_create
+      summary: Create category
+      description: Requires admin or manager role.
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Category"
+      responses:
+        "201":
+          description: Category created
+
+  /rest/v1/categories/{id}:
+    patch:
+      operationId: categories_update
+      summary: Update category
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Category"
+      responses:
+        "204":
+          description: Category updated
+    delete:
+      operationId: categories_delete
+      summary: Delete category
+      description: Admin only.
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Category deleted
+
+  # ── Products ──────────────────────────────────────────────────
+  /rest/v1/products:
+    get:
+      operationId: products_list
+      summary: List products
+      description: |
+        Embed category: `?select=*,category:categories(id,name)`.
+        Embed stock per branch: `?select=*,stock:product_stock(branch_id,quantity)`.
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: name
+          in: query
+          schema:
+            type: string
+          example: "ilike.%search%"
+        - name: barcode
+          in: query
+          schema:
+            type: string
+          example: "eq.8851001100016"
+        - name: category_id
+          in: query
+          schema:
+            type: string
+        - name: track_stock
+          in: query
+          schema:
+            type: string
+          example: "eq.true"
+        - name: sku
+          in: query
+          schema:
+            type: string
+          example: "ilike.DRK%"
+      responses:
+        "200":
+          description: Array of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: products_create
+      summary: Create product
+      description: Requires admin or manager role.
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Product"
+      responses:
+        "201":
+          description: Product created
+
+  /rest/v1/products/{id}:
+    get:
+      operationId: products_get
+      summary: Get product by ID
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/SelectParam"
+      responses:
+        "200":
+          description: Single product record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    patch:
+      operationId: products_update
+      summary: Update product
+      description: Requires admin or manager role.
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Product"
+      responses:
+        "204":
+          description: Product updated
+    delete:
+      operationId: products_delete
+      summary: Delete product
+      description: Admin only.
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Product deleted
+
+  /rest/v1/product_stock:
+    get:
+      operationId: product_stock_list
+      summary: List per-branch stock levels
+      description: Filter by product_id, branch_id, or quantity (e.g. quantity=lt.10 for low-stock alert).
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: product_id
+          in: query
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+        - name: quantity
+          in: query
+          schema:
+            type: string
+          example: "lt.10"
+      responses:
+        "200":
+          description: Array of product stock rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductStock"
+
+  /rest/v1/product_cost_items:
+    get:
+      operationId: product_cost_items_list
+      summary: List BOM cost items for a product
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: product_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: order
+          in: query
+          schema:
+            type: string
+          example: "sort_order.asc"
+      responses:
+        "200":
+          description: Array of cost items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductCostItem"
+    post:
+      operationId: product_cost_items_create
+      summary: Add BOM cost item
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductCostItem"
+      responses:
+        "201":
+          description: Cost item created
+
+  /rest/v1/product_cost_items/{id}:
+    patch:
+      operationId: product_cost_items_update
+      summary: Update BOM cost item
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductCostItem"
+      responses:
+        "204":
+          description: Cost item updated
+    delete:
+      operationId: product_cost_items_delete
+      summary: Delete BOM cost item
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Cost item deleted
+
+  /rest/v1/option_groups:
+    get:
+      operationId: option_groups_list
+      summary: List option groups
+      description: "Embed options in one request: `?select=*,options(*)`."
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - name: product_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of option groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OptionGroup"
+
+  /rest/v1/options:
+    get:
+      operationId: options_list
+      summary: List product options
+      tags: [Inventory]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: group_id
+          in: query
+          schema:
+            type: string
+        - name: is_active
+          in: query
+          schema:
+            type: string
+          example: "eq.true"
+      responses:
+        "200":
+          description: Array of product options
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductOption"
+
+  # ── Stock ─────────────────────────────────────────────────────
+  /rest/v1/stock_logs:
+    get:
+      operationId: stock_logs_list
+      summary: List stock movement history
+      tags: [Stock]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: product_id
+          in: query
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+        - name: created_at
+          in: query
+          schema:
+            type: string
+          example: "gte.2026-04-01"
+      responses:
+        "200":
+          description: Array of stock log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockLog"
+
+  /rest/v1/stock_transfers:
+    get:
+      operationId: stock_transfers_list
+      summary: List stock transfers between branches
+      tags: [Stock]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: status
+          in: query
+          schema:
+            type: string
+          example: "eq.in_transit"
+        - name: from_branch_id
+          in: query
+          schema:
+            type: string
+        - name: to_branch_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of stock transfers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockTransfer"
+
+  /rest/v1/stock_transfer_items:
+    get:
+      operationId: stock_transfer_items_list
+      summary: List items in a stock transfer
+      tags: [Stock]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: transfer_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of transfer line items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockTransferItem"
+
+  # ── CRM ───────────────────────────────────────────────────────
+  /rest/v1/customers:
+    get:
+      operationId: customers_list
+      summary: List customers
+      description: "Full-text search: `?or=(name.ilike.%q%,phone.ilike.%q%,email.ilike.%q%)`"
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: name
+          in: query
+          schema:
+            type: string
+          example: "ilike.%search%"
+        - name: phone
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      operationId: customers_create
+      summary: Create customer
+      description: Requires admin, manager, or cashier role.
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Customer"
+      responses:
+        "201":
+          description: Customer created
+
+  /rest/v1/customers/{id}:
+    patch:
+      operationId: customers_update
+      summary: Update customer
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Customer"
+      responses:
+        "204":
+          description: Customer updated
+    delete:
+      operationId: customers_delete
+      summary: Delete customer
+      description: Admin only. Application layer must verify the customer has no sales history first.
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Customer deleted
+
+  /rest/v1/suppliers:
+    get:
+      operationId: suppliers_list
+      summary: List suppliers
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: name
+          in: query
+          schema:
+            type: string
+          example: "ilike.%search%"
+      responses:
+        "200":
+          description: Array of suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: suppliers_create
+      summary: Create supplier
+      description: Requires admin, manager, or purchasing role.
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Supplier"
+      responses:
+        "201":
+          description: Supplier created
+
+  /rest/v1/suppliers/{id}:
+    patch:
+      operationId: suppliers_update
+      summary: Update supplier
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Supplier"
+      responses:
+        "204":
+          description: Supplier updated
+    delete:
+      operationId: suppliers_delete
+      summary: Delete supplier
+      description: Admin only. Application layer must verify no purchase orders exist for this supplier.
+      tags: [CRM]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Supplier deleted
+
+  # ── POS / Sales ───────────────────────────────────────────────
+  /rest/v1/sales:
+    post:
+      operationId: sales_create
+      summary: Create sale
+      description: Creates a completed sale header. Call `POST /rest/v1/sale_items` separately for line items.
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, branch_id, total_amount, subtotal_ex_vat, vat_amount, payment_method]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                customer_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                member_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                branch_id:
+                  type: string
+                  format: uuid
+                total_amount:
+                  type: number
+                subtotal_ex_vat:
+                  type: number
+                vat_amount:
+                  type: number
+                member_discount_baht:
+                  type: number
+                  default: 0
+                redeem_points_used:
+                  type: number
+                  default: 0
+                payment_method:
+                  type: string
+                  enum: [cash, card, transfer]
+                status:
+                  type: string
+                  enum: [completed]
+                  default: completed
+      responses:
+        "201":
+          description: Sale created — returns the new sale row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+    get:
+      operationId: sales_list
+      summary: List sales
+      description: |
+        Embed items: `?select=*,items:sale_items(*,options:sale_item_options(*))`.
+        Embed customer: `?select=*,customer:customers(name,phone)`.
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: status
+          in: query
+          schema:
+            type: string
+          example: "eq.completed"
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+        - name: customer_id
+          in: query
+          schema:
+            type: string
+        - name: payment_method
+          in: query
+          schema:
+            type: string
+          example: "eq.cash"
+        - name: created_at
+          in: query
+          schema:
+            type: string
+          example: "gte.2026-04-01T00:00:00Z"
+      responses:
+        "200":
+          description: Array of sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+
+  /rest/v1/sale_items:
+    post:
+      operationId: sale_items_create
+      summary: Create sale items
+      description: Inserts one or more line items for a sale. Accepts a single object or an array.
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/SaleItemInsert"
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/SaleItemInsert"
+      responses:
+        "201":
+          description: Sale item(s) created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SaleItem"
+    get:
+      operationId: sale_items_list
+      summary: List items in a sale
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: sale_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of sale items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SaleItem"
+
+  /rest/v1/sale_item_options:
+    get:
+      operationId: sale_item_options_list
+      summary: List option selections for a sale item
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: sale_item_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of selected options
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SaleItemOption"
+
+  /rest/v1/held_sales:
+    get:
+      operationId: held_sales_list
+      summary: List held (parked) bills
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of held sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HeldSale"
+    post:
+      operationId: held_sales_create
+      summary: Park a bill
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeldSale"
+      responses:
+        "201":
+          description: Bill parked
+
+  /rest/v1/held_sales/{id}:
+    delete:
+      operationId: held_sales_delete
+      summary: Delete held bill
+      description: Called after completing or discarding a parked bill.
+      tags: [POS]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Held bill deleted
+
+  # ── Purchase Orders ───────────────────────────────────────────
+  /rest/v1/purchase_orders:
+    post:
+      operationId: purchase_orders_create
+      summary: Create purchase order
+      description: Creates a draft purchase order header. Use `POST /rest/v1/purchase_order_items` to add line items.
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_id, user_id, branch_id, total_amount, subtotal_ex_vat, vat_amount]
+              properties:
+                supplier_id:
+                  type: string
+                  format: uuid
+                user_id:
+                  type: string
+                  format: uuid
+                branch_id:
+                  type: string
+                  format: uuid
+                total_amount:
+                  type: number
+                subtotal_ex_vat:
+                  type: number
+                vat_amount:
+                  type: number
+                notes:
+                  type: string
+                  nullable: true
+                status:
+                  type: string
+                  enum: [draft]
+                  default: draft
+      responses:
+        "201":
+          description: Purchase order created — returns the new PO row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+    get:
+      operationId: purchase_orders_list
+      summary: List purchase orders
+      description: |
+        Embed supplier: `?select=*,supplier:suppliers(name)`.
+        Embed items with product: `?select=*,items:purchase_order_items(*,product:products(name,unit,po_unit,po_conversion))`.
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: status
+          in: query
+          schema:
+            type: string
+          example: "eq.draft"
+        - name: supplier_id
+          in: query
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+        - name: created_at
+          in: query
+          schema:
+            type: string
+          example: "gte.2026-04-01"
+      responses:
+        "200":
+          description: Array of purchase orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrder"
+
+  /rest/v1/purchase_orders/{id}:
+    get:
+      operationId: purchase_orders_get
+      summary: Get purchase order by ID
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/SelectParam"
+      responses:
+        "200":
+          description: Single purchase order record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+    patch:
+      operationId: purchase_orders_update
+      summary: Update purchase order header
+      description: Requires admin, manager, or purchasing role. Most fields only editable when status is draft.
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrder"
+      responses:
+        "204":
+          description: Purchase order updated
+
+  /rest/v1/purchase_order_items:
+    get:
+      operationId: purchase_order_items_list
+      summary: List PO line items
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: po_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of PO line items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrderItem"
+    post:
+      operationId: purchase_order_items_create
+      summary: Add PO line item
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderItem"
+      responses:
+        "201":
+          description: Line item added
+
+  /rest/v1/purchase_order_items/{id}:
+    patch:
+      operationId: purchase_order_items_update
+      summary: Update PO line item
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderItem"
+      responses:
+        "204":
+          description: Line item updated
+    delete:
+      operationId: purchase_order_items_delete
+      summary: Delete PO line item
+      tags: [Purchasing]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204":
+          description: Line item deleted
+
+  # ── Membership ────────────────────────────────────────────────
+  /rest/v1/members:
+    get:
+      operationId: members_list
+      summary: List loyalty members
+      tags: [Membership]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: member_no
+          in: query
+          schema:
+            type: string
+          example: "eq.M00001"
+        - name: phone
+          in: query
+          schema:
+            type: string
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: tier_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Member"
+    post:
+      operationId: members_create
+      summary: Enroll new member
+      tags: [Membership]
+      parameters:
+        - $ref: "#/components/parameters/PreferReturn"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Member"
+      responses:
+        "201":
+          description: Member enrolled
+
+  /rest/v1/members/{id}:
+    patch:
+      operationId: members_update
+      summary: Update member
+      tags: [Membership]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Member"
+      responses:
+        "204":
+          description: Member updated
+
+  /rest/v1/membership_tiers:
+    get:
+      operationId: membership_tiers_list
+      summary: List membership tiers
+      tags: [Membership]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - name: order
+          in: query
+          schema:
+            type: string
+          example: "sort_order.asc"
+      responses:
+        "200":
+          description: Array of membership tiers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MembershipTier"
+
+  /rest/v1/membership_settings:
+    get:
+      operationId: membership_settings_get
+      summary: Get membership settings for current company
+      tags: [Membership]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+      responses:
+        "200":
+          description: Membership settings for the current company
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MembershipSettings"
+    patch:
+      operationId: membership_settings_update
+      summary: Update membership settings
+      tags: [Membership]
+      parameters:
+        - name: company_id
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembershipSettings"
+      responses:
+        "204":
+          description: Settings updated
+
+  /rest/v1/member_points_log:
+    get:
+      operationId: member_points_log_list
+      summary: List point earn and redeem history for a member
+      tags: [Membership]
+      parameters:
+        - $ref: "#/components/parameters/SelectParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/RangeHeader"
+        - name: member_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+          example: "eq.earn"
+      responses:
+        "200":
+          description: Array of points log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberPointsLog"
+
+  # ===========================================================================
+  # REST API  /rest/v1/rpc/  — Custom PostgreSQL Functions
+  # ===========================================================================
+
+  /rest/v1/rpc/decrement_stock:
+    post:
+      operationId: rpc_decrement_stock
+      summary: Atomically decrement product stock at a branch
+      description: |
+        Called during POS checkout for each sale item. Handles stock
+        deduction and writes a stock_log entry in one atomic DB operation.
+        SECURITY DEFINER — executes as function owner.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_product_id, p_branch_id, p_quantity, p_sale_id]
+              properties:
+                p_product_id:
+                  type: string
+                  format: uuid
+                p_branch_id:
+                  type: string
+                  format: uuid
+                p_quantity:
+                  type: number
+                p_sale_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Stock decremented, returns new quantity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  new_quantity:
+                    type: number
+
+  /rest/v1/rpc/receive_po_item:
+    post:
+      operationId: rpc_receive_po_item
+      summary: Receive items from a purchase order into stock
+      description: |
+        Marks quantity_received on the PO item, increments product_stock,
+        writes a stock_log entry, and sets the PO status to received
+        when all items are fully received.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_item_id, p_qty_received, p_stock_qty, p_user_id]
+              properties:
+                p_item_id:
+                  type: string
+                  format: uuid
+                  description: purchase_order_items.id
+                p_qty_received:
+                  type: number
+                  description: Quantity in PO units
+                p_stock_qty:
+                  type: number
+                  description: Quantity in stock units (= p_qty_received x po_conversion)
+                p_user_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: PO item received and stock updated
+
+  /rest/v1/rpc/send_stock_transfer:
+    post:
+      operationId: rpc_send_stock_transfer
+      summary: Initiate a stock transfer from source branch
+      description: Sets transfer status to in_transit and deducts stock at from_branch_id.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_transfer_id]
+              properties:
+                p_transfer_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Transfer initiated
+
+  /rest/v1/rpc/receive_stock_transfer:
+    post:
+      operationId: rpc_receive_stock_transfer
+      summary: Receive a stock transfer at destination branch
+      description: Sets transfer status to received and increments stock at to_branch_id.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_transfer_id]
+              properties:
+                p_transfer_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Transfer received and stock updated
+
+  /rest/v1/rpc/cancel_stock_transfer:
+    post:
+      operationId: rpc_cancel_stock_transfer
+      summary: Cancel a stock transfer
+      description: Sets transfer status to cancelled. Restores source stock if the transfer was already in_transit.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_transfer_id]
+              properties:
+                p_transfer_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Transfer cancelled
+
+  /rest/v1/rpc/next_sku_for_category:
+    post:
+      operationId: rpc_next_sku_for_category
+      summary: Generate next sequential SKU for a category
+      description: Uses the category sku_prefix and an auto-incrementing counter e.g. DRK-0042.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_category_id]
+              properties:
+                p_category_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Generated SKU string
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "DRK-0042"
+
+  /rest/v1/rpc/next_invoice_no:
+    post:
+      operationId: rpc_next_invoice_no
+      summary: Generate next sequential invoice number
+      description: |
+        Platform admin only. Format is {prefix}{year}-{seq} e.g. INV2026-0001.
+        Atomically increments the invoice_seq in platform_settings.
+      tags: [RPC]
+      security:
+        - ApiKeyAuth: []
+          ServiceRoleAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+      responses:
+        "200":
+          description: Generated invoice number
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "INV2026-0001"
+
+  /rest/v1/rpc/next_member_no:
+    post:
+      operationId: rpc_next_member_no
+      summary: Generate next sequential member number for a company
+      description: Format is M{5-digit-seq} e.g. M00042. Atomically incremented per company.
+      tags: [RPC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_company_id]
+              properties:
+                p_company_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Generated member number
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "M00042"
+
+  /rest/v1/rpc/run_subscription_tick:
+    post:
+      operationId: rpc_run_subscription_tick
+      summary: Process subscription status transitions (cron job)
+      description: |
+        Checks all subscriptions against current_period_end and due_date.
+        Moves overdue subscriptions to past_due and suspends after threshold.
+        Triggered by Supabase pg_cron — not called from application code.
+      tags: [RPC]
+      security:
+        - ApiKeyAuth: []
+          ServiceRoleAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+      responses:
+        "200":
+          description: Subscription statuses updated
+
+# =============================================================================
+# Tags
+# =============================================================================
+tags:
+  - name: Auth
+    description: "Supabase Auth API (/auth/v1/) — sign up, sign in, session management"
+  - name: Auth-Admin
+    description: "Admin Auth endpoints — require service_role key in Authorization header"
+  - name: Storage
+    description: "Supabase Storage API (/storage/v1/) — file upload and download"
+  - name: Profiles
+    description: User profiles and role assignments
+  - name: Companies
+    description: Multi-tenant company records
+  - name: Billing
+    description: Plans, subscriptions, invoices, and platform settings
+  - name: Branches
+    description: Store branches and user-branch assignments
+  - name: Inventory
+    description: Products, categories, option groups, and BOM cost items
+  - name: Stock
+    description: Stock levels, movement logs, and inter-branch transfers
+  - name: CRM
+    description: Customers and suppliers
+  - name: POS
+    description: Sales, receipts, and held bills
+  - name: Purchasing
+    description: Purchase orders and line items
+  - name: Membership
+    description: Loyalty programme members, tiers, and points
+  - name: RPC
+    description: Custom PostgreSQL functions callable via /rest/v1/rpc/
