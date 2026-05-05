@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { ImagePlus, Loader2 } from 'lucide-react'
 import { uploadProductImage } from '@/lib/actions/storage'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-client'
 
 type Props = {
   productId: string
@@ -23,8 +24,10 @@ type Props = {
 export function ProductThumb({
   productId, imageUrl, productName, canEdit = false, size = 40,
 }: Props) {
+  const { user } = useAuth()
+  const companyId = user?.companyId ?? ''
   const inputRef = useRef<HTMLInputElement>(null)
-  const uploadWith = uploadProductImage.bind(null, productId)
+  const uploadWith = uploadProductImage.bind(null, productId, companyId)
   const [state, formAction, pending] = useActionState(uploadWith, undefined)
   const [preview, setPreview] = useState<string | null>(imageUrl)
 

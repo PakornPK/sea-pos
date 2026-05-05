@@ -1,4 +1,4 @@
-import type { AuthedUser } from '@/lib/auth'
+import type { AuthedUser } from '@/lib/auth-client'
 
 /**
  * Resolve a list-view's effective branch filter from the URL + caller.

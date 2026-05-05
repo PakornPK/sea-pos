@@ -1,14 +1,12 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { requirePlatformAdmin } from '@/lib/auth'
+import { useAuth } from '@/lib/auth-client'
 import { billingRepo } from '@/lib/repositories'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { SubscriptionListRow } from '@/lib/repositories'
-
-export const metadata: Metadata = {
-  title: 'Subscriptions | SEA-POS',
-}
 
 const STATUS_LABEL: Record<string, string> = {
   trialing:  'ทดลองใช้',
@@ -53,9 +51,18 @@ function DueBadge({ sub }: { sub: SubscriptionListRow }) {
   return <span className="text-[11px] text-muted-foreground">{days} วัน</span>
 }
 
-export default async function SubscriptionsPage() {
-  await requirePlatformAdmin()
-  const subs = await billingRepo.listSubscriptions()
+export default function SubscriptionsPage() {
+  const { user } = useAuth()
+  const [subs, setSubs] = useState<SubscriptionListRow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    billingRepo.listSubscriptions()
+      .then((d) => { setSubs(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading) return null
 
   // Sort: past_due/suspended first, then by period_end ascending
   const sorted = [...subs].sort((a, b) => {
@@ -117,7 +124,7 @@ export default async function SubscriptionsPage() {
                 >
                   <td className="px-4 py-3 font-medium">
                     <Link
-                      href={`/platform/companies/${sub.company_id}`}
+                      href={`/platform/companies/detail/?id=${sub.company_id}`}
                       className="hover:text-primary hover:underline"
                     >
                       {sub.company_name}

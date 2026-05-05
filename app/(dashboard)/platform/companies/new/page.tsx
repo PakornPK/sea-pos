@@ -1,17 +1,16 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useAuth } from '@/lib/auth-client'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { requirePlatformAdmin } from '@/lib/auth'
 import { CreateCompanyForm } from '@/components/platform/CreateCompanyForm'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-export const metadata: Metadata = {
-  title: 'เพิ่มบริษัทใหม่ | SEA-POS Platform',
-}
+export default function NewCompanyPage() {
+  const { user } = useAuth()
 
-export default async function NewCompanyPage() {
-  await requirePlatformAdmin()
+  if (!user) return null
 
   return (
     <div className="flex flex-col gap-6">

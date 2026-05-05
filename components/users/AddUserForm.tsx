@@ -17,9 +17,9 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] =
     label: ROLE_LABELS[value],
   }))
 
-type Props = { branches: Branch[] }
+type Props = { branches: Branch[]; onCreated?: () => void }
 
-export function AddUserForm({ branches }: Props) {
+export function AddUserForm({ branches, onCreated }: Props) {
   const [state, formAction, pending] = useActionState(createUser, undefined)
   const [open, setOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -30,8 +30,9 @@ export function AddUserForm({ branches }: Props) {
       formRef.current?.reset()
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(false)
+      onCreated?.()
     }
-  }, [state])
+  }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) {
     return (

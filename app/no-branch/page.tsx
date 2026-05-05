@@ -1,14 +1,13 @@
-import type { Metadata } from 'next'
+'use client'
+
 import Link from 'next/link'
 import { MapPinOff } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
-import { signOut } from '@/lib/actions/auth'
-
-export const metadata: Metadata = {
-  title: 'ไม่มีสาขา | SEA-POS',
-}
+import { useAuth } from '@/lib/auth-client'
 
 export default function NoBranchPage() {
+  const { signOut } = useAuth()
+
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
       <div className="grid h-16 w-16 place-items-center rounded-full bg-muted">
@@ -21,17 +20,16 @@ export default function NoBranchPage() {
           ของบริษัทเพื่อขอเพิ่มสิทธิ์เข้าถึงสาขา
         </p>
       </div>
-      <form action={signOut}>
-        <button
-          type="submit"
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          ออกจากระบบ
-        </button>
-      </form>
+      <button
+        type="button"
+        onClick={() => { void signOut() }}
+        className={buttonVariants({ variant: 'outline', size: 'sm' })}
+      >
+        ออกจากระบบ
+      </button>
       <p className="text-xs text-muted-foreground">
         ผู้ดูแลสามารถมอบหมายสาขาได้ที่{' '}
-        <Link href="/users" className="underline underline-offset-2 hover:text-foreground">
+        <Link href="/users/" className="underline underline-offset-2 hover:text-foreground">
           หน้าผู้ใช้งาน
         </Link>
       </p>

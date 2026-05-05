@@ -18,7 +18,6 @@ export type { StorageRepository, StorageBucket, UploadResult } from './storage'
 export type { BranchRepository }         from './branch'
 export type { ProductRepository, ProductStockRepository } from './product'
 export type { CategoryRepository }       from './category'
-export type { CustomerRepository, CustomerInput } from './customer'
 export type { SupplierRepository, SupplierInput } from './supplier'
 export type {
   SaleRepository, SaleListRow, SaleSummaryForStats, SaleDetail, SaleItemWithProduct,
@@ -33,7 +32,6 @@ export type {
 } from './stockTransfer'
 export type { UserRepository, UserListRow } from './user'
 export type { HeldSaleRepository, HeldSaleListRow } from './heldSale'
-export type { AuthRepository }           from './auth'
 export type {
   BillingRepository,
   PlatformSettingsInput,
@@ -65,6 +63,7 @@ export type {
 } from './loyalty'
 export type {
   AnalyticsRepository,
+  BranchScope,
   TodaySummary,
   DailySeriesPoint,
   PaymentMixPoint,
@@ -86,14 +85,12 @@ import type { StorageRepository }         from './storage'
 import type { BranchRepository }          from './branch'
 import type { ProductRepository, ProductStockRepository } from './product'
 import type { CategoryRepository }        from './category'
-import type { CustomerRepository }        from './customer'
 import type { SupplierRepository }        from './supplier'
 import type { SaleRepository }            from './sale'
 import type { PurchaseOrderRepository }   from './purchaseOrder'
 import type { StockLogRepository }        from './stockLog'
 import type { StockTransferRepository }   from './stockTransfer'
 import type { UserRepository }            from './user'
-import type { AuthRepository }            from './auth'
 import type { AnalyticsRepository }       from './analytics'
 import type { HeldSaleRepository }        from './heldSale'
 import type { BillingRepository }         from './billing'
@@ -110,14 +107,12 @@ export interface Repositories {
   product:       ProductRepository
   productStock:  ProductStockRepository
   category:      CategoryRepository
-  customer:      CustomerRepository
   supplier:      SupplierRepository
   sale:          SaleRepository
   purchaseOrder: PurchaseOrderRepository
   stockLog:      StockLogRepository
   stockTransfer: StockTransferRepository
   user:          UserRepository
-  auth:          AuthRepository
   analytics:     AnalyticsRepository
   heldSale:      HeldSaleRepository
   billing:       BillingRepository

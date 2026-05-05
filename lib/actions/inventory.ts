@@ -1,8 +1,3 @@
-'use server'
-
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { getActionUser, requireActionRole } from '@/lib/auth'
 import { productRepo, productStockRepo, storageRepo, optionRepo, productCostItemRepo } from '@/lib/repositories'
 import { chain, money } from '@/lib/money'
 import { checkProductLimit, formatLimitError } from '@/lib/limits'
@@ -11,32 +6,24 @@ import { validateImageUpload, uniqueAssetName } from '@/lib/storage-validation'
 const ADJUST_ROLES = ['admin', 'manager'] as const
 const CREATE_ROLES = ['admin', 'manager', 'purchasing'] as const
 
-export async function adjustStock(productId: string, delta: number) {
+export async function adjustStock(productId: string, delta: number, branchId: string, userId: string) {
   try {
-    const { me } = await requireActionRole([...ADJUST_ROLES])
-    if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
+    if (!branchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
 
     const err = await productStockRepo.adjust({
       productId,
-      branchId: me.activeBranchId,
+      branchId,
       delta,
       reason: delta > 0 ? 'ปรับเพิ่มสต๊อก (ผู้จัดการ)' : 'ปรับลดสต๊อก (ผู้จัดการ)',
-      userId: me.id,
+      userId,
     })
     if (err) return { error: err }
-
-    revalidatePath('/inventory')
-    revalidatePath('/pos')
-    revalidatePath('/reports')
-    revalidatePath('/dashboard')
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'ไม่มีสิทธิ์' }
   }
 }
 
 export async function addProduct(_prev: unknown, formData: FormData) {
-  const { me } = await requireActionRole([...ADJUST_ROLES])
-
   const name = (formData.get('name') as string).trim()
   let sku = (formData.get('sku') as string | null)?.trim() ?? ''
   const minStock = parseInt(formData.get('min_stock') as string) || 0
@@ -51,6 +38,8 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   const poConversion = parseFloat(formData.get('po_conversion') as string) || 1
   const rawImage = formData.get('image') as File | null
   const hasImage = !!rawImage && rawImage.size > 0
+  const activeBranchId = (formData.get('activeBranchId') as string | null) || null
+  const companyId = (formData.get('companyId') as string | null) || null
 
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
@@ -91,15 +80,15 @@ export async function addProduct(_prev: unknown, formData: FormData) {
   // Seed a pivot row at 0 for the user's current branch so tracked products
   // are queryable from the POS immediately. Untracked products (menu items /
   // services) don't need a stock row since they bypass the stock gate.
-  if (me.activeBranchId && trackStock) {
-    await productStockRepo.seed(res.id, me.activeBranchId)
+  if (activeBranchId && trackStock) {
+    await productStockRepo.seed(res.id, activeBranchId)
   }
 
-  if (imageFile && imageExt && me.companyId) {
+  if (imageFile && imageExt && companyId) {
     const relativePath = `${res.id}/${uniqueAssetName(imageExt)}`
     const upload = await storageRepo.upload(
       'products',
-      me.companyId,
+      companyId,
       relativePath,
       imageFile,
       { contentType: imageFile.type }
@@ -135,7 +124,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
 
   // Save option groups if provided (JSON encoded in form field)
   const optionGroupsRaw = formData.get('option_groups') as string | null
-  if (optionGroupsRaw && me.companyId) {
+  if (optionGroupsRaw && companyId) {
     try {
       const groups = JSON.parse(optionGroupsRaw) as Array<{
         name: string
@@ -145,7 +134,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
       }>
       for (let gi = 0; gi < groups.length; gi++) {
         const g = groups[gi]
-        const saved = await optionRepo.saveGroup(res.id, me.companyId, {
+        const saved = await optionRepo.saveGroup(res.id, companyId, {
           name: g.name, required: g.required, multi_select: g.multi_select, sort_order: gi,
         })
         for (let oi = 0; oi < g.options.length; oi++) {
@@ -158,9 +147,7 @@ export async function addProduct(_prev: unknown, formData: FormData) {
     }
   }
 
-  revalidatePath('/inventory')
-  revalidatePath('/pos')
-  redirect(`/inventory/${res.id}/edit`)
+  return { redirectTo: `/inventory/edit/?id=${res.id}` }
 }
 
 export async function quickCreateProduct(input: {
@@ -171,16 +158,12 @@ export async function quickCreateProduct(input: {
   price: number
   cost: number
   minStock: number
+  activeBranchId?: string | null
 }): Promise<
   | { id: string; name: string; sku: string | null; price: number; cost: number; category_id: string | null; stock: number; min_stock: number }
   | { error: string }
 > {
   try {
-    const { me } = await getActionUser()
-    if (!(CREATE_ROLES as readonly string[]).includes(me.role)) {
-      return { error: 'ไม่มีสิทธิ์เพิ่มสินค้า' }
-    }
-
     const name = input.name.trim()
     if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
@@ -204,12 +187,10 @@ export async function quickCreateProduct(input: {
     })
     if ('error' in res) return res
 
-    if (me.activeBranchId) {
-      await productStockRepo.seed(res.id, me.activeBranchId)
+    if (input.activeBranchId) {
+      await productStockRepo.seed(res.id, input.activeBranchId)
     }
 
-    revalidatePath('/inventory')
-    revalidatePath('/pos')
     return {
       id: res.id,
       name: res.name,
@@ -226,8 +207,6 @@ export async function quickCreateProduct(input: {
 }
 
 export async function updateProduct(productId: string, _prev: unknown, formData: FormData) {
-  const { me } = await requireActionRole([...ADJUST_ROLES])
-
   const existing = await productRepo.getById(productId)
   if (!existing) return { error: 'ไม่พบสินค้า' }
 
@@ -243,6 +222,7 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
   const unit = (formData.get('unit') as string | null)?.trim() || 'ชิ้น'
   const poUnit = (formData.get('po_unit') as string | null)?.trim() || null
   const poConversion = parseFloat(formData.get('po_conversion') as string) || 1
+  const activeBranchId = (formData.get('activeBranchId') as string | null) || null
 
   if (!name) return { error: 'กรุณาระบุชื่อสินค้า' }
 
@@ -264,12 +244,10 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
 
   // Ensure a stock row exists when track_stock is true. Idempotent — safe to
   // call even if the row already exists (ON CONFLICT DO NOTHING).
-  if (trackStock && me.activeBranchId) {
-    await productStockRepo.seed(productId, me.activeBranchId)
+  if (trackStock && activeBranchId) {
+    await productStockRepo.seed(productId, activeBranchId)
   }
 
-  revalidatePath('/inventory')
-  revalidatePath('/pos')
   return { success: true as const }
 }
 
@@ -277,7 +255,6 @@ export async function updateProduct(productId: string, _prev: unknown, formData:
 
 export async function addCostItem(_prev: unknown, formData: FormData) {
   try {
-    await requireActionRole([...ADJUST_ROLES])
     const productId       = formData.get('product_id') as string
     const name            = (formData.get('name') as string).trim()
     const quantity        = parseFloat(formData.get('quantity') as string) || 1
@@ -293,7 +270,6 @@ export async function addCostItem(_prev: unknown, formData: FormData) {
     if ('error' in res) return { error: res.error }
 
     await syncProductCost(productId)
-    revalidatePath(`/inventory/${productId}/edit`)
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
@@ -301,12 +277,10 @@ export async function addCostItem(_prev: unknown, formData: FormData) {
 
 export async function deleteCostItem(id: string, productId: string) {
   try {
-    await requireActionRole([...ADJUST_ROLES])
     const err = await productCostItemRepo.remove(id)
     if (err) return { error: err }
 
     await syncProductCost(productId)
-    revalidatePath(`/inventory/${productId}/edit`)
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
@@ -322,25 +296,20 @@ async function syncProductCost(productId: string) {
 }
 
 export async function deleteProduct(productId: string) {
-  await requireActionRole(['admin'])
-
   const existing = await productRepo.getById(productId)
   if (!existing) return { error: 'ไม่พบสินค้า' }
 
   const error = await productRepo.delete(productId)
   if (error) return { error }
-
-  revalidatePath('/inventory')
-  revalidatePath('/pos')
 }
 
 export async function convertStockUnit(
   productId: string,
   newUnit: string,
   factor: number,
+  userId = '',
 ): Promise<{ success: true } | { error: string }> {
   try {
-    const { me } = await requireActionRole([...ADJUST_ROLES])
     if (!Number.isFinite(factor) || factor <= 0) return { error: 'ตัวคูณต้องมากกว่า 0' }
 
     const trimmed = newUnit.trim()
@@ -362,7 +331,7 @@ export async function convertStockUnit(
         branchId: row.branch_id,
         delta,
         reason: `เปลี่ยนหน่วย: ${oldUnit} → ${trimmed} (×${factor})`,
-        userId: me.id,
+        userId,
       })
       if (err) return { error: `สาขา ${row.branch_name}: ${err}` }
     }
@@ -371,11 +340,11 @@ export async function convertStockUnit(
     const err = await productRepo.update(productId, { unit: trimmed, min_stock: newMinStock })
     if (err) return { error: err }
 
-    revalidatePath(`/inventory/${productId}/edit`)
-    revalidatePath('/inventory')
-    revalidatePath('/pos')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
+
+// Re-export role constants for documentation purposes
+export { ADJUST_ROLES, CREATE_ROLES }

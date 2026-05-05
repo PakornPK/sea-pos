@@ -99,7 +99,7 @@ export function InvoiceList({
             return (
               <tr key={inv.id} className={cn('hover:bg-muted/20', inv.status === 'void' && 'opacity-50')}>
                 <td className="px-4 py-2.5 font-mono text-[12px]">
-                  <Link href={`/platform/invoices/${inv.id}`} className="text-primary hover:underline">
+                  <Link href={`/platform/invoices/detail/?id=${inv.id}`} className="text-primary hover:underline">
                     {inv.invoice_no}
                   </Link>
                 </td>
@@ -115,7 +115,7 @@ export function InvoiceList({
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <Link href={`/platform/invoices/${inv.id}`} target="_blank">
+                    <Link href={`/platform/invoices/detail/?id=${inv.id}`} target="_blank">
                       <Button size="sm" variant="ghost" className="h-7 px-2">
                         <Printer className="h-3.5 w-3.5" />
                         <span className="sr-only">พิมพ์</span>

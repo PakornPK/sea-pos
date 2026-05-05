@@ -1,7 +1,3 @@
-'use server'
-
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { requireActionRole } from '@/lib/auth'
 import { companyRepo } from '@/lib/repositories'
 
 export type CompanyState = { error?: string; success?: boolean } | undefined
@@ -27,9 +23,6 @@ export async function updateCompanySettings(
   formData: FormData
 ): Promise<CompanyState> {
   try {
-    const { me } = await requireActionRole(['admin'])
-    if (!me.companyId) return { error: 'ไม่พบข้อมูลบริษัทของคุณ' }
-
     const name = String(formData.get('name') ?? '').trim()
     if (!name) return { error: 'กรุณาระบุชื่อร้าน/บริษัท' }
 
@@ -55,21 +48,20 @@ export async function updateCompanySettings(
     // Read existing settings to preserve upload-managed fields (logo_url, letterhead_url).
     // Merge: existing first so upload fields survive, form values overwrite on top.
     // Strip undefined so cleared form fields are removed from the JSON, not stored as null.
-    const current = await companyRepo.getByIdCached(me.companyId)
+    const current = await companyRepo.getCurrent()
     const existing = (current?.settings ?? {}) as Record<string, unknown>
     const settings = Object.fromEntries(
       Object.entries({ ...existing, ...formSettings }).filter(([, v]) => v !== undefined)
     )
 
-    const nameErr = await companyRepo.updateName(me.companyId, name)
+    const companyId = current?.id ?? ''
+
+    const nameErr = await companyRepo.updateName(companyId, name)
     if (nameErr) return { error: nameErr }
 
-    const settingsErr = await companyRepo.updateSettings(me.companyId, settings)
+    const settingsErr = await companyRepo.updateSettings(companyId, settings)
     if (settingsErr) return { error: settingsErr }
 
-    revalidatePath('/settings/company')
-    revalidatePath('/', 'layout')  // affects receipt rendering everywhere
-    revalidateTag(`company:${me.companyId}`, {})
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }

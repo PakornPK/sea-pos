@@ -13,11 +13,11 @@ export interface HeldSaleRepository {
   getById(id: string): Promise<HeldSale | null>
 
   create(input: {
-    branch_id:   string
-    user_id:     string
-    customer_id: string | null
-    items:       HeldSaleItem[]
-    note:        string | null
+    branch_id: string
+    user_id:   string
+    member_id: string | null
+    items:     HeldSaleItem[]
+    note:      string | null
   }): Promise<{ id: string } | { error: string }>
 
   delete(id: string): Promise<string | null>

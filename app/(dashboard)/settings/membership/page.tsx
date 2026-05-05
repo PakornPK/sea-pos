@@ -1,17 +1,30 @@
-import type { Metadata } from 'next'
-import { requirePage } from '@/lib/auth'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/auth-client'
 import { loyaltyRepo } from '@/lib/repositories'
 import { MembershipSettingsForm } from '@/components/loyalty/MembershipSettingsForm'
 import { TierList } from '@/components/loyalty/TierList'
 
-export const metadata: Metadata = { title: 'ตั้งค่าสมาชิก | SEA-POS' }
+type LoyaltySettings = Awaited<ReturnType<typeof loyaltyRepo.getSettings>>
+type Tier = Awaited<ReturnType<typeof loyaltyRepo.listTiers>>[number]
 
-export default async function MembershipSettingsPage() {
-  await requirePage()
-  const [settings, tiers] = await Promise.all([
-    loyaltyRepo.getSettings(),
-    loyaltyRepo.listTiers(),
-  ])
+export default function MembershipSettingsPage() {
+  const { user } = useAuth()
+  const [settings, setSettings] = useState<LoyaltySettings | null>(null)
+  const [tiers, setTiers] = useState<Tier[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      loyaltyRepo.getSettings(),
+      loyaltyRepo.listTiers(),
+    ])
+      .then(([s, t]) => { setSettings(s); setTiers(t); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading) return null
 
   return (
     <div className="flex flex-col gap-8 max-w-2xl">

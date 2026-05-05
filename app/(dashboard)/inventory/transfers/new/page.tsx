@@ -1,40 +1,30 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { requirePageRole } from '@/lib/auth'
-import { branchRepo, productRepo } from '@/lib/repositories'
+import { useAuth } from '@/lib/auth-client'
 import { TransferCreateForm } from '@/components/inventory/TransferCreateForm'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { UserRole } from '@/types/database'
+import { getTransferFormData, type TransferFormData } from '@/lib/actions/stockTransfers'
 
-export const metadata: Metadata = {
-  title: 'สร้างรายการโอน | SEA-POS',
-}
+export default function NewTransferPage() {
+  const { user } = useAuth()
+  const [formData, setFormData] = useState<TransferFormData | null>(null)
 
-const ALLOWED: UserRole[] = ['admin', 'manager']
+  useEffect(() => {
+    if (!user) return
+    getTransferFormData(user.activeBranchId).then(setFormData)
+  }, [user])
 
-export default async function NewTransferPage() {
-  const { me } = await requirePageRole(ALLOWED)
-
-  const [allBranches, productsPage, fromBranch] = await Promise.all([
-    branchRepo.list(),
-    me.activeBranchId
-      ? productRepo.listInStockForBranchPaginated(
-          { page: 1, pageSize: 500 },
-          { branchId: me.activeBranchId },
-        )
-      : Promise.resolve({ rows: [], totalCount: 0, page: 1, pageSize: 500, totalPages: 1 }),
-    me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
-  ])
-
-  const toBranchCandidates = allBranches.filter((b) => b.id !== me.activeBranchId)
+  if (!user) return null  // AuthGuard handles redirect
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <Link
-          href="/inventory/transfers"
+          href="/inventory/transfers/"
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -47,11 +37,13 @@ export default async function NewTransferPage() {
         </div>
       </div>
 
-      <TransferCreateForm
-        fromBranch={fromBranch}
-        toBranchCandidates={toBranchCandidates}
-        productsAtSource={productsPage.rows}
-      />
+      {formData && (
+        <TransferCreateForm
+          fromBranch={formData.fromBranch}
+          toBranchCandidates={formData.toBranchCandidates}
+          productsAtSource={formData.productsAtSource}
+        />
+      )}
     </div>
   )
 }

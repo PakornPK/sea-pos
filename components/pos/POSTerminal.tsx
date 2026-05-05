@@ -11,10 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { createSale, searchInStockProducts, findProductByCode } from '@/lib/actions/pos'
+import { createSale, searchInStockProducts, findProductByCode, type SaleState } from '@/lib/actions/pos'
 import { holdSale } from '@/lib/actions/heldSales'
 import { formatBaht } from '@/lib/format'
-import { CustomerPicker, type PickerCustomer } from '@/components/customers/CustomerPicker'
 import { MemberLookupPanel } from '@/components/pos/MemberLookupPanel'
 import { HeldSalesDrawer } from '@/components/pos/HeldSalesDrawer'
 import { PAYMENT_LABEL, type PaymentMethod } from '@/lib/labels'
@@ -23,6 +22,8 @@ import type { HeldSaleListRow } from '@/lib/repositories'
 import type { MemberLookupResult } from '@/lib/actions/loyalty'
 import { computeVat, type VatConfig } from '@/lib/vat'
 import { chain, money, lineTotal } from '@/lib/money'
+import { useAuth } from '@/lib/auth-client'
+import { useRouter } from 'next/navigation'
 
 type CartItem = {
   cartKey:   string          // productId[:optId,...] — unique per product+option combo
@@ -46,7 +47,6 @@ type POSTerminalProps = {
   initialTotal:     number
   initialPage:      number
   pageSize:         number
-  customers:        PickerCustomer[]
   vatConfig:        VatConfig
   initialHeldSales: HeldSaleListRow[]
   initialOptionsMap: Record<string, OptionGroupWithOptions[]>
@@ -72,17 +72,25 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> =
   }))
 
 export function POSTerminal({
-  initialProducts, initialTotal, initialPage, pageSize, customers, vatConfig, initialHeldSales,
+  initialProducts, initialTotal, initialPage, pageSize, vatConfig, initialHeldSales,
   initialOptionsMap,
 }: POSTerminalProps) {
+  const { user } = useAuth()
+  const router = useRouter()
+  const branchId = user?.activeBranchId ?? ''
+
   // ── Cart (unchanged — user loves this part) ────────────────────
   const [cart, setCart] = useState<CartItem[]>([])
   const [payment, setPayment] = useState('cash')
-  const [customer, setCustomer] = useState<PickerCustomer | null>(null)
   const [member, setMember]           = useState<MemberLookupResult | null>(null)
   const [redeemPoints, setRedeemPoints] = useState(0)
   const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(null)
-  const [state, formAction, isPending] = useActionState(createSale, undefined)
+  const [state, formAction, isPending] = useActionState<SaleState, FormData>(createSale, undefined)
+
+  // Handle redirectTo after successful sale
+  useEffect(() => {
+    if (state && 'redirectTo' in state && state.redirectTo) router.push(state.redirectTo)
+  }, [state, router])
 
   // ── Server-driven product grid ─────────────────────────────────
   const [products, setProducts] = useState<ProductWithStock[]>(initialProducts)
@@ -110,7 +118,7 @@ export function POSTerminal({
   useEffect(() => {
     const handle = setTimeout(() => {
       startLoading(async () => {
-        const res = await searchInStockProducts({ page, search: search.trim() })
+        const res = await searchInStockProducts({ page, search: search.trim(), branchId })
         setProducts(res.rows)
         setTotal(res.totalCount)
       })
@@ -138,7 +146,7 @@ export function POSTerminal({
     try {
       const fd = new FormData()
       fd.append('items',      JSON.stringify(cart))
-      fd.append('customerId', customer?.id ?? '')
+      fd.append('memberId',   member?.id ?? '')
       fd.append('note',       note.trim())
       const res = await holdSale(undefined, fd)
       if (res?.error) {
@@ -148,7 +156,6 @@ export function POSTerminal({
       // Success — blank the live cart so the cashier can serve the next
       // customer, and tell the drawer to refetch its list + count.
       setCart([])
-      setCustomer(null)
       setHeldRefresh((n) => n + 1)
     } finally {
       setHolding(false)
@@ -168,11 +175,6 @@ export function POSTerminal({
         options:   [],
       })),
     )
-    // Customer on the held bill is re-selected from the picker list if present.
-    const c = snapshot.customer_id
-      ? customers.find((x) => x.id === snapshot.customer_id) ?? null
-      : null
-    setCustomer(c)
   }
 
   // Enter in search = scan commit. Look up exact SKU at the active branch;
@@ -185,7 +187,7 @@ export function POSTerminal({
     // commits state, so `search` can still be stale at this point.
     const term = (e.currentTarget.value ?? search).trim()
     if (!term) return
-    const product = await findProductByCode(term)
+    const product = await findProductByCode(term, branchId)
     if (product) {
       addToCart(product)
       setSearch('')
@@ -447,6 +449,7 @@ export function POSTerminal({
             <HeldSalesDrawer
               onResume={handleResume}
               currentCartHasItems={cart.length > 0}
+              branchId={branchId}
               refreshKey={heldRefresh}
               initialRows={initialHeldSales}
             />
@@ -544,11 +547,8 @@ export function POSTerminal({
           <form action={formAction} className="space-y-2.5">
             <input type="hidden" name="cart"          value={JSON.stringify(cart)} />
             <input type="hidden" name="paymentMethod" value={payment} />
-            <input type="hidden" name="customerId"    value={customer?.id ?? ''} />
             <input type="hidden" name="memberId"      value={member?.id ?? ''} />
             <input type="hidden" name="redeemPoints"  value={redeemPoints} />
-
-            <CustomerPicker customers={customers} selected={customer} onChange={setCustomer} />
 
             <MemberLookupPanel
               member={member}
@@ -576,7 +576,7 @@ export function POSTerminal({
               ))}
             </div>
 
-            {state?.error && (
+            {state && 'error' in state && state.error && (
               <p className="text-center text-[12px] text-destructive">{state.error}</p>
             )}
 

@@ -11,21 +11,21 @@ import {
 } from '@/components/ui/dialog'
 import { createBranch, type BranchState } from '@/lib/actions/branches'
 
-export function AddBranchDialog() {
+type Props = { onCreated?: () => void }
+
+export function AddBranchDialog({ onCreated }: Props) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState<BranchState, FormData>(createBranch, undefined)
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
-    // Close dialog + reset form on a successful submit. The setState here
-    // syncs UI state to the action result — the React docs' "external system"
-    // pattern (the Dialog is driven by `open`). Only fires once per result.
     if (state?.success) {
       formRef.current?.reset()
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(false)
+      onCreated?.()
     }
-  }, [state])
+  }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

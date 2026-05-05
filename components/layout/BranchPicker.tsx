@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react'
 import { MapPin, ChevronDown, Loader2 } from 'lucide-react'
-import { setActiveBranch } from '@/lib/actions/branches'
+import { useAuth } from '@/lib/auth-client'
 import type { Branch } from '@/types/database'
 
 type Props = {
@@ -10,11 +10,8 @@ type Props = {
   active:   Branch | null
 }
 
-/**
- * Branch switcher dropdown. Hidden when a user has only one branch —
- * cashiers stay locked to where they're standing.
- */
 export function BranchPicker({ branches, active }: Props) {
+  const { setActiveBranch } = useAuth()
   const [pending, startTransition] = useTransition()
 
   if (branches.length <= 1) {
@@ -30,12 +27,8 @@ export function BranchPicker({ branches, active }: Props) {
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const next = e.target.value
     if (!next || next === active?.id) return
-    startTransition(async () => {
-      await setActiveBranch(next)
-      // Full reload — branch switch affects server auth headers, active
-      // branch badges, paginated lists, dashboard widgets, and Suspense
-      // boundaries keyed on searchParams. router.refresh() doesn't blow
-      // all of those caches reliably, so we force a clean re-request.
+    startTransition(() => {
+      setActiveBranch(next)
       window.location.reload()
     })
   }

@@ -1,18 +1,30 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ShoppingBag } from 'lucide-react'
-import { signIn } from '@/lib/actions/auth'
+import { clientSignIn } from '@/lib/auth-client'
 import { features } from '@/lib/features'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-type ActionState = { error: string } | undefined
-
 export function LoginForm() {
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(signIn, undefined)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const email      = String(fd.get('email') ?? '').trim().toLowerCase()
+    const password   = String(fd.get('password') ?? '')
+    const rememberMe = fd.get('remember_me') === 'on'
+    startTransition(async () => {
+      const err = await clientSignIn(email, password, rememberMe)
+      if (err) { setError(err); return }
+      window.location.href = '/'
+    })
+  }
 
   return (
     <div className="w-full max-w-[360px] flex flex-col items-center gap-8">
@@ -29,7 +41,7 @@ export function LoginForm() {
 
       {/* Card */}
       <div className="w-full rounded-2xl bg-card shadow-sm ring-1 ring-border/70 p-6">
-        <form action={formAction} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">อีเมล</Label>
             <Input
@@ -65,9 +77,9 @@ export function LoginForm() {
             จดจำฉันในอุปกรณ์นี้
           </label>
 
-          {state?.error && (
+          {error && (
             <p className="rounded-xl bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
-              {state.error}
+              {error}
             </p>
           )}
 
@@ -80,7 +92,7 @@ export function LoginForm() {
       {features.enableSignup && (
         <p className="text-[13px] text-muted-foreground">
           ยังไม่มีบัญชี?{' '}
-          <Link href="/signup" className="text-primary font-medium hover:underline">
+          <Link href="/signup/" className="text-primary font-medium hover:underline">
             สมัครใช้งาน
           </Link>
         </p>

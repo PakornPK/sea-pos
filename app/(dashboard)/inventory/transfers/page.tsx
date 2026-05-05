@@ -1,8 +1,10 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ArrowLeftRight, ArrowRight, Plus } from 'lucide-react'
-import { requirePageRole } from '@/lib/auth'
-import { stockTransferRepo, branchRepo } from '@/lib/repositories'
+import { useAuth } from '@/lib/auth-client'
 import { resolveBranchFilter } from '@/lib/branch-filter'
 import { BranchScopeToggle } from '@/components/layout/BranchScopeToggle'
 import { Badge } from '@/components/ui/badge'
@@ -14,13 +16,8 @@ import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
 import { SortableHeader } from '@/components/ui/SortableHeader'
 import { parseSort, sortRows, sortToggleHref } from '@/lib/sort'
-import type { StockTransferStatus, UserRole } from '@/types/database'
-
-export const metadata: Metadata = {
-  title: 'โอนสต๊อก | SEA-POS',
-}
-
-const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
+import type { StockTransferStatus } from '@/types/database'
+import { listTransfers, type TransferListRow } from '@/lib/actions/stockTransfers'
 
 const STATUS_LABEL: Record<StockTransferStatus, string> = {
   draft:      'ร่าง',
@@ -37,29 +34,35 @@ const STATUS_VARIANT: Record<StockTransferStatus, 'default' | 'secondary' | 'out
 }
 
 type SortCol = 'created_at' | 'status' | 'total_quantity'
-type Search = { branch?: string; sort?: string; dir?: string }
 
-export default async function TransfersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Search>
-}) {
-  const { me } = await requirePageRole(ALLOWED)
-  const sp = await searchParams
+export default function TransfersPage() {
+  const { user } = useAuth()
+  const searchParams = useSearchParams()
 
-  const isAdmin = me.role === 'admin' || me.isPlatformAdmin
-  const branchFilter = resolveBranchFilter(me, sp.branch)
-  const { col, dir } = parseSort<SortCol>(sp as Record<string, string | undefined>, 'created_at', 'desc')
+  const [rows, setRows] = useState<TransferListRow[]>([])
+  const [activeBranchName, setActiveBranchName] = useState<string | null>(null)
 
-  const [rawRows, activeBranch] = await Promise.all([
-    stockTransferRepo.list({ branchId: branchFilter }),
-    me.activeBranchId ? branchRepo.getById(me.activeBranchId) : Promise.resolve(null),
-  ])
+  const sp: Record<string, string> = {}
+  searchParams.forEach((value, key) => { sp[key] = value })
 
-  const rows = sortRows(rawRows, col as keyof typeof rawRows[0], dir)
+  const isAdmin = !!user && (user.role === 'admin' || user.isPlatformAdmin)
+  const branchFilter = user ? resolveBranchFilter(user, searchParams.get('branch') ?? undefined) : undefined
+  const { col, dir } = parseSort<SortCol>(sp, 'created_at', 'desc')
+
+  useEffect(() => {
+    if (!user) return
+    listTransfers({ branchId: branchFilter ?? null }).then(({ rows: r, activeBranchName: name }) => {
+      setRows(r)
+      setActiveBranchName(name)
+    })
+  }, [user, branchFilter])
+
+  if (!user) return null  // AuthGuard handles redirect
+
+  const sorted = sortRows(rows, col as keyof TransferListRow, dir)
 
   function href(c: SortCol) {
-    return sortToggleHref('/inventory/transfers', sp as Record<string, string | undefined>, c, col, dir)
+    return sortToggleHref('/inventory/transfers/', sp, c, col, dir)
   }
 
   return (
@@ -72,7 +75,7 @@ export default async function TransfersPage({
           </p>
         </div>
         <Link
-          href="/inventory/transfers/new"
+          href="/inventory/transfers/new/"
           className={cn(buttonVariants({ size: 'sm' }))}
         >
           <Plus className="mr-1 h-4 w-4" />
@@ -82,14 +85,14 @@ export default async function TransfersPage({
 
       {isAdmin && (
         <BranchScopeToggle
-          basePath="/inventory/transfers"
-          searchParams={sp as Record<string, string | undefined>}
+          basePath="/inventory/transfers/"
+          searchParams={sp}
           isAllBranches={branchFilter === null}
-          activeBranchLabel={activeBranch?.name ?? null}
+          activeBranchLabel={activeBranchName}
         />
       )}
 
-      {rows.length === 0 ? (
+      {sorted.length === 0 ? (
         <p className="rounded-2xl bg-muted/30 py-10 text-center text-sm text-muted-foreground">
           ยังไม่มีรายการโอน
         </p>
@@ -112,7 +115,7 @@ export default async function TransfersPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((t) => (
+            {sorted.map((t) => (
               <TableRow key={t.id}>
                 <TableCell className="text-sm text-muted-foreground">
                   {formatDateTime(t.created_at)}
@@ -137,7 +140,7 @@ export default async function TransfersPage({
                 </TableCell>
                 <TableCell className="text-right">
                   <Link
-                    href={`/inventory/transfers/${t.id}`}
+                    href={`/inventory/transfers/detail/?id=${t.id}`}
                     className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
                   >
                     <ArrowLeftRight className="h-3.5 w-3.5" />

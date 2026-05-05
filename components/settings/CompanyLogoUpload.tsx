@@ -7,6 +7,7 @@ import { uploadCompanyAsset, removeCompanyAsset } from '@/lib/actions/storage'
 import { validateImageUpload } from '@/lib/storage-validation'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-client'
 
 type Props = {
   kind: 'logo' | 'letterhead'
@@ -17,8 +18,10 @@ type Props = {
 }
 
 export function CompanyLogoUpload({ kind, label, hint, currentUrl, aspect = 'square' }: Props) {
+  const { user } = useAuth()
+  const companyId = user?.companyId ?? ''
   const inputRef = useRef<HTMLInputElement>(null)
-  const uploadWith = uploadCompanyAsset.bind(null, kind)
+  const uploadWith = uploadCompanyAsset.bind(null, kind, companyId)
   const [state, formAction, pending] = useActionState(uploadWith, undefined)
   const [preview, setPreview] = useState<string | null>(currentUrl)
   const [removing, setRemoving] = useState(false)
@@ -67,7 +70,7 @@ export function CompanyLogoUpload({ kind, label, hint, currentUrl, aspect = 'squ
     setRemoveError(null)
     setRemoving(true)
     try {
-      await removeCompanyAsset(kind)
+      await removeCompanyAsset(kind, companyId)
       stablePreview.current = null
       setPreview(null)
     } catch (e) {

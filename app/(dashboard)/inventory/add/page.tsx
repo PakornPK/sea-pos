@@ -1,22 +1,31 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
-import { requirePageRole } from '@/lib/auth'
+import { useAuth } from '@/lib/auth-client'
 import { categoryRepo, productRepo } from '@/lib/repositories'
 import { AddProductForm } from '@/components/inventory/AddProductForm'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { Category, Product } from '@/types/database'
 
-export const metadata: Metadata = {
-  title: 'เพิ่มสินค้า | SEA-POS',
-}
+export default function AddProductPage() {
+  const { user } = useAuth()
+  const [categories, setCategories] = useState<Category[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
 
-export default async function AddProductPage() {
-  await requirePageRole(['admin', 'manager'])
-  const [categories, allProducts] = await Promise.all([
-    categoryRepo.list(),
-    productRepo.listAll(),
-  ])
+  useEffect(() => {
+    Promise.all([
+      categoryRepo.list(),
+      productRepo.listAll(),
+    ])
+      .then(([cats, prods]) => { setCategories(cats); setAllProducts(prods); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading) return null
 
   const optionCatIds = new Set(
     categories

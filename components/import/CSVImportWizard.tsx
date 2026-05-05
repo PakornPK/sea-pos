@@ -24,14 +24,13 @@ import { cn } from '@/lib/utils'
 import { parseCSV, normalizeKey } from '@/lib/csv'
 import {
   importProducts,
-  importCustomers,
   importMembers,
   type ImportResult,
 } from '@/lib/actions/import'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ImportType = 'products' | 'customers' | 'members'
+export type ImportType = 'products' | 'members'
 
 type Step = 'upload' | 'preview' | 'done'
 type MappedRow = Record<string, string>
@@ -106,36 +105,6 @@ const IMPORT_CONFIG: Record<ImportType, ImportConfig> = {
       },
     ],
   },
-  customers: {
-    title: 'นำเข้าลูกค้า',
-    path: '/customers',
-    fields: [
-      {
-        key: 'name',
-        label: 'ชื่อลูกค้า',
-        required: true,
-        aliases: ['name', 'ชื่อ', 'ชื่อลูกค้า', 'customername', 'fullname'],
-      },
-      {
-        key: 'phone',
-        label: 'เบอร์โทรศัพท์',
-        required: false,
-        aliases: ['phone', 'เบอร์โทร', 'เบอร์', 'tel', 'mobile', 'phonenumber', 'telephone'],
-      },
-      {
-        key: 'email',
-        label: 'อีเมล',
-        required: false,
-        aliases: ['email', 'อีเมล', 'emailaddress', 'mail'],
-      },
-      {
-        key: 'address',
-        label: 'ที่อยู่',
-        required: false,
-        aliases: ['address', 'ที่อยู่', 'addr', 'location'],
-      },
-    ],
-  },
   members: {
     title: 'นำเข้าสมาชิก',
     path: '/members',
@@ -184,12 +153,6 @@ const TEMPLATE_EXAMPLES: Record<ImportType, Record<string, string>> = {
     min_stock: '10',
     category: 'เครื่องดื่ม',
     track_stock: 'true',
-  },
-  customers: {
-    name: 'สมชาย ใจดี',
-    phone: '0812345678',
-    email: 'somchai@example.com',
-    address: '123 ถ.สุขุมวิท กรุงเทพฯ',
   },
   members: {
     name: 'สมหญิง มีสุข',
@@ -400,8 +363,6 @@ export function CSVImportWizard({ type, open, onClose }: Props) {
       let importResult: ImportResult
       if (type === 'products') {
         importResult = await importProducts(validRows)
-      } else if (type === 'customers') {
-        importResult = await importCustomers(validRows)
       } else {
         importResult = await importMembers(validRows)
       }

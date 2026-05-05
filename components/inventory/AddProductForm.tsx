@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useRef, useState } from 'react'
+import { useActionState, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { ImagePlus, Link2, Plus, Trash2, X } from 'lucide-react'
 import { addProduct } from '@/lib/actions/inventory'
@@ -14,7 +15,7 @@ import { chain, money } from '@/lib/money'
 import { formatBaht } from '@/lib/format'
 import type { Category, Product } from '@/types/database'
 
-type ActionState = { error: string } | undefined
+type ActionState = { error: string } | { redirectTo: string } | undefined
 
 type DraftCostItem = { name: string; quantity: number; unit_cost: number; linked_product_id: string | null }
 type DraftOption   = { name: string; price_delta: number; linked_product_id: string | null }
@@ -33,6 +34,7 @@ type AddProductFormProps = {
 }
 
 export function AddProductForm({ categories, allProducts, linkableProducts }: AddProductFormProps) {
+  const router = useRouter()
   const costCatIds = new Set(
     categories.filter((c) => c.category_type === 'cost').map((c) => c.id)
   )
@@ -43,6 +45,10 @@ export function AddProductForm({ categories, allProducts, linkableProducts }: Ad
     addProduct,
     undefined
   )
+
+  useEffect(() => {
+    if (state && 'redirectTo' in state && state.redirectTo) router.push(state.redirectTo)
+  }, [state, router])
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [trackStock, setTrackStock] = useState(true)
@@ -578,7 +584,7 @@ export function AddProductForm({ categories, allProducts, linkableProducts }: Ad
         })}
       </div>
 
-      {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {state && 'error' in state && state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? 'กำลังบันทึก...' : 'เพิ่มสินค้า'}

@@ -146,7 +146,7 @@ export function POList({ orders, currentStatus }: Props) {
                 </TableCell>
                 <TableCell className="text-center">
                   <Link
-                    href={`/purchasing/${o.id}`}
+                    href={`/purchasing/detail/?id=${o.id}`}
                     className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
                   >
                     <Eye className="h-4 w-4" />

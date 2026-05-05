@@ -1,19 +1,19 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Building2, TrendingUp, AlertTriangle, Ban,
   CreditCard, ArrowRight, Receipt,
 } from 'lucide-react'
-import { requirePlatformAdmin } from '@/lib/auth'
+import { useAuth } from '@/lib/auth-client'
 import { billingRepo } from '@/lib/repositories'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SubscriptionTickButton } from '@/components/platform/SubscriptionTickButton'
 
-export const metadata: Metadata = {
-  title: 'Platform Dashboard | SEA-POS',
-}
+type PlatformSummary = Awaited<ReturnType<typeof billingRepo.getPlatformSummary>>
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { minimumFractionDigits: 2 })
@@ -46,9 +46,18 @@ const SUB_STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | '
   cancelled: 'outline',
 }
 
-export default async function PlatformDashboard() {
-  await requirePlatformAdmin()
-  const d = await billingRepo.getPlatformSummary()
+export default function PlatformDashboard() {
+  const { user } = useAuth()
+  const [d, setD] = useState<PlatformSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    billingRepo.getPlatformSummary()
+      .then((data) => { setD(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading || !d) return null
 
   return (
     <div className="flex flex-col gap-8">
@@ -135,7 +144,7 @@ export default async function PlatformDashboard() {
               {d.attentionCompanies.map((c) => (
                 <Link
                   key={c.id}
-                  href={`/platform/companies/${c.id}`}
+                  href={`/platform/companies/detail/?id=${c.id}`}
                   className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">

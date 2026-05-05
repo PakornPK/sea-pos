@@ -36,11 +36,12 @@ type UserTableProps = {
   users: UserRow[]
   currentUserId: string
   allBranches: Branch[]
+  onMutated?: () => void
 }
 
 type SortCol = 'email' | 'first_name' | 'role'
 
-export function UserTable({ users, currentUserId, allBranches }: UserTableProps) {
+export function UserTable({ users, currentUserId, allBranches, onMutated }: UserTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
   const [branchEditingId, setBranchEditingId] = useState<string | null>(null)
@@ -62,6 +63,7 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
       try {
         await updateUserBranches(formData)
         setBranchEditingId(null)
+        onMutated?.()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'บันทึกสาขาไม่สำเร็จ')
       }
@@ -73,7 +75,7 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
     setError(null)
     startTransition(async () => {
       try {
-        await deleteUser(id)
+        await deleteUser(id, currentUserId)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'ลบผู้ใช้ไม่สำเร็จ')
       }
@@ -97,7 +99,7 @@ export function UserTable({ users, currentUserId, allBranches }: UserTableProps)
     setError(null)
     startTransition(async () => {
       try {
-        await forceSignOutUser(id)
+        await forceSignOutUser(id, currentUserId)
         alert('บังคับออกจากระบบสำเร็จ')
       } catch (e) {
         setError(e instanceof Error ? e.message : 'บังคับออกจากระบบไม่สำเร็จ')

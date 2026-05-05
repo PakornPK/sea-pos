@@ -27,11 +27,12 @@ type ProductTableProps = {
   canAdjust?: boolean
   /** Admin "ทุกสาขา" mode — renders a per-branch stock breakdown instead of +/- buttons. */
   isAllBranches?: boolean
+  onStockAdjusted?: () => void
 }
 
 type SortCol = 'name' | 'price' | 'stock'
 
-export function ProductTable({ products, categories, canAdjust = false, isAllBranches = false }: ProductTableProps) {
+export function ProductTable({ products, categories, canAdjust = false, isAllBranches = false, onStockAdjusted }: ProductTableProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [sortCol, setSortCol] = useState<SortCol>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -197,9 +198,9 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                   <TableCell>
                     {product.track_stock ? (
                       <div className="flex items-center justify-center gap-2">
-                        <StockAdjustButton productId={product.id} delta={-1} disabled={product.stock <= 0} />
+                        <StockAdjustButton productId={product.id} delta={-1} disabled={product.stock <= 0} onAdjusted={onStockAdjusted} />
                         <span className="w-8 text-center tabular-nums">{product.stock}</span>
-                        <StockAdjustButton productId={product.id} delta={1} />
+                        <StockAdjustButton productId={product.id} delta={1} onAdjusted={onStockAdjusted} />
                       </div>
                     ) : (
                       <span className="text-muted-foreground text-xs text-center block">—</span>
@@ -209,7 +210,7 @@ export function ProductTable({ products, categories, canAdjust = false, isAllBra
                 {canAdjust && (
                   <TableCell>
                     <Link
-                      href={`/inventory/${product.id}/edit`}
+                      href={`/inventory/edit/?id=${product.id}`}
                       className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-7 w-7 p-0')}
                       title="แก้ไขสินค้า"
                     >

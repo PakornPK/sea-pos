@@ -1,16 +1,25 @@
-import type { Metadata } from 'next'
-import { requirePlatformAdmin } from '@/lib/auth'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/auth-client'
 import { planRepo } from '@/lib/repositories'
 import { PlanEditor } from '@/components/platform/PlanEditor'
 import { CreatePlanForm } from '@/components/platform/CreatePlanForm'
 
-export const metadata: Metadata = {
-  title: 'แพ็กเกจ | SEA-POS Platform',
-}
+type PlanWithUsage = Awaited<ReturnType<typeof planRepo.listAllWithUsage>>[number]
 
-export default async function PlansPage() {
-  await requirePlatformAdmin()
-  const plans = await planRepo.listAllWithUsage()
+export default function PlansPage() {
+  const { user } = useAuth()
+  const [plans, setPlans] = useState<PlanWithUsage[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    planRepo.listAllWithUsage()
+      .then((d) => { setPlans(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading) return null
 
   const totalCompanies = plans.reduce((s, p) => s + p.company_count, 0)
 

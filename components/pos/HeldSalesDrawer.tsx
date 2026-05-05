@@ -20,6 +20,10 @@ type Props = {
    */
   currentCartHasItems: boolean
   /**
+   * The active branch ID, used to scope held sales list and resume.
+   */
+  branchId: string
+  /**
    * Bump this counter to force an immediate refetch (e.g. after the parent
    * holds a new bill). Any change triggers a fresh listHeldSales() call so
    * the count badge + drawer list stay in sync without waiting for the user
@@ -37,7 +41,7 @@ type Props = {
  * Header pill that opens a list of parked bills for the active branch. Count
  * badge refreshes when the drawer opens or when `refreshKey` bumps.
  */
-export function HeldSalesDrawer({ onResume, currentCartHasItems, refreshKey = 0, initialRows = [] }: Props) {
+export function HeldSalesDrawer({ onResume, currentCartHasItems, branchId, refreshKey = 0, initialRows = [] }: Props) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<HeldSaleListRow[]>(initialRows)
   const [loading, startLoading] = useTransition()
@@ -48,26 +52,26 @@ export function HeldSalesDrawer({ onResume, currentCartHasItems, refreshKey = 0,
   useEffect(() => {
     if (!open) return
     startLoading(async () => {
-      const list = await listHeldSales()
+      const list = await listHeldSales(branchId)
       setRows(list)
     })
-  }, [open])
+  }, [open, branchId])
 
   // Re-fetch badge count when refreshKey bumps (a new bill was held).
   useEffect(() => {
     if (refreshKey === 0) return   // skip initial mount
     startLoading(async () => {
-      const list = await listHeldSales()
+      const list = await listHeldSales(branchId)
       setRows(list)
     })
-  }, [refreshKey])
+  }, [refreshKey, branchId])
 
   async function handleResume(id: string) {
     if (currentCartHasItems) {
       if (!confirm('ตะกร้าปัจจุบันจะถูกแทนที่ด้วยบิลที่พักไว้ ดำเนินการต่อ?')) return
     }
     setBusyId(id)
-    const snapshot = await resumeHeldSale(id)
+    const snapshot = await resumeHeldSale(id, branchId)
     setBusyId(null)
     if (!snapshot) return
     onResume(snapshot)

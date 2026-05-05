@@ -1,11 +1,13 @@
-import type { Metadata } from 'next'
-import { requirePage } from '@/lib/auth'
+'use client'
+
+import { useAuth } from '@/lib/auth-client'
 import { EnrollMemberForm } from '@/components/loyalty/EnrollMemberForm'
 
-export const metadata: Metadata = { title: 'สมัครสมาชิก | SEA-POS' }
+export default function EnrollPage() {
+  const { user } = useAuth()
 
-export default async function EnrollPage() {
-  await requirePage()
+  if (!user) return null
+
   return (
     <div className="max-w-lg">
       <h1 className="text-[24px] font-bold tracking-tight mb-6">สมัครสมาชิก</h1>

@@ -23,7 +23,7 @@ export function RecentSalesList({ sales }: { sales: RecentSale[] }) {
           {sales.map((s) => (
             <div key={s.id} className="flex items-center gap-3 text-sm">
               <Link
-                href={`/pos/receipt/${s.id}`}
+                href={`/pos/receipt/?saleId=${s.id}`}
                 className="font-mono text-xs font-medium hover:underline shrink-0"
               >
                 {formatReceiptNo(s.receipt_no, s.branch_code)}
@@ -44,7 +44,7 @@ export function RecentSalesList({ sales }: { sales: RecentSale[] }) {
                 <Badge variant="destructive" className="shrink-0">ยกเลิก</Badge>
               ) : (
                 <Link
-                  href={`/pos/receipt/${s.id}`}
+                  href={`/pos/receipt/?saleId=${s.id}`}
                   className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'shrink-0 h-7 w-7 p-0')}
                 >
                   <Eye className="h-3.5 w-3.5" />

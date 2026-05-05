@@ -3,19 +3,25 @@
 import { useTransition } from 'react'
 import { adjustStock } from '@/lib/actions/inventory'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/lib/auth-client'
 
 type StockAdjustButtonProps = {
-  productId: string
-  delta: number
-  disabled?: boolean
+  productId:  string
+  delta:      number
+  disabled?:  boolean
+  onAdjusted?: () => void
 }
 
-export function StockAdjustButton({ productId, delta, disabled }: StockAdjustButtonProps) {
+export function StockAdjustButton({ productId, delta, disabled, onAdjusted }: StockAdjustButtonProps) {
+  const { user } = useAuth()
   const [pending, startTransition] = useTransition()
 
   function handleClick() {
-    startTransition(() => {
-      adjustStock(productId, delta)
+    const branchId = user?.activeBranchId ?? ''
+    const userId = user?.id ?? ''
+    startTransition(async () => {
+      await adjustStock(productId, delta, branchId, userId)
+      onAdjusted?.()
     })
   }
 

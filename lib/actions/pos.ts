@@ -1,28 +1,23 @@
-'use server'
-
-import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
-import { getActionUser, requireActionRole } from '@/lib/auth'
-import { productRepo, productStockRepo, saleRepo, companyRepo, loyaltyRepo, optionRepo, productCostItemRepo } from '@/lib/repositories'
+import { productRepo, productStockRepo, saleRepo, companyRepo, branchRepo, loyaltyRepo, optionRepo, productCostItemRepo } from '@/lib/repositories'
 import { DEFAULT_PAGE_SIZE, type Paginated } from '@/lib/pagination'
 import type { ProductWithStock } from '@/types/database'
 import { computeVat, getVatConfig } from '@/lib/vat'
 import { chain, money, lineTotal, qty } from '@/lib/money'
 
-export type SaleState = { error: string } | undefined
-export type VoidState = { error?: string } | undefined
+export type SaleState = { error: string } | { redirectTo: string } | undefined
+export type VoidState = { error?: string; redirectTo?: string } | undefined
 
 export async function searchInStockProducts(input: {
-  page:   number
-  search: string
+  page:         number
+  search:       string
+  branchId:     string
 }): Promise<Paginated<ProductWithStock>> {
-  const { me } = await getActionUser()
-  if (!me.activeBranchId) {
+  if (!input.branchId) {
     return { rows: [], totalCount: 0, page: 1, pageSize: DEFAULT_PAGE_SIZE, totalPages: 1 }
   }
   return productRepo.listInStockForBranchPaginated(
     { page: Math.max(1, input.page), pageSize: DEFAULT_PAGE_SIZE },
-    { branchId: me.activeBranchId, search: input.search },
+    { branchId: input.branchId, search: input.search },
   )
 }
 
@@ -31,15 +26,10 @@ export async function searchInStockProducts(input: {
  * the cashier's active branch. Barcode match takes precedence over SKU.
  * Returns null when nothing matches or the item is out of stock.
  */
-export async function findProductByCode(code: string): Promise<ProductWithStock | null> {
-  const { me } = await getActionUser()
-  if (!me.activeBranchId) return null
-  if (!(SELL_ROLES as readonly string[]).includes(me.role)) return null
-  return productRepo.findInStockByCodeForBranch(me.activeBranchId, code)
+export async function findProductByCode(code: string, branchId: string): Promise<ProductWithStock | null> {
+  if (!branchId) return null
+  return productRepo.findInStockByCodeForBranch(branchId, code)
 }
-
-const SELL_ROLES = ['admin', 'manager', 'cashier'] as const
-const VOID_ROLES = ['admin', 'manager'] as const
 
 type CartOption = {
   group_id:          string
@@ -62,16 +52,15 @@ type CartItem = {
   options:   CartOption[]
 }
 
-export async function createSale(_prev: SaleState, formData: FormData): Promise<SaleState> {
-  const { me } = await getActionUser()
-  if (!(SELL_ROLES as readonly string[]).includes(me.role)) {
-    return { error: 'ไม่มีสิทธิ์ขายสินค้า' }
-  }
-  if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
+export async function createSale(_prev: SaleState, formData: FormData): Promise<SaleState | { redirectTo: string }> {
+  const activeBranchId = (formData.get('activeBranchId') as string) || null
+  const userId         = (formData.get('userId')         as string) || ''
+  const companyId      = (formData.get('companyId')      as string) || null
+
+  if (!activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
 
   const cartJson      = formData.get('cart')          as string
   const paymentMethod = formData.get('paymentMethod') as string
-  const customerId    = (formData.get('customerId')   as string) || null
   const memberId      = (formData.get('memberId')     as string) || null
   const redeemPoints  = Number(formData.get('redeemPoints') ?? 0) || 0
 
@@ -86,7 +75,7 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
 
   // Re-resolve VAT config + per-item flags server-side. Never trust client
   // flags — a tampered payload could mis-state tax or skip stock checks.
-  const company = me.companyId ? await companyRepo.getByIdCached(me.companyId) : null
+  const company = companyId ? await companyRepo.getByIdCached(companyId) : null
   const vatConfig = getVatConfig(company)
   const companySettings = (company?.settings ?? {}) as { allow_negative_stock?: boolean }
   const allowNegative = companySettings.allow_negative_stock !== false  // default true
@@ -122,30 +111,21 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   }
   const finalTotal = Math.max(0, money(chain(breakdown.total).minus(memberDiscountBaht)))
 
-  const header = await saleRepo.createHeader({
-    user_id:              me.id,
-    customer_id:          customerId,
+  const saleResult = await saleRepo.create({
+    user_id:              userId,
     member_id:            memberId,
-    branch_id:            me.activeBranchId,
+    branch_id:            activeBranchId,
     total_amount:         finalTotal,
     subtotal_ex_vat:      breakdown.subtotalExVat,
     vat_amount:           breakdown.vatAmount,
     member_discount_baht: memberDiscountBaht,
     redeem_points_used:   redeemPoints,
     payment_method:       paymentMethod as 'cash' | 'card' | 'transfer',
-  })
-  if ('error' in header) return { error: header.error }
-
-  const itemsResult = await saleRepo.insertItems(
-    header.id,
-    cart.map((i) => {
-      // Base cost from the product itself (cup, packaging, etc.)
+    items: cart.map((i) => {
       const baseCost = chain(costMap[i.productId] ?? 0)
-      // Add ingredient cost from each linked option (e.g. 20g beans × ฿0.80/g)
       const ingredientCost = (i.options ?? []).reduce((acc, o) => {
         if (!o.linked_product_id) return acc
-        const ingCost = chain(costMap[o.linked_product_id] ?? 0)
-        return acc.plus(ingCost.times(o.quantity_per_use ?? 1))
+        return acc.plus(chain(costMap[o.linked_product_id] ?? 0).times(o.quantity_per_use ?? 1))
       }, chain(0))
       return {
         product_id:   i.productId,
@@ -154,16 +134,16 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
         subtotal:     lineTotal(i.price, i.quantity),
         cost_at_sale: money(baseCost.plus(ingredientCost)),
       }
-    })
-  )
-  if ('error' in itemsResult) return { error: itemsResult.error }
+    }),
+  })
+  if ('error' in saleResult) return { error: saleResult.error }
 
   // Save selected options per sale item (snapshot includes linked_product_id)
   await Promise.all(
     cart.map((item, idx) => {
       if (!item.options?.length) return Promise.resolve()
       return optionRepo.insertSaleItemOptions(
-        itemsResult.ids[idx],
+        saleResult.itemIds[idx],
         item.options.map((o) => ({
           option_id:         o.option_id,
           group_name:        o.group_name,
@@ -190,10 +170,10 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     if (trackStockMap[item.productId] !== false) {
       const stockErr = await productStockRepo.decrement({
         productId:     item.productId,
-        branchId:      me.activeBranchId,
+        branchId:      activeBranchId,
         quantity:      item.quantity,
-        saleId:        header.id,
-        userId:        me.id,
+        saleId:        saleResult.id,
+        userId,
         allowNegative,
       })
       if (stockErr) return { error: `อัปเดตสต๊อก "${item.name}" ไม่สำเร็จ: ${stockErr}` }
@@ -219,16 +199,16 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
   }
   // Resolve trackStock for all linked products and deduct
   if (linkedStockMap.size > 0) {
-    const linkedIds = Array.from(linkedStockMap.keys())
-    const linkedTrackMap = await productRepo.trackStockMap(linkedIds)
-    for (const [linkedId, qty] of linkedStockMap) {
+    const linkedProductIds = Array.from(linkedStockMap.keys())
+    const linkedTrackMap = await productRepo.trackStockMap(linkedProductIds)
+    for (const [linkedId, linkedQty] of linkedStockMap) {
       if (linkedTrackMap[linkedId] === false) continue
       const linkedErr = await productStockRepo.decrement({
         productId:     linkedId,
-        branchId:      me.activeBranchId,
-        quantity:      qty,
-        saleId:        header.id,
-        userId:        me.id,
+        branchId:      activeBranchId,
+        quantity:      linkedQty,
+        saleId:        saleResult.id,
+        userId,
         allowNegative,
       })
       if (linkedErr) return { error: `อัปเดตสต๊อกส่วนประกอบ (${linkedId.slice(0, 8)}) ไม่สำเร็จ: ${linkedErr}` }
@@ -240,20 +220,17 @@ export async function createSale(_prev: SaleState, formData: FormData): Promise<
     await loyaltyRepo.awardPointsFromSale({
       member_id:     memberId,
       amount_baht:   finalTotal,
-      sale_id:       header.id,
+      sale_id:       saleResult.id,
       redeem_points: redeemPoints,
     })
   }
 
-  revalidatePath('/inventory')
-  revalidatePath('/reports')
-  revalidatePath('/dashboard')
-  redirect(`/pos/receipt/${header.id}`)
+  return { redirectTo: `/pos/receipt/?saleId=${saleResult.id}` }
 }
 
 export async function voidSale(_prev: VoidState, formData: FormData): Promise<VoidState> {
   try {
-    const { me } = await requireActionRole([...VOID_ROLES])
+    const userId = (formData.get('userId') as string) || ''
 
     const saleId = formData.get('saleId') as string
     const reason = (formData.get('reason') as string | null)?.trim() ?? ''
@@ -287,7 +264,7 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
         branchId:  saleBranchId,
         delta:     item.quantity,
         reason:    voidNote,
-        userId:    me.id,
+        userId,
       })
     }
 
@@ -301,7 +278,7 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
           branchId:  saleBranchId,
           delta:     total_quantity,
           reason:    voidNote,
-          userId:    me.id,
+          userId,
         })
       }
     }
@@ -329,16 +306,32 @@ export async function voidSale(_prev: VoidState, formData: FormData): Promise<Vo
           branchId:  saleBranchId,
           delta:     restoreQty,
           reason:    voidNote,
-          userId:    me.id,
+          userId,
         })
       }
     }
 
-    revalidatePath('/inventory')
-    revalidatePath(`/pos/receipt/${saleId}`)
-    revalidatePath('/reports')
-    revalidatePath('/dashboard')
+    return { redirectTo: '/pos/sales' }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
+}
+
+export type ReceiptData = {
+  sale: Awaited<ReturnType<typeof saleRepo.getById>>
+  items: Awaited<ReturnType<typeof saleRepo.listItemsWithProduct>>
+  company: Awaited<ReturnType<typeof companyRepo.getCurrent>>
+  branch: Awaited<ReturnType<typeof branchRepo.getById>> | null
+}
+
+export async function getReceiptData(saleId: string): Promise<ReceiptData> {
+  const [sale, items, company] = await Promise.all([
+    saleRepo.getById(saleId),
+    saleRepo.listItemsWithProduct(saleId),
+    companyRepo.getCurrent(),
+  ])
+  const branch = sale && (sale as unknown as { branch_id?: string }).branch_id
+    ? await branchRepo.getById((sale as unknown as { branch_id: string }).branch_id)
+    : null
+  return { sale, items, company, branch }
 }

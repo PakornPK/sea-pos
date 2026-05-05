@@ -1,8 +1,13 @@
-'use server'
-
-import { revalidatePath } from 'next/cache'
-import { requireActionRole } from '@/lib/auth'
 import { supplierRepo, type SupplierInput } from '@/lib/repositories'
+import { parsePageParams, type Paginated } from '@/lib/pagination'
+import type { Supplier } from '@/types/database'
+
+export type SupplierPageData = Paginated<Supplier>
+
+export async function listSuppliersPaginated(sp: { page?: string; pageSize?: string }): Promise<SupplierPageData> {
+  const p = parsePageParams(sp)
+  return supplierRepo.listPaginated(p)
+}
 
 export type SupplierState = { error?: string; success?: boolean } | undefined
 
@@ -22,15 +27,12 @@ export async function addSupplier(
   formData: FormData
 ): Promise<SupplierState> {
   try {
-    await requireActionRole([...MANAGE_ROLES])
     const payload = parseForm(formData)
     if (!payload.name) return { error: 'กรุณาระบุชื่อผู้จำหน่าย' }
 
     const error = await supplierRepo.create(payload)
     if (error) return { error }
 
-    revalidatePath('/purchasing/suppliers')
-    revalidatePath('/purchasing')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -42,7 +44,6 @@ export async function updateSupplier(
   formData: FormData
 ): Promise<SupplierState> {
   try {
-    await requireActionRole([...MANAGE_ROLES])
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบผู้จำหน่าย' }
 
@@ -55,7 +56,6 @@ export async function updateSupplier(
     const error = await supplierRepo.update(id, payload)
     if (error) return { error }
 
-    revalidatePath('/purchasing/suppliers')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -63,7 +63,6 @@ export async function updateSupplier(
 }
 
 export async function deleteSupplier(id: string): Promise<void> {
-  await requireActionRole(['admin'])
   if (!id) throw new Error('ไม่พบผู้จำหน่าย')
 
   const existing = await supplierRepo.getById(id)
@@ -75,6 +74,7 @@ export async function deleteSupplier(id: string): Promise<void> {
 
   const error = await supplierRepo.delete(id)
   if (error) throw new Error(error)
-
-  revalidatePath('/purchasing/suppliers')
 }
+
+// Re-export for documentation purposes
+export { MANAGE_ROLES }

@@ -1,36 +1,28 @@
-import type { Metadata } from 'next'
-import { Suspense } from 'react'
-import { DollarSign, Receipt, ShoppingBag, TrendingUp } from 'lucide-react'
-import { requirePageRole } from '@/lib/auth'
-import { analyticsRepo } from '@/lib/repositories'
+'use client'
+
+import { useAuth } from '@/lib/auth-client'
+import { useSearchParams } from 'next/navigation'
 import { resolveBranchFilter } from '@/lib/branch-filter'
-import { formatBaht } from '@/lib/format'
-import { KpiCard } from '@/components/dashboard/KpiCard'
-import { RevenueTrendChart } from '@/components/dashboard/RevenueTrendChart'
-import { PaymentMixDonut } from '@/components/dashboard/PaymentMixDonut'
-import { TopProductsBar } from '@/components/dashboard/TopProductsBar'
-import { LowStockList } from '@/components/dashboard/LowStockList'
-import { RecentSalesList } from '@/components/dashboard/RecentSalesList'
 import { BranchScopeToggle } from '@/components/layout/BranchScopeToggle'
-import { Skeleton } from '@/components/ui/skeleton'
-import type { UserRole } from '@/types/database'
+import { TodayKpisWidget } from '@/components/dashboard/TodayKpisWidget'
+import { RevenueTrendWidget } from '@/components/dashboard/RevenueTrendWidget'
+import { PaymentMixWidget } from '@/components/dashboard/PaymentMixWidget'
+import { TopProductsWidget } from '@/components/dashboard/TopProductsWidget'
+import { LowStockWidget } from '@/components/dashboard/LowStockWidget'
+import { RecentSalesWidget } from '@/components/dashboard/RecentSalesWidget'
 
-export const metadata: Metadata = {
-  title: 'ภาพรวมร้าน | SEA-POS',
-}
+export default function DashboardPage() {
+  const { user } = useAuth()
+  const searchParams = useSearchParams()
 
-const ALLOWED: UserRole[] = ['admin', 'manager']
+  if (!user) return null  // AuthGuard handles redirect
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ branch?: string }>
-}) {
-  const { me } = await requirePageRole(ALLOWED)
-  const sp = await searchParams
-  const branchId = resolveBranchFilter(me, sp.branch)
-  const isAdmin = me.role === 'admin' || me.isPlatformAdmin
+  const branchId = resolveBranchFilter(user, searchParams.get('branch') ?? undefined)
+  const isAdmin = user.role === 'admin' || user.isPlatformAdmin
   const isAllBranches = branchId === null
+
+  const sp: Record<string, string> = {}
+  searchParams.forEach((value, key) => { sp[key] = value })
 
   return (
     <div className="flex flex-col gap-6">
@@ -43,7 +35,7 @@ export default async function DashboardPage({
         </div>
         {isAdmin && (
           <BranchScopeToggle
-            basePath="/dashboard"
+            basePath="/dashboard/"
             searchParams={sp}
             isAllBranches={isAllBranches}
             activeBranchLabel={null}
@@ -51,105 +43,21 @@ export default async function DashboardPage({
         )}
       </div>
 
-      <Suspense key={`kpi-${branchId ?? 'all'}`} fallback={<KpiRowSkeleton />}>
-        <TodayKpis branchId={branchId} />
-      </Suspense>
+      <TodayKpisWidget branchId={branchId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <Suspense key={`trend-${branchId ?? 'all'}`} fallback={<ChartSkeleton />}>
-            <RevenueTrendWidget branchId={branchId} />
-          </Suspense>
+          <RevenueTrendWidget branchId={branchId} />
         </div>
-        <Suspense key={`pay-${branchId ?? 'all'}`} fallback={<ChartSkeleton />}>
-          <PaymentMixWidget branchId={branchId} />
-        </Suspense>
+        <PaymentMixWidget branchId={branchId} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Suspense key={`top-${branchId ?? 'all'}`} fallback={<ChartSkeleton />}>
-          <TopProductsWidget branchId={branchId} />
-        </Suspense>
-        <Suspense key={`low-${branchId ?? 'all'}`} fallback={<ListSkeleton />}>
-          <LowStockWidget branchId={branchId} />
-        </Suspense>
+        <TopProductsWidget branchId={branchId} />
+        <LowStockWidget branchId={branchId} />
       </div>
 
-      <Suspense key={`recent-${branchId ?? 'all'}`} fallback={<ListSkeleton rows={10} />}>
-        <RecentSalesWidget branchId={branchId} />
-      </Suspense>
-    </div>
-  )
-}
-
-// ─── Streamed widgets ───────────────────────────────────────────────────────
-
-async function TodayKpis({ branchId }: { branchId: string | null }) {
-  await requirePageRole(ALLOWED)
-  const s = await analyticsRepo.todaySummary({ branchId })
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <KpiCard label="รายได้วันนี้"  value={formatBaht(s.revenue)}                   icon={DollarSign}  color="blue"   />
-      <KpiCard label="จำนวนบิล"      value={s.billCount.toLocaleString('th-TH')}      icon={Receipt}     color="green"  />
-      <KpiCard label="ยอดเฉลี่ย/บิล" value={formatBaht(s.avgBill)}                   icon={TrendingUp}  color="purple" />
-      <KpiCard label="ชิ้นที่ขาย"    value={s.itemsSold.toLocaleString('th-TH')}     icon={ShoppingBag} color="orange" />
-    </div>
-  )
-}
-
-async function RevenueTrendWidget({ branchId }: { branchId: string | null }) {
-  await requirePageRole(ALLOWED)
-  const data = await analyticsRepo.dailySeries(7, { branchId })
-  return <RevenueTrendChart data={data} />
-}
-
-async function PaymentMixWidget({ branchId }: { branchId: string | null }) {
-  await requirePageRole(ALLOWED)
-  const data = await analyticsRepo.paymentMix(30, { branchId })
-  return <PaymentMixDonut data={data} />
-}
-
-async function TopProductsWidget({ branchId }: { branchId: string | null }) {
-  await requirePageRole(ALLOWED)
-  const data = await analyticsRepo.topProducts(30, 5, { branchId })
-  return <TopProductsBar data={data} />
-}
-
-async function LowStockWidget({ branchId }: { branchId: string | null }) {
-  await requirePageRole(ALLOWED)
-  const items = await analyticsRepo.lowStock(8, { branchId })
-  return <LowStockList items={items} />
-}
-
-async function RecentSalesWidget({ branchId }: { branchId: string | null }) {
-  await requirePageRole(ALLOWED)
-  const sales = await analyticsRepo.recentSales(10, { branchId })
-  return <RecentSalesList sales={sales} />
-}
-
-// ─── Skeletons for Suspense fallbacks ───────────────────────────────────────
-
-function KpiRowSkeleton() {
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[100px] rounded-2xl" />
-      ))}
-    </div>
-  )
-}
-
-function ChartSkeleton() {
-  return <Skeleton className="h-[270px] rounded-2xl" />
-}
-
-function ListSkeleton({ rows = 6 }: { rows?: number }) {
-  return (
-    <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border/60 space-y-3">
-      <Skeleton className="h-4 w-28" />
-      {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} className="h-5 w-full rounded-lg" />
-      ))}
+      <RecentSalesWidget branchId={branchId} />
     </div>
   )
 }

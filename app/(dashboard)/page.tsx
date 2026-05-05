@@ -1,21 +1,26 @@
-import { redirect } from 'next/navigation'
-import { getActionUser } from '@/lib/auth'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth-client'
 import type { UserRole } from '@/types/database'
 
 const ROLE_HOME: Record<UserRole, string> = {
-  admin:      '/dashboard',
-  manager:    '/dashboard',
-  cashier:    '/pos',
-  purchasing: '/purchasing',
+  admin:      '/dashboard/',
+  manager:    '/dashboard/',
+  cashier:    '/pos/',
+  purchasing: '/purchasing/',
 }
 
-export default async function DashboardPage() {
-  // proxy.ts already guarantees an authenticated user before we reach here.
-  const { me } = await getActionUser()
+export default function RootPage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
 
-  // Platform admins live in a completely separate UI under /platform.
-  // They don't see customer-facing pages and don't need the dashboard home.
-  if (me.isPlatformAdmin) redirect('/platform/companies')
+  useEffect(() => {
+    if (loading || !user) return
+    if (user.isPlatformAdmin) router.replace('/platform/companies/')
+    else router.replace(ROLE_HOME[user.role] ?? '/inventory/')
+  }, [loading, user, router])
 
-  redirect(ROLE_HOME[me.role] ?? '/inventory')
+  return null
 }

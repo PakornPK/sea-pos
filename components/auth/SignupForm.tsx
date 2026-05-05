@@ -1,19 +1,39 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { signUp } from '@/lib/actions/auth'
+import { clientSignUp } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-type State = { error: string } | undefined
-
 export function SignupForm() {
-  const [state, formAction, pending] = useActionState<State, FormData>(signUp, undefined)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const email       = String(fd.get('email') ?? '').trim().toLowerCase()
+    const password    = String(fd.get('password') ?? '')
+    const fullName    = String(fd.get('full_name') ?? '').trim()
+    const companyName = String(fd.get('company_name') ?? '').trim()
+
+    if (!email)       { setError('กรุณาระบุอีเมล'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('รูปแบบอีเมลไม่ถูกต้อง'); return }
+    if (password.length < 8) { setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (!fullName)    { setError('กรุณาระบุชื่อ-สกุล'); return }
+    if (!companyName) { setError('กรุณาระบุชื่อร้าน/บริษัท'); return }
+
+    startTransition(async () => {
+      const err = await clientSignUp(email, password, fullName, companyName)
+      if (err) { setError(err); return }
+      window.location.href = '/'
+    })
+  }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="company_name">ชื่อร้าน / บริษัท *</Label>
         <Input
@@ -63,7 +83,7 @@ export function SignupForm() {
         />
       </div>
 
-      {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" disabled={pending}>
         {pending ? 'กำลังสร้างบัญชี...' : 'สมัครใช้งาน'}
@@ -71,7 +91,7 @@ export function SignupForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         มีบัญชีอยู่แล้ว?{' '}
-        <Link href="/login" className="text-primary hover:underline">
+        <Link href="/login/" className="text-primary hover:underline">
           เข้าสู่ระบบ
         </Link>
       </p>

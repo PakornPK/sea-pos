@@ -1,17 +1,24 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useState, useEffect } from 'react'
 import { notFound } from 'next/navigation'
-import { requirePageRole } from '@/lib/auth'
+import { useAuth } from '@/lib/auth-client'
 import { companyRepo } from '@/lib/repositories'
 import { CompanySettingsForm } from '@/components/settings/CompanySettingsForm'
+import type { Company } from '@/types/database'
 
-export const metadata: Metadata = {
-  title: 'ตั้งค่าบริษัท | SEA-POS',
-}
+export default function CompanySettingsPage() {
+  const { user } = useAuth()
+  const [company, setCompany] = useState<Company | null | undefined>(undefined)
 
-export default async function CompanySettingsPage() {
-  await requirePageRole(['admin'])
-  const company = await companyRepo.getCurrent()
-  if (!company) notFound()
+  useEffect(() => {
+    companyRepo.getCurrent()
+      .then((d) => setCompany(d ?? null))
+      .catch(() => setCompany(null))
+  }, [])
+
+  if (!user || company === undefined) return null
+  if (company === null) notFound()
 
   return (
     <div className="flex flex-col gap-6">

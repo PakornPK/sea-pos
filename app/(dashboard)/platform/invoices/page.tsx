@@ -1,15 +1,23 @@
-import type { Metadata } from 'next'
-import { requirePlatformAdmin } from '@/lib/auth'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/auth-client'
 import { billingRepo } from '@/lib/repositories'
 import { InvoiceList } from '@/components/platform/InvoiceList'
+import type { InvoiceListRow } from '@/lib/repositories'
 
-export const metadata: Metadata = {
-  title: 'ใบกำกับภาษี | SEA-POS Platform',
-}
+export default function InvoicesPage() {
+  const { user } = useAuth()
+  const [invoices, setInvoices] = useState<InvoiceListRow[]>([])
+  const [loading, setLoading] = useState(true)
 
-export default async function InvoicesPage() {
-  await requirePlatformAdmin()
-  const invoices = await billingRepo.listInvoices()
+  useEffect(() => {
+    billingRepo.listInvoices()
+      .then((d) => { setInvoices(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading) return null
 
   const totalIssued = invoices.filter((i) => i.status === 'issued').reduce((s, i) => s + i.total_baht, 0)
   const countIssued = invoices.filter((i) => i.status === 'issued').length

@@ -14,35 +14,46 @@ type Props = {
   company: Company
 }
 
+type Settings = {
+  receipt_header?: string
+  receipt_footer?: string
+  tax_id?: string
+  phone?: string
+  address?: string
+  logo_url?: string
+  letterhead_url?: string
+  vat_mode?: 'none' | 'included' | 'excluded'
+  vat_rate?: number
+  allow_negative_stock?: boolean
+}
+
+function parseSettings(company: Company): Settings {
+  return (company.settings ?? {}) as Settings
+}
+
 export function CompanySettingsForm({ company }: Props) {
   const [state, formAction, pending] = useActionState(updateCompanySettings, undefined)
   const [showSaved, setShowSaved] = useState(false)
 
+  const s = parseSettings(company)
+
+  const [name, setName]                       = useState(company.name ?? '')
+  const [phone, setPhone]                     = useState(s.phone ?? '')
+  const [taxId, setTaxId]                     = useState(s.tax_id ?? '')
+  const [address, setAddress]                 = useState(s.address ?? '')
+  const [vatMode, setVatMode]                 = useState<'none' | 'included' | 'excluded'>(s.vat_mode ?? 'none')
+  const [vatRate, setVatRate]                 = useState(String(typeof s.vat_rate === 'number' ? s.vat_rate : 7))
+  const [allowNegStock, setAllowNegStock]     = useState(s.allow_negative_stock !== false)
+  const [receiptHeader, setReceiptHeader]     = useState(s.receipt_header ?? '')
+  const [receiptFooter, setReceiptFooter]     = useState(s.receipt_footer ?? '')
+
   useEffect(() => {
-    // Show "saved" toast for 3s after each successful submit.
     if (state?.success) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowSaved(true)
       const t = setTimeout(() => setShowSaved(false), 3000)
       return () => clearTimeout(t)
     }
   }, [state])
-
-  const settings = (company.settings ?? {}) as {
-    receipt_header?: string
-    receipt_footer?: string
-    tax_id?: string
-    phone?: string
-    address?: string
-    logo_url?: string
-    letterhead_url?: string
-    vat_mode?: 'none' | 'included' | 'excluded'
-    vat_rate?: number
-    allow_negative_stock?: boolean
-  }
-  const currentVatMode = settings.vat_mode ?? 'none'
-  const currentVatRate = typeof settings.vat_rate === 'number' ? settings.vat_rate : 7
-  const [vatMode, setVatMode] = useState<'none' | 'included' | 'excluded'>(currentVatMode)
 
   return (
    <div className="flex flex-col gap-6 max-w-xl">
@@ -57,14 +68,14 @@ export function CompanySettingsForm({ company }: Props) {
         kind="logo"
         label="โลโก้บริษัท"
         hint="แนะนำสี่เหลี่ยมจัตุรัส, PNG/SVG, ไม่เกิน 2MB"
-        currentUrl={settings.logo_url ?? null}
+        currentUrl={s.logo_url ?? null}
         aspect="square"
       />
       <CompanyLogoUpload
         kind="letterhead"
         label="หัวจดหมาย"
         hint="แนะนำแนวนอน, PNG/JPG, ไม่เกิน 2MB"
-        currentUrl={settings.letterhead_url ?? null}
+        currentUrl={s.letterhead_url ?? null}
         aspect="wide"
       />
     </section>
@@ -84,7 +95,8 @@ export function CompanySettingsForm({ company }: Props) {
             name="name"
             required
             disabled={pending}
-            defaultValue={company.name}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
           />
         </div>
 
@@ -95,7 +107,8 @@ export function CompanySettingsForm({ company }: Props) {
               id="phone"
               name="phone"
               disabled={pending}
-              defaultValue={settings.phone ?? ''}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </div>
 
@@ -105,7 +118,8 @@ export function CompanySettingsForm({ company }: Props) {
               id="tax_id"
               name="tax_id"
               disabled={pending}
-              defaultValue={settings.tax_id ?? ''}
+              value={taxId}
+              onChange={(e) => setTaxId(e.target.value)}
               placeholder="13 หลัก"
             />
           </div>
@@ -117,7 +131,8 @@ export function CompanySettingsForm({ company }: Props) {
             id="address"
             name="address"
             disabled={pending}
-            defaultValue={settings.address ?? ''}
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
           />
         </div>
       </section>
@@ -155,7 +170,8 @@ export function CompanySettingsForm({ company }: Props) {
               min={0}
               max={100}
               step="0.01"
-              defaultValue={currentVatRate}
+              value={vatRate}
+              onChange={(e) => setVatRate(e.target.value)}
               disabled={pending || vatMode === 'none'}
               placeholder="7"
             />
@@ -176,11 +192,11 @@ export function CompanySettingsForm({ company }: Props) {
             type="checkbox"
             name="allow_negative_stock"
             value="true"
-            defaultChecked={settings.allow_negative_stock !== false}
+            checked={allowNegStock}
+            onChange={(e) => setAllowNegStock(e.target.checked)}
             disabled={pending}
             className="mt-0.5 h-4 w-4 shrink-0"
           />
-          {/* Hidden fallback — checkbox value wins when checked because it appears first in DOM order */}
           <input type="hidden" name="allow_negative_stock" value="false" />
           <span className="text-sm leading-snug">
             อนุญาตให้สต๊อกติดลบ
@@ -208,7 +224,8 @@ export function CompanySettingsForm({ company }: Props) {
             id="receipt_header"
             name="receipt_header"
             disabled={pending}
-            defaultValue={settings.receipt_header ?? ''}
+            value={receiptHeader}
+            onChange={(e) => setReceiptHeader(e.target.value)}
             placeholder="เช่น ยินดีต้อนรับ"
           />
         </div>
@@ -219,7 +236,8 @@ export function CompanySettingsForm({ company }: Props) {
             id="receipt_footer"
             name="receipt_footer"
             disabled={pending}
-            defaultValue={settings.receipt_footer ?? ''}
+            value={receiptFooter}
+            onChange={(e) => setReceiptFooter(e.target.value)}
             placeholder="เช่น ขอบคุณที่ใช้บริการ"
           />
         </div>

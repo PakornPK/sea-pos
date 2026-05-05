@@ -208,14 +208,6 @@ export type StockLog = {
   created_at: string
 }
 
-export type Customer = {
-  id: string
-  name: string
-  phone: string | null
-  email: string | null
-  address: string | null
-  created_at: string
-}
 
 export type Supplier = {
   id: string
@@ -229,7 +221,6 @@ export type Supplier = {
 export type Sale = {
   id: string
   receipt_no: number
-  customer_id: string | null
   member_id: string | null
   user_id: string
   total_amount: number
@@ -293,7 +284,7 @@ export type HeldSale = {
   id:          string
   branch_id:   string
   user_id:     string
-  customer_id: string | null
+  member_id: string | null
   items:       HeldSaleItem[]
   note:        string | null
   created_at:  string
@@ -332,12 +323,6 @@ export type StockLogInsert = {
   user_id?: string | null
 }
 
-export type CustomerInsert = {
-  name: string
-  phone?: string | null
-  email?: string | null
-  address?: string | null
-}
 
 export type SupplierInsert = {
   name: string
@@ -347,7 +332,6 @@ export type SupplierInsert = {
 }
 
 export type SaleInsert = {
-  customer_id?: string | null
   user_id: string
   total_amount: number
   subtotal_ex_vat?: number

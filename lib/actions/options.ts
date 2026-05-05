@@ -1,13 +1,8 @@
-'use server'
-
-import { getActionUser, requireActionRole } from '@/lib/auth'
 import { optionRepo } from '@/lib/repositories'
-import { revalidatePath } from 'next/cache'
 import type { OptionGroupWithOptions } from '@/types/database'
 
 /** Fetch option groups for a product (called from POS dialog). */
 export async function getProductOptions(productId: string): Promise<OptionGroupWithOptions[]> {
-  await getActionUser()
   return optionRepo.listForProduct(productId)
 }
 
@@ -20,8 +15,8 @@ export async function saveOptionGroup(
   formData: FormData,
 ): Promise<OptionGroupState> {
   try {
-    const { me } = await requireActionRole(['admin', 'manager'])
     const productId   = formData.get('product_id')   as string
+    const companyId   = (formData.get('company_id')  as string) || ''
     const id          = (formData.get('id') as string) || undefined
     const name        = (formData.get('name') as string).trim()
     const required    = formData.get('required')    === 'true'
@@ -29,19 +24,16 @@ export async function saveOptionGroup(
     const sortOrder   = Number(formData.get('sort_order') ?? 0)
 
     if (!name) return { error: 'กรุณาระบุชื่อกลุ่มตัวเลือก' }
-    if (!me.companyId) return { error: 'ไม่พบบริษัท' }
 
-    await optionRepo.saveGroup(productId, me.companyId, { id, name, required, multi_select: multiSelect, sort_order: sortOrder })
-    revalidatePath(`/inventory/${productId}/edit`)
+    await optionRepo.saveGroup(productId, companyId, { id, name, required, multi_select: multiSelect, sort_order: sortOrder })
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
 
 export async function deleteOptionGroup(groupId: string, productId: string): Promise<void> {
-  await requireActionRole(['admin', 'manager'])
   await optionRepo.deleteGroup(groupId)
-  revalidatePath(`/inventory/${productId}/edit`)
+  void productId // kept for caller context
 }
 
 export async function saveOption(
@@ -49,7 +41,6 @@ export async function saveOption(
   formData: FormData,
 ): Promise<OptionGroupState> {
   try {
-    await requireActionRole(['admin', 'manager'])
     const groupId         = formData.get('group_id')         as string
     const productId       = formData.get('product_id')       as string
     const id              = (formData.get('id') as string)   || undefined
@@ -62,14 +53,13 @@ export async function saveOption(
     if (!name) return { error: 'กรุณาระบุชื่อตัวเลือก' }
 
     await optionRepo.saveOption(groupId, { id, name, price_delta: priceDelta, sort_order: sortOrder, linked_product_id: linkedProductId, quantity_per_use: quantityPerUse })
-    revalidatePath(`/inventory/${productId}/edit`)
+    void productId // kept for caller context
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
 
 export async function deleteOption(optionId: string, productId: string): Promise<void> {
-  await requireActionRole(['admin', 'manager'])
   await optionRepo.deleteOption(optionId)
-  revalidatePath(`/inventory/${productId}/edit`)
+  void productId // kept for caller context
 }

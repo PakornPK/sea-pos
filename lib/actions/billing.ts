@@ -1,19 +1,9 @@
-'use server'
-
-import { revalidatePath } from 'next/cache'
-import { getActionUser } from '@/lib/auth'
 import { billingRepo, storageRepo } from '@/lib/repositories'
-import { getAdminDb } from '@/lib/repositories/supabase/db'
+import { restRpc } from '@/lib/api/rest'
 import type { PaymentMethod } from '@/types/database'
 import type { InvoiceLine } from '@/types/database'
 
 export type BillingState = { error?: string; success?: boolean; id?: string; invoice_no?: string } | undefined
-
-async function requirePlatformAdmin() {
-  const { me } = await getActionUser()
-  if (!me.isPlatformAdmin) throw new Error('เฉพาะผู้ดูแลแพลตฟอร์มเท่านั้น')
-  return { me }
-}
 
 // ─── Platform settings ────────────────────────────────────────────────────────
 
@@ -22,7 +12,6 @@ export async function updatePlatformSettings(
   formData: FormData
 ): Promise<BillingState> {
   try {
-    await requirePlatformAdmin()
     const err = await billingRepo.updateSettings({
       seller_name:        String(formData.get('seller_name')      ?? '').trim() || undefined,
       seller_tax_id:      String(formData.get('seller_tax_id')    ?? '').trim() || null,
@@ -38,7 +27,6 @@ export async function updatePlatformSettings(
       invoice_prefix:     String(formData.get('invoice_prefix')   ?? '').trim() || undefined,
     })
     if (err) return { error: err }
-    revalidatePath('/platform/settings')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -52,7 +40,6 @@ export async function updateCompanyBillingInfo(
   formData: FormData
 ): Promise<BillingState> {
   try {
-    await requirePlatformAdmin()
     // Dynamically import to avoid circular dep; company repo is in repositories
     const { companyRepo } = await import('@/lib/repositories')
     const companyId = String(formData.get('company_id') ?? '').trim()
@@ -64,7 +51,6 @@ export async function updateCompanyBillingInfo(
       contact_phone: String(formData.get('contact_phone') ?? '').trim() || null,
     })
     if (err) return { error: err }
-    revalidatePath(`/platform/companies/${companyId}`)
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -78,7 +64,6 @@ export async function recordPayment(
   formData: FormData
 ): Promise<BillingState> {
   try {
-    const { me } = await requirePlatformAdmin()
     const subscriptionId = String(formData.get('subscription_id') ?? '').trim()
     const companyId      = String(formData.get('company_id')      ?? '').trim()
     if (!subscriptionId || !companyId) return { error: 'ข้อมูลไม่ครบถ้วน' }
@@ -146,8 +131,6 @@ export async function recordPayment(
       lines,
     })
 
-    revalidatePath(`/platform/companies/${companyId}`)
-    revalidatePath('/platform/invoices')
     return { success: true, id: result.id, invoice_no: invoice?.invoice_no }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -161,7 +144,6 @@ export async function issueInvoice(
   formData: FormData
 ): Promise<BillingState> {
   try {
-    await requirePlatformAdmin()
     const companyId      = String(formData.get('company_id')      ?? '').trim()
     const subscriptionId = String(formData.get('subscription_id') ?? '').trim() || null
     const dueAt          = String(formData.get('due_at')          ?? '').trim() || null
@@ -179,8 +161,6 @@ export async function issueInvoice(
       notes: String(formData.get('notes') ?? '').trim() || null,
     })
     if (!result) return { error: 'ออกใบกำกับภาษีไม่สำเร็จ' }
-    revalidatePath('/platform/invoices')
-    revalidatePath(`/platform/companies/${companyId}`)
     return { success: true, id: result.id, invoice_no: result.invoice_no }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
@@ -190,7 +170,6 @@ export async function issueInvoice(
 // ─── Get signed URL for a payment receipt ────────────────────────────────────
 
 export async function getReceiptUrl(receiptPath: string): Promise<string | null> {
-  await requirePlatformAdmin()
   return storageRepo.createSignedUrl('receipts', receiptPath, 3600)
 }
 
@@ -204,11 +183,8 @@ export type TickResult = {
 
 export async function runSubscriptionTick(): Promise<{ data: TickResult; error?: string }> {
   try {
-    await requirePlatformAdmin()
-    const db = await getAdminDb()
-    const { data, error } = await db.rpc('run_subscription_tick')
-    if (error) return { data: null, error: error.message }
-    const row = Array.isArray(data) ? data[0] : data
+    const result = await restRpc<unknown>('run_subscription_tick')
+    const row = Array.isArray(result) ? result[0] : result as Record<string, unknown>
     return {
       data: {
         processed:        Number(row?.processed       ?? 0),
@@ -228,14 +204,11 @@ export async function voidInvoice(
   formData: FormData
 ): Promise<BillingState> {
   try {
-    await requirePlatformAdmin()
     const id     = String(formData.get('id') ?? '').trim()
     const reason = String(formData.get('void_reason') ?? '').trim()
     if (!id) return { error: 'ไม่พบใบกำกับภาษี' }
     const err = await billingRepo.updateInvoiceStatus(id, 'void', reason || undefined)
     if (err) return { error: err }
-    revalidatePath('/platform/invoices')
-    revalidatePath(`/platform/invoices/${id}`)
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }

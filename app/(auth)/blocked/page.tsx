@@ -1,53 +1,36 @@
-import type { Metadata } from 'next'
+'use client'
+
 import Link from 'next/link'
-import { requirePage } from '@/lib/auth'
-import { companyRepo } from '@/lib/repositories'
-import { signOut } from '@/lib/actions/auth'
-import { Button } from '@/components/ui/button'
 import { AlertCircle, Clock, Lock } from 'lucide-react'
+import { useAuth } from '@/lib/auth-client'
+import { Button } from '@/components/ui/button'
 
-export const metadata: Metadata = {
-  title: 'บัญชีของคุณ | SEA-POS',
-}
+const MESSAGES = {
+  pending: {
+    icon: Clock,
+    title: 'บัญชีของคุณกำลังรอการอนุมัติ',
+    body: 'ทีมงาน SEA-POS จะตรวจสอบและเปิดใช้งานบัญชีของคุณภายใน 24 ชั่วโมงทำการ. หากมีคำถาม กรุณาติดต่อทีมสนับสนุน',
+  },
+  suspended: {
+    icon: Lock,
+    title: 'บัญชีของคุณถูกระงับชั่วคราว',
+    body: 'บัญชีถูกระงับการใช้งาน. กรุณาติดต่อทีมสนับสนุนเพื่อแก้ไขปัญหาและเปิดใช้งานอีกครั้ง',
+  },
+  closed: {
+    icon: AlertCircle,
+    title: 'บัญชีของคุณถูกปิด',
+    body: 'บัญชีนี้ถูกปิดถาวร. หากคุณคิดว่านี่เป็นข้อผิดพลาด กรุณาติดต่อทีมสนับสนุน',
+  },
+  active: {
+    icon: AlertCircle,
+    title: 'เกิดข้อผิดพลาด',
+    body: 'กรุณารีเฟรชหน้า หรือเข้าสู่ระบบใหม่',
+  },
+} as const
 
-/**
- * Dead-end page shown to users whose company is not `active`. Platform
- * admins never land here because their company_id is null and they are
- * routed elsewhere. Proxy.ts sends traffic here when company.status is
- * pending / suspended / closed.
- */
-export default async function BlockedPage() {
-  await requirePage()
-  const company = await companyRepo.getCurrent()
-  const status = company?.status ?? 'pending'
-
-  const message = {
-    pending: {
-      icon: Clock,
-      title: 'บัญชีของคุณกำลังรอการอนุมัติ',
-      body:
-        'ทีมงาน SEA-POS จะตรวจสอบและเปิดใช้งานบัญชีของคุณภายใน 24 ชั่วโมงทำการ. ' +
-        'หากมีคำถาม กรุณาติดต่อทีมสนับสนุน',
-    },
-    suspended: {
-      icon: Lock,
-      title: 'บัญชีของคุณถูกระงับชั่วคราว',
-      body:
-        'บัญชีถูกระงับการใช้งาน. กรุณาติดต่อทีมสนับสนุนเพื่อแก้ไขปัญหาและเปิดใช้งานอีกครั้ง',
-    },
-    closed: {
-      icon: AlertCircle,
-      title: 'บัญชีของคุณถูกปิด',
-      body:
-        'บัญชีนี้ถูกปิดถาวร. หากคุณคิดว่านี่เป็นข้อผิดพลาด กรุณาติดต่อทีมสนับสนุน',
-    },
-    active: {
-      icon: AlertCircle,
-      title: 'เกิดข้อผิดพลาด',
-      body: 'กรุณารีเฟรชหน้า หรือเข้าสู่ระบบใหม่',
-    },
-  }[status]
-
+export default function BlockedPage() {
+  const { signOut } = useAuth()
+  const message = MESSAGES['pending']
   const Icon = message.icon
 
   return (
@@ -59,19 +42,9 @@ export default async function BlockedPage() {
         <h1 className="text-[22px] font-bold tracking-tight">{message.title}</h1>
         <p className="text-sm text-muted-foreground">{message.body}</p>
       </div>
-      {company && (
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border/70 px-4 py-3 text-[14px] w-full">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">บริษัท</span>
-            <span className="font-medium">{company.name}</span>
-          </div>
-        </div>
-      )}
-      <form action={signOut}>
-        <Button type="submit" variant="outline" size="sm">
-          ออกจากระบบ
-        </Button>
-      </form>
+      <Button variant="outline" size="sm" onClick={() => { void signOut() }}>
+        ออกจากระบบ
+      </Button>
       <p className="text-xs text-muted-foreground">
         <Link href="mailto:support@sea-pos.com" className="underline">
           ติดต่อทีมสนับสนุน

@@ -1,15 +1,24 @@
-import type { Metadata } from 'next'
-import { requirePlatformAdmin } from '@/lib/auth'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/auth-client'
 import { billingRepo } from '@/lib/repositories'
 import { PlatformSettingsForm } from '@/components/platform/PlatformSettingsForm'
 
-export const metadata: Metadata = {
-  title: 'ตั้งค่าแพลตฟอร์ม | SEA-POS',
-}
+type PlatformSettings = Awaited<ReturnType<typeof billingRepo.getSettings>>
 
-export default async function PlatformSettingsPage() {
-  await requirePlatformAdmin()
-  const settings = await billingRepo.getSettings()
+export default function PlatformSettingsPage() {
+  const { user } = useAuth()
+  const [settings, setSettings] = useState<PlatformSettings | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    billingRepo.getSettings()
+      .then((d) => { setSettings(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading || !settings) return null
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">

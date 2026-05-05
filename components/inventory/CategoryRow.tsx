@@ -27,7 +27,7 @@ export function CategoryRow({ id, name, prefix, vatExempt, categoryType }: Props
   const [draft, setDraft] = useState(prefix ?? '')
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [isExempt, setIsExempt] = useState(vatExempt)
+  const [isExempt, setIsExempt] = useState(Boolean(vatExempt))
   const [catType, setCatType] = useState<CategoryType>(categoryType)
 
   function handleTypeChange(next: CategoryType) {

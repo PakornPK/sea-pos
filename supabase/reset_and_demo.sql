@@ -1,6 +1,6 @@
 -- ============================================================
 -- SEA-POS: Demo Reset & Seed (multi-branch)
--- ⚠️  CAUTION: Deletes ALL product, sales, and customer data
+-- ⚠️  CAUTION: Deletes ALL product, sales, and member data
 -- Safe to run multiple times (idempotent)
 --
 -- Assumes migrations up to 045 have been applied.
@@ -28,9 +28,10 @@ TRUNCATE TABLE
   products,
   categories,
   suppliers,
-  customers,
   member_points_log,
-  members
+  members,
+  membership_tiers,
+  membership_settings
 CASCADE;
 
 -- Reset sequences
@@ -55,7 +56,6 @@ VALUES (
 -- ── 1c. Override company_id default for the seeding transaction ──
 ALTER TABLE categories           ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
 ALTER TABLE products             ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
-ALTER TABLE customers            ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
 ALTER TABLE suppliers            ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
 ALTER TABLE sales                ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
 ALTER TABLE purchase_orders      ALTER COLUMN company_id SET DEFAULT '99999999-0000-0000-0000-000000000001';
@@ -216,12 +216,19 @@ UPDATE products SET cost = 4.00  WHERE id = '22222222-0000-0000-0000-00000000000
 UPDATE products SET cost = 29.00 WHERE id = '22222222-0000-0000-0000-000000000008';  -- 28+1
 UPDATE products SET cost = 22.40 WHERE id = '22222222-0000-0000-0000-000000000001';  -- 2+14.4+6
 
--- ── 4. Customers ──────────────────────────────────────────────
-INSERT INTO customers (id, name, phone, email) VALUES
-  ('33333333-0000-0000-0000-000000000001', 'สมชาย ใจดี',        '0812345678', 'somchai@example.com'),
-  ('33333333-0000-0000-0000-000000000002', 'สมหญิง รักดี',      '0898765432', NULL),
-  ('33333333-0000-0000-0000-000000000003', 'บริษัท ABC จำกัด',  '025551234',  'info@abc.co.th');
-UPDATE customers SET company_id = '99999999-0000-0000-0000-000000000001' WHERE company_id IS NULL;
+-- ── 4b. Membership settings, tiers & members ─────────────────
+INSERT INTO membership_settings (company_id, enabled, points_per_baht, baht_per_point, max_redeem_pct, points_expiry_days)
+VALUES ('99999999-0000-0000-0000-000000000001', true, 1.0, 0.10, 20, NULL);
+
+INSERT INTO membership_tiers (company_id, name, color, min_spend_baht, discount_pct, points_multiplier, sort_order) VALUES
+  ('99999999-0000-0000-0000-000000000001', 'Silver', '#94a3b8', 5000,  3, 1.5, 1),
+  ('99999999-0000-0000-0000-000000000001', 'Gold',   '#f59e0b', 15000, 5, 2.0, 2),
+  ('99999999-0000-0000-0000-000000000001', 'Platinum','#8b5cf6', 30000, 8, 3.0, 3);
+
+INSERT INTO members (id, company_id, member_no, name, phone, email, points_balance, total_spend_baht) VALUES
+  ('44444444-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001', 'M-00001', 'สมชาย ใจดี',   '0812345678', 'somchai@example.com', 1250, 8500),
+  ('44444444-0000-0000-0000-000000000002', '99999999-0000-0000-0000-000000000001', 'M-00002', 'สมหญิง รักไทย','0898765432', NULL,                   320,  1800),
+  ('44444444-0000-0000-0000-000000000003', '99999999-0000-0000-0000-000000000001', 'M-00003', 'บริษัท ABC',   '025551234',  'info@abc.co.th',       2100, 12000);
 
 -- ── 5. Suppliers ──────────────────────────────────────────────
 INSERT INTO suppliers (name, contact_name, phone, email) VALUES
@@ -298,47 +305,66 @@ BEGIN
     );
   END IF;
 
-  INSERT INTO public.profiles (id, role, first_name, last_name, full_name, company_id)
-  SELECT u.id,
-         CASE u.email
-           WHEN 'admin@sea-pos.test'      THEN 'admin'
-           WHEN 'manager@sea-pos.test'    THEN 'manager'
-           WHEN 'cashier@sea-pos.test'    THEN 'cashier'
-           WHEN 'purchasing@sea-pos.test' THEN 'purchasing'
-         END,
-         CASE u.email
-           WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแล'
-           WHEN 'manager@sea-pos.test'    THEN 'ผู้จัดการ'
-           WHEN 'cashier@sea-pos.test'    THEN 'พนักงาน'
-           WHEN 'purchasing@sea-pos.test' THEN 'เจ้าหน้าที่'
-         END,
-         CASE u.email
-           WHEN 'admin@sea-pos.test'      THEN 'ระบบ'
-           WHEN 'manager@sea-pos.test'    THEN 'ร้าน'
-           WHEN 'cashier@sea-pos.test'    THEN 'เก็บเงิน'
-           WHEN 'purchasing@sea-pos.test' THEN 'จัดซื้อ'
-         END,
-         CASE u.email
-           WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแลระบบ'
-           WHEN 'manager@sea-pos.test'    THEN 'ผู้จัดการร้าน'
-           WHEN 'cashier@sea-pos.test'    THEN 'พนักงานเก็บเงิน'
-           WHEN 'purchasing@sea-pos.test' THEN 'เจ้าหน้าที่จัดซื้อ'
-         END,
-         '99999999-0000-0000-0000-000000000001'
-  FROM auth.users u
-  WHERE u.email IN (
-    'admin@sea-pos.test',
-    'manager@sea-pos.test',
-    'cashier@sea-pos.test',
-    'purchasing@sea-pos.test'
-  )
-  ON CONFLICT (id) DO UPDATE
-    SET role       = EXCLUDED.role,
-        first_name = EXCLUDED.first_name,
-        last_name  = EXCLUDED.last_name,
-        full_name  = EXCLUDED.full_name,
-        company_id = EXCLUDED.company_id;
 END $$;
+
+-- ── 6a. Fix auth.users metadata (always runs — IF NOT EXISTS skips UPDATE) ──
+UPDATE auth.users
+SET raw_user_meta_data =
+  CASE email
+    WHEN 'admin@sea-pos.test'      THEN '{"role":"admin","full_name":"ผู้ดูแลระบบ","company_id":"99999999-0000-0000-0000-000000000001"}'::jsonb
+    WHEN 'manager@sea-pos.test'    THEN '{"role":"manager","full_name":"ผู้จัดการร้าน","company_id":"99999999-0000-0000-0000-000000000001"}'::jsonb
+    WHEN 'cashier@sea-pos.test'    THEN '{"role":"cashier","full_name":"พนักงานเก็บเงิน","company_id":"99999999-0000-0000-0000-000000000001"}'::jsonb
+    WHEN 'purchasing@sea-pos.test' THEN '{"role":"purchasing","full_name":"เจ้าหน้าที่จัดซื้อ","company_id":"99999999-0000-0000-0000-000000000001"}'::jsonb
+  END
+WHERE email IN (
+  'admin@sea-pos.test', 'manager@sea-pos.test',
+  'cashier@sea-pos.test', 'purchasing@sea-pos.test'
+);
+
+-- ── 6b. Upsert profiles (always runs — even if users already existed) ──
+-- The DO block above skips auth.users INSERT when accounts exist, so the
+-- handle_new_user trigger never fires on re-runs.  Deleting the demo company
+-- CASCADE-deletes profiles, so we must re-create them unconditionally here.
+INSERT INTO public.profiles (id, role, first_name, last_name, full_name, company_id)
+SELECT u.id,
+       CASE u.email
+         WHEN 'admin@sea-pos.test'      THEN 'admin'
+         WHEN 'manager@sea-pos.test'    THEN 'manager'
+         WHEN 'cashier@sea-pos.test'    THEN 'cashier'
+         WHEN 'purchasing@sea-pos.test' THEN 'purchasing'
+       END,
+       CASE u.email
+         WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแล'
+         WHEN 'manager@sea-pos.test'    THEN 'ผู้จัดการ'
+         WHEN 'cashier@sea-pos.test'    THEN 'พนักงาน'
+         WHEN 'purchasing@sea-pos.test' THEN 'เจ้าหน้าที่'
+       END,
+       CASE u.email
+         WHEN 'admin@sea-pos.test'      THEN 'ระบบ'
+         WHEN 'manager@sea-pos.test'    THEN 'ร้าน'
+         WHEN 'cashier@sea-pos.test'    THEN 'เก็บเงิน'
+         WHEN 'purchasing@sea-pos.test' THEN 'จัดซื้อ'
+       END,
+       CASE u.email
+         WHEN 'admin@sea-pos.test'      THEN 'ผู้ดูแลระบบ'
+         WHEN 'manager@sea-pos.test'    THEN 'ผู้จัดการร้าน'
+         WHEN 'cashier@sea-pos.test'    THEN 'พนักงานเก็บเงิน'
+         WHEN 'purchasing@sea-pos.test' THEN 'เจ้าหน้าที่จัดซื้อ'
+       END,
+       '99999999-0000-0000-0000-000000000001'
+FROM auth.users u
+WHERE u.email IN (
+  'admin@sea-pos.test',
+  'manager@sea-pos.test',
+  'cashier@sea-pos.test',
+  'purchasing@sea-pos.test'
+)
+ON CONFLICT (id) DO UPDATE
+  SET role       = EXCLUDED.role,
+      first_name = EXCLUDED.first_name,
+      last_name  = EXCLUDED.last_name,
+      full_name  = EXCLUDED.full_name,
+      company_id = EXCLUDED.company_id;
 
 -- ── 6b. Assign test users to branches ─────────────────────────
 INSERT INTO user_branches (user_id, branch_id, is_default)
@@ -362,16 +388,16 @@ DECLARE
   v_cashier   UUID;
   v_admin     UUID;
   v_branch    UUID := 'aaaaaaaa-0000-0000-0000-000000000001';
-  v_c1        UUID := '33333333-0000-0000-0000-000000000001';
-  v_c2        UUID := '33333333-0000-0000-0000-000000000002';
-  v_c3        UUID := '33333333-0000-0000-0000-000000000003';
+  v_c1        UUID := '44444444-0000-0000-0000-000000000001';
+  v_c2        UUID := '44444444-0000-0000-0000-000000000002';
+  v_c3        UUID := '44444444-0000-0000-0000-000000000003';
   v_sale      UUID;
 BEGIN
   SELECT id INTO v_cashier FROM auth.users WHERE email = 'cashier@sea-pos.test';
   SELECT id INTO v_admin   FROM auth.users WHERE email = 'admin@sea-pos.test';
 
   -- Sale 1 · 6 days ago · walk-in · cash
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, NULL, 54.00, 'cash', 'completed', NOW() - INTERVAL '6 days')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -379,7 +405,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000007', 2, 6.00, 12.00, 3.50);
 
   -- Sale 2 · 5 days ago · สมชาย · card
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, v_c1, 168.00, 'card', 'completed', NOW() - INTERVAL '5 days')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -389,7 +415,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000006', 1, 18.00, 18.00, 12.00);
 
   -- Sale 3 · 4 days ago · สมหญิง · transfer
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, v_c2, 185.00, 'transfer', 'completed', NOW() - INTERVAL '4 days')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -399,7 +425,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000007', 1,  6.00,  6.00,  3.50);
 
   -- Sale 4 · 4 days ago · walk-in · cash
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, NULL, 98.00, 'cash', 'completed', NOW() - INTERVAL '4 days')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -408,7 +434,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000018', 1, 30.00, 30.00, 22.00);
 
   -- Sale 5 · 3 days ago · บริษัท ABC · transfer (large)
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_admin, v_branch, v_c3, 430.00, 'transfer', 'completed', NOW() - INTERVAL '3 days')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -418,7 +444,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000017',  4, 20.00,  80.00, 13.00);
 
   -- Sale 6 · 2 days ago · walk-in · cash
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, NULL, 90.00, 'cash', 'completed', NOW() - INTERVAL '2 days')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -427,7 +453,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000009', 1, 25.00, 25.00, 18.00);
 
   -- Sale 7 · 1 day ago · สมชาย · card
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, v_c1, 127.00, 'card', 'completed', NOW() - INTERVAL '1 day')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -437,7 +463,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000006', 1, 18.00, 18.00, 12.00);
 
   -- Sale 8 · today · walk-in · cash
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, NULL, 64.00, 'cash', 'completed', NOW() - INTERVAL '3 hours')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -445,7 +471,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000017', 1, 20.00, 20.00, 13.00);
 
   -- Sale 9 · today · สมหญิง · cash · VOIDED
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, v_c2, 40.00, 'cash', 'voided', NOW() - INTERVAL '1 hour')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -453,7 +479,7 @@ BEGIN
     (v_sale, '22222222-0000-0000-0000-000000000007', 2, 6.00, 12.00, 3.50);
 
   -- Sale 10 · today · walk-in · transfer
-  INSERT INTO sales (id, user_id, branch_id, customer_id, total_amount, payment_method, status, created_at)
+  INSERT INTO sales (id, user_id, branch_id, member_id, total_amount, payment_method, status, created_at)
   VALUES (gen_random_uuid(), v_cashier, v_branch, NULL, 126.00, 'transfer', 'completed', NOW() - INTERVAL '30 minutes')
   RETURNING id INTO v_sale;
   INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_at_sale) VALUES
@@ -653,7 +679,6 @@ UPDATE stock_transfers  SET company_id = '99999999-0000-0000-0000-000000000001' 
 -- ── 11. Restore normal company_id defaults ─────────────────────
 ALTER TABLE categories           ALTER COLUMN company_id SET DEFAULT get_current_company_id();
 ALTER TABLE products             ALTER COLUMN company_id SET DEFAULT get_current_company_id();
-ALTER TABLE customers            ALTER COLUMN company_id SET DEFAULT get_current_company_id();
 ALTER TABLE suppliers            ALTER COLUMN company_id SET DEFAULT get_current_company_id();
 ALTER TABLE sales                ALTER COLUMN company_id SET DEFAULT get_current_company_id();
 ALTER TABLE purchase_orders      ALTER COLUMN company_id SET DEFAULT get_current_company_id();
@@ -673,7 +698,6 @@ SELECT
   (SELECT COUNT(*) FROM categories)        AS categories,
   (SELECT COUNT(*) FROM products)          AS products,
   (SELECT COUNT(*) FROM product_stock)     AS stock_rows,
-  (SELECT COUNT(*) FROM customers)         AS customers,
   (SELECT COUNT(*) FROM suppliers)         AS suppliers,
   (SELECT COUNT(*) FROM option_groups)       AS option_groups,
   (SELECT COUNT(*) FROM options)             AS options,

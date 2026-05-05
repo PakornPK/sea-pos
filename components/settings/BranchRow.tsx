@@ -1,33 +1,30 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useActionState } from 'react'
-import { CheckCircle2, MapPin, Pencil, Star, StarOff, Trash2 } from 'lucide-react'
+import { MapPin, Pencil, Star, StarOff, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { deleteBranch, setBranchDefault, updateBranch, type BranchState } from '@/lib/actions/branches'
+import { deleteBranch, setBranchDefault, updateBranch } from '@/lib/actions/branches'
 import type { Branch } from '@/types/database'
 
 type Props = {
   branch: Branch
+  onMutated?: () => void
 }
 
-export function BranchRow({ branch }: Props) {
+export function BranchRow({ branch, onMutated }: Props) {
   const [editing, setEditing] = useState(false)
   const [pending, startTransition] = useTransition()
   const [rowError, setRowError] = useState<string | null>(null)
-  const [state, formAction, saving] = useActionState<BranchState, FormData>(updateBranch, undefined)
-
-  const disabled = pending || saving
 
   function handleSetDefault() {
     setRowError(null)
     startTransition(async () => {
-      try { await setBranchDefault(branch.id) }
+      try { await setBranchDefault(branch.id); onMutated?.() }
       catch (e) { setRowError(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ') }
     })
   }
@@ -36,8 +33,17 @@ export function BranchRow({ branch }: Props) {
     if (!confirm(`ยืนยันการลบสาขา "${branch.name}"?`)) return
     setRowError(null)
     startTransition(async () => {
-      try { await deleteBranch(branch.id) }
+      try { await deleteBranch(branch.id); onMutated?.() }
       catch (e) { setRowError(e instanceof Error ? e.message : 'ลบไม่สำเร็จ') }
+    })
+  }
+
+  function handleUpdate(formData: FormData) {
+    setRowError(null)
+    startTransition(async () => {
+      const result = await updateBranch(undefined, formData)
+      if (result?.error) { setRowError(result.error); return }
+      onMutated?.()
     })
   }
 
@@ -73,18 +79,18 @@ export function BranchRow({ branch }: Props) {
           {!branch.is_default && (
             <Button
               size="sm" variant="ghost"
-              onClick={handleSetDefault} disabled={disabled}
+              onClick={handleSetDefault} disabled={pending}
               title="ตั้งเป็นสาขาเริ่มต้น"
             >
               <StarOff className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={disabled}>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={pending}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button
             size="sm" variant="ghost"
-            onClick={handleDelete} disabled={disabled}
+            onClick={handleDelete} disabled={pending}
             className="text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -93,11 +99,6 @@ export function BranchRow({ branch }: Props) {
       </div>
 
       {rowError && <p className="text-xs text-destructive">{rowError}</p>}
-      {state?.success && (
-        <p className="inline-flex items-center gap-1 text-xs text-green-600">
-          <CheckCircle2 className="h-3 w-3" /> บันทึกแล้ว
-        </p>
-      )}
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="sm:max-w-md">
@@ -107,12 +108,12 @@ export function BranchRow({ branch }: Props) {
               รหัสสาขาใช้ขึ้นต้นเลขใบเสร็จ (เช่น {branch.code}-00042)
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <form action={handleUpdate} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={branch.id} />
             <div className="grid grid-cols-4 gap-3">
               <div className="col-span-3 flex flex-col gap-1">
                 <Label htmlFor={`name-${branch.id}`}>ชื่อสาขา *</Label>
-                <Input id={`name-${branch.id}`} name="name" required defaultValue={branch.name} disabled={saving} />
+                <Input id={`name-${branch.id}`} name="name" required defaultValue={branch.name} disabled={pending} />
               </div>
               <div className="col-span-1 flex flex-col gap-1">
                 <Label htmlFor={`code-${branch.id}`}>รหัส *</Label>
@@ -123,31 +124,31 @@ export function BranchRow({ branch }: Props) {
                   defaultValue={branch.code}
                   style={{ textTransform: 'uppercase' }}
                   maxLength={10}
-                  disabled={saving}
+                  disabled={pending}
                 />
               </div>
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`address-${branch.id}`}>ที่อยู่</Label>
-              <Input id={`address-${branch.id}`} name="address" defaultValue={branch.address ?? ''} disabled={saving} />
+              <Input id={`address-${branch.id}`} name="address" defaultValue={branch.address ?? ''} disabled={pending} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`phone-${branch.id}`}>เบอร์โทร</Label>
-                <Input id={`phone-${branch.id}`} name="phone" defaultValue={branch.phone ?? ''} disabled={saving} />
+                <Input id={`phone-${branch.id}`} name="phone" defaultValue={branch.phone ?? ''} disabled={pending} />
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`tax-${branch.id}`}>เลขประจำตัวผู้เสียภาษี</Label>
-                <Input id={`tax-${branch.id}`} name="tax_id" defaultValue={branch.tax_id ?? ''} disabled={saving} />
+                <Input id={`tax-${branch.id}`} name="tax_id" defaultValue={branch.tax_id ?? ''} disabled={pending} />
               </div>
             </div>
-            {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+            {rowError && <p className="text-sm text-destructive">{rowError}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={saving}>
+              <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={pending}>
                 ยกเลิก
               </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+              <Button type="submit" disabled={pending}>
+                {pending ? 'กำลังบันทึก...' : 'บันทึก'}
               </Button>
             </DialogFooter>
           </form>

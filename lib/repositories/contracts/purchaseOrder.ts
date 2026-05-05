@@ -40,6 +40,17 @@ export interface PurchaseOrderRepository {
   getById(id: string): Promise<PurchaseOrder | null>
   getStatus(id: string): Promise<PurchaseOrderStatus | null>
   listItemsWithProduct(poId: string): Promise<POItemWithProduct[]>
+  create(input: {
+    supplier_id: string
+    user_id: string
+    branch_id: string
+    total_amount: number
+    subtotal_ex_vat: number
+    vat_amount: number
+    notes: string | null
+    items: POLineInput[]
+  }): Promise<{ id: string } | { error: string }>
+  /** @deprecated use create() — backend requires items to be included in the PO payload */
   createHeader(input: {
     supplier_id: string
     user_id: string

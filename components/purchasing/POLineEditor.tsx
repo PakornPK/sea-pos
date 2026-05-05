@@ -14,6 +14,7 @@ import { formatBaht } from '@/lib/format'
 import { lineTotal, sumBy } from '@/lib/money'
 import { computeVat, type VatConfig } from '@/lib/vat'
 import type { Category, Product } from '@/types/database'
+import { useAuth } from '@/lib/auth-client'
 
 export type POLine = {
   productId: string
@@ -31,6 +32,7 @@ type Props = {
 }
 
 export function POLineEditor({ products, categories = [], vatConfig, initial, onChange }: Props) {
+  const { user } = useAuth()
   const [localProducts, setLocalProducts] = useState<Product[]>(products)
   const [lines, setLines] = useState<POLine[]>(initial ?? [])
   const [selectedProductId, setSelectedProductId] = useState('')
@@ -101,6 +103,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
         price: newPrice,
         cost: newCost,
         minStock: newMin,
+        activeBranchId: user?.activeBranchId ?? null,
       })
       if ('error' in res) {
         setCreateError(res.error)
@@ -111,7 +114,7 @@ export function POLineEditor({ products, categories = [], vatConfig, initial, on
       if (newImage) {
         const fd = new FormData()
         fd.append('file', newImage)
-        const up = await uploadProductImage(res.id, undefined, fd)
+        const up = await uploadProductImage(res.id, user?.companyId ?? '', undefined, fd)
         if (up?.error) {
           setCreateError(up.error)
           return

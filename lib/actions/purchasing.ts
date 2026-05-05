@@ -1,13 +1,29 @@
-'use server'
+import { purchaseOrderRepo, productRepo, companyRepo, supplierRepo, categoryRepo, branchRepo, userRepo, type POLineInput } from '@/lib/repositories'
+import type { Supplier, Product, Category, Branch } from '@/types/database'
+import type { VatConfig } from '@/lib/vat'
 
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { requireActionRole } from '@/lib/auth'
-import { purchaseOrderRepo, productRepo, companyRepo, type POLineInput } from '@/lib/repositories'
+export type NewPOFormData = {
+  suppliers: Supplier[]
+  products: Product[]
+  categories: Category[]
+  branches: Branch[]
+  vatConfig: VatConfig
+}
+
+export async function getNewPOFormData(): Promise<NewPOFormData> {
+  const [suppliers, products, categories, branches, company] = await Promise.all([
+    supplierRepo.list(),
+    productRepo.listAll(),
+    categoryRepo.list(),
+    branchRepo.list(),
+    companyRepo.getCurrent(),
+  ])
+  return { suppliers, products, categories, branches, vatConfig: getVatConfig(company) }
+}
 import { computeVat, getVatConfig } from '@/lib/vat'
 import { chain, qty } from '@/lib/money'
 
-export type POState = { error?: string; success?: boolean } | undefined
+export type POState = { error?: string; success?: boolean; redirectTo?: string } | undefined
 
 const MANAGE_ROLES = ['admin', 'manager', 'purchasing'] as const
 
@@ -69,9 +85,11 @@ export async function createPurchaseOrder(
   _prev: POState,
   formData: FormData
 ): Promise<POState> {
-  let newPoId: string | null = null
   try {
-    const { me } = await requireActionRole([...MANAGE_ROLES])
+    const userId       = (formData.get('userId')      as string) || ''
+    const activeBranchId = (formData.get('activeBranchId') as string) || null
+    const branchIds    = ((formData.get('branchIds') as string) || '').split(',').filter(Boolean)
+    const isAdmin      = formData.get('isAdmin') === 'true'
 
     const supplierId = String(formData.get('supplierId') ?? '')
     const notes      = String(formData.get('notes')      ?? '').trim() || null
@@ -83,36 +101,30 @@ export async function createPurchaseOrder(
 
     // Branch: explicit picker wins (if supplied), else fall back to active branch.
     // Non-admins can only create POs at a branch they're assigned to.
-    const branchId = rawBranch || me.activeBranchId
+    const branchId = rawBranch || activeBranchId
     if (!branchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
-    const isAdmin = me.role === 'admin' || me.isPlatformAdmin
-    if (!isAdmin && !me.branchIds.includes(branchId)) {
+    if (!isAdmin && !branchIds.includes(branchId)) {
       return { error: 'ไม่มีสิทธิ์สร้างใบสั่งซื้อที่สาขานี้' }
     }
 
     const breakdown = await computePoBreakdown(lines)
 
-    const header = await purchaseOrderRepo.createHeader({
+    const poResult = await purchaseOrderRepo.create({
       supplier_id:     supplierId,
-      user_id:         me.id,
+      user_id:         userId,
       branch_id:       branchId,
       total_amount:    breakdown.total,
       subtotal_ex_vat: breakdown.subtotalExVat,
       vat_amount:      breakdown.vatAmount,
       notes,
+      items:           toRepoLines(lines),
     })
-    if ('error' in header) return { error: header.error }
-    newPoId = header.id
+    if ('error' in poResult) return { error: poResult.error }
 
-    const itemsErr = await purchaseOrderRepo.replaceItems(header.id, toRepoLines(lines))
-    if (itemsErr) return { error: itemsErr }
-
-    revalidatePath('/purchasing')
+    return { redirectTo: `/purchasing/detail/?id=${poResult.id}` }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
-  if (newPoId) redirect(`/purchasing/${newPoId}`)
-  return { error: 'เกิดข้อผิดพลาด' }
 }
 
 export async function updatePurchaseOrder(
@@ -120,8 +132,6 @@ export async function updatePurchaseOrder(
   formData: FormData
 ): Promise<POState> {
   try {
-    await requireActionRole([...MANAGE_ROLES])
-
     const id         = String(formData.get('id')         ?? '')
     const supplierId = String(formData.get('supplierId') ?? '')
     const notes      = String(formData.get('notes')      ?? '').trim() || null
@@ -148,31 +158,24 @@ export async function updatePurchaseOrder(
     })
     if (updateErr) return { error: updateErr }
 
-    revalidatePath('/purchasing')
-    revalidatePath(`/purchasing/${id}`)
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
 
-export async function confirmPurchaseOrder(id: string): Promise<void> {
-  const { me } = await requireActionRole([...MANAGE_ROLES])
+export async function confirmPurchaseOrder(id: string, userId = ''): Promise<void> {
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
   const status = await purchaseOrderRepo.getStatus(id)
   if (!status) throw new Error('ไม่พบใบสั่งซื้อ')
   if (status !== 'draft') throw new Error('ยืนยันได้เฉพาะใบสั่งซื้อที่เป็นฉบับร่างเท่านั้น')
 
-  const err = await purchaseOrderRepo.confirm(id, me.id)
+  const err = await purchaseOrderRepo.confirm(id, userId)
   if (err) throw new Error(err)
-
-  revalidatePath('/purchasing')
-  revalidatePath(`/purchasing/${id}`)
 }
 
 export async function cancelPurchaseOrder(id: string): Promise<void> {
-  await requireActionRole([...MANAGE_ROLES])
   if (!id) throw new Error('ไม่พบใบสั่งซื้อ')
 
   const status = await purchaseOrderRepo.getStatus(id)
@@ -182,9 +185,6 @@ export async function cancelPurchaseOrder(id: string): Promise<void> {
 
   const err = await purchaseOrderRepo.cancel(id)
   if (err) throw new Error(err)
-
-  revalidatePath('/purchasing')
-  revalidatePath(`/purchasing/${id}`)
 }
 
 export async function receivePurchaseOrder(
@@ -192,7 +192,7 @@ export async function receivePurchaseOrder(
   formData: FormData
 ): Promise<POState> {
   try {
-    const { me } = await requireActionRole([...MANAGE_ROLES])
+    const userId = (formData.get('userId') as string) || ''
 
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบใบสั่งซื้อ' }
@@ -201,8 +201,8 @@ export async function receivePurchaseOrder(
     for (const [key, val] of formData.entries()) {
       if (!key.startsWith('qty__')) continue
       const itemId = key.slice('qty__'.length)
-      const qty    = Number(val)
-      if (qty > 0) receipts.push({ itemId, qty })
+      const qtyVal = Number(val)
+      if (qtyVal > 0) receipts.push({ itemId, qty: qtyVal })
     }
 
     if (receipts.length === 0) return { error: 'กรุณาระบุจำนวนที่รับอย่างน้อย 1 รายการ' }
@@ -226,19 +226,91 @@ export async function receivePurchaseOrder(
         itemId:   r.itemId,
         qty:      r.qty,
         stockQty: qty(chain(r.qty).times(poConversion)),
-        userId:   me.id,
+        userId,
       })
       if (err) return { error: `รับของไม่สำเร็จ: ${err}` }
     }
 
-    revalidatePath('/inventory')
-    revalidatePath('/pos')
-    revalidatePath('/purchasing')
-    revalidatePath(`/purchasing/${id}`)
-    revalidatePath('/reports')
-    revalidatePath('/dashboard')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
+
+export type PODetailData = {
+  po: Awaited<ReturnType<typeof purchaseOrderRepo.getById>>
+  items: Awaited<ReturnType<typeof purchaseOrderRepo.listItemsWithProduct>>
+  suppliers: Supplier[]
+  products: Product[]
+  categories: Category[]
+  vatConfig: VatConfig
+  branch: Branch | null
+  signerOptions: Array<{ id: string; name: string | null; email: string }>
+  lockedSignerName: string | null
+}
+
+function poUserName(u: { first_name: string | null; last_name: string | null; full_name: string | null }) {
+  return [u.first_name, u.last_name].filter(Boolean).join(' ') || u.full_name || null
+}
+
+export async function getPODetail(id: string, companyId: string | null): Promise<PODetailData> {
+  const [po, items, suppliers, products, categories, company] = await Promise.all([
+    purchaseOrderRepo.getById(id),
+    purchaseOrderRepo.listItemsWithProduct(id),
+    supplierRepo.list(),
+    productRepo.listAll(),
+    categoryRepo.list(),
+    companyRepo.getCurrent(),
+  ])
+  const vatConfig = getVatConfig(company)
+  const [branch, companyUsers] = await Promise.all([
+    po && (po as unknown as { branch_id?: string }).branch_id
+      ? branchRepo.getById((po as unknown as { branch_id: string }).branch_id)
+      : Promise.resolve(null),
+    companyId ? userRepo.listByCompany(companyId) : Promise.resolve([]),
+  ])
+
+  // Auto-recalc VAT drift for drafts
+  if (po && po.status === 'draft' && items.length > 0) {
+    const exemptMap = await productRepo.vatExemptMap(items.map((i) => i.product_id))
+    const expected = computeVat(
+      items.map((i) => ({
+        price:     Number(i.unit_cost),
+        quantity:  i.quantity_ordered,
+        vatExempt: Boolean(exemptMap[i.product_id]),
+      })),
+      vatConfig,
+    )
+    const drifted =
+      Math.abs(expected.total         - Number(po.total_amount))    > 0.005 ||
+      Math.abs(expected.subtotalExVat - Number(po.subtotal_ex_vat)) > 0.005 ||
+      Math.abs(expected.vatAmount     - Number(po.vat_amount))      > 0.005
+    if (drifted) {
+      await purchaseOrderRepo.updateHeader(po.id, {
+        supplier_id:     po.supplier_id,
+        notes:           po.notes,
+        total_amount:    expected.total,
+        subtotal_ex_vat: expected.subtotalExVat,
+        vat_amount:      expected.vatAmount,
+      })
+      po.total_amount    = expected.total
+      po.subtotal_ex_vat = expected.subtotalExVat
+      po.vat_amount      = expected.vatAmount
+    }
+  }
+
+  const PURCHASING_ROLES = new Set(['admin', 'manager', 'purchasing'])
+  const signerOptions = companyUsers
+    .filter((u) => PURCHASING_ROLES.has(u.role) || (po && u.id === po.user_id))
+    .map((u) => ({ id: u.id, name: poUserName(u), email: u.email }))
+
+  const confirmedByUser = po?.confirmed_by_user_id
+    ? companyUsers.find((u) => u.id === po.confirmed_by_user_id) ?? null
+    : null
+  const lockedSignerName = confirmedByUser ? poUserName(confirmedByUser) : null
+
+  return { po, items, suppliers, products, categories, vatConfig, branch, signerOptions, lockedSignerName }
+}
+
+// Re-export for documentation purposes
+export { MANAGE_ROLES }

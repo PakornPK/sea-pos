@@ -1,11 +1,6 @@
-'use server'
-
-import { revalidatePath } from 'next/cache'
-import { requireActionRole } from '@/lib/auth'
 import {
   productRepo,
   productStockRepo,
-  customerRepo,
   loyaltyRepo,
   categoryRepo,
 } from '@/lib/repositories'
@@ -25,9 +20,7 @@ export type ImportResult = {
 
 // ─── Products ────────────────────────────────────────────────────────────────
 
-export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
-  const { me } = await requireActionRole(['admin', 'manager', 'purchasing'])
-
+export async function importProducts(rows: ImportRow[], activeBranchId?: string | null): Promise<ImportResult> {
   // Build category name → id map (case-insensitive).
   const categories = await categoryRepo.list()
   const categoryMap = new Map<string, string>()
@@ -100,8 +93,8 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
       }
 
       // Seed stock row for this branch if track_stock is enabled.
-      if (trackStock && me.activeBranchId) {
-        await productStockRepo.seed(result.id, me.activeBranchId)
+      if (trackStock && activeBranchId) {
+        await productStockRepo.seed(result.id, activeBranchId)
       }
 
       imported++
@@ -112,51 +105,6 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
       })
     }
   }
-
-  revalidatePath('/inventory')
-
-  return { imported, failed }
-}
-
-// ─── Customers ───────────────────────────────────────────────────────────────
-
-export async function importCustomers(rows: ImportRow[]): Promise<ImportResult> {
-  await requireActionRole(['admin', 'manager', 'cashier'])
-
-  let imported = 0
-  const failed: RowError[] = []
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    try {
-      const name = row['name']?.trim() ?? ''
-      if (!name) {
-        failed.push({ index: i, error: 'กรุณาระบุชื่อลูกค้า' })
-        continue
-      }
-
-      const error = await customerRepo.create({
-        name,
-        phone: row['phone']?.trim() || null,
-        email: row['email']?.trim() || null,
-        address: row['address']?.trim() || null,
-      })
-
-      if (error) {
-        failed.push({ index: i, error })
-        continue
-      }
-
-      imported++
-    } catch (e) {
-      failed.push({
-        index: i,
-        error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ',
-      })
-    }
-  }
-
-  revalidatePath('/customers')
 
   return { imported, failed }
 }
@@ -164,8 +112,6 @@ export async function importCustomers(rows: ImportRow[]): Promise<ImportResult> 
 // ─── Members ─────────────────────────────────────────────────────────────────
 
 export async function importMembers(rows: ImportRow[]): Promise<ImportResult> {
-  await requireActionRole(['admin', 'manager'])
-
   let imported = 0
   const failed: RowError[] = []
 
@@ -198,8 +144,6 @@ export async function importMembers(rows: ImportRow[]): Promise<ImportResult> {
       })
     }
   }
-
-  revalidatePath('/members')
 
   return { imported, failed }
 }

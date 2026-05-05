@@ -14,7 +14,7 @@ export function EnrollMemberForm() {
 
   useEffect(() => {
     if (state?.success && state.id) {
-      router.push(`/members/${state.id}`)
+      router.push(`/members/detail/?id=${state.id}`)
     }
   }, [state, router])
 

@@ -1,34 +1,29 @@
+'use client'
+
+import { useAuth } from '@/lib/auth-client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
-import type { Branch, UserRole } from '@/types/database'
 
-type DashboardShellProps = {
-  children: React.ReactNode
-  email: string
-  fullName: string
-  role: UserRole
-  isPlatformAdmin: boolean
-  branches: Branch[]
-  activeBranch: Branch | null
-}
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const { user, branches } = useAuth()
+  if (!user) return null
 
-export function DashboardShell({
-  children, email, fullName, role, isPlatformAdmin, branches, activeBranch,
-}: DashboardShellProps) {
+  const activeBranch = branches.find((b) => b.id === user.activeBranchId) ?? null
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
-        role={role}
-        isPlatformAdmin={isPlatformAdmin}
+        role={user.role}
+        isPlatformAdmin={user.isPlatformAdmin}
         activeBranch={activeBranch}
-        fullName={fullName}
-        email={email}
+        fullName={user.fullName ?? ''}
+        email={user.email ?? ''}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header
-          email={email}
-          fullName={fullName}
-          role={role}
+          email={user.email ?? ''}
+          fullName={user.fullName ?? ''}
+          role={user.role}
           branches={branches}
           activeBranch={activeBranch}
         />

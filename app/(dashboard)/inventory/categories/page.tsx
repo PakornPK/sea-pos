@@ -1,20 +1,28 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
-import { requirePageRole } from '@/lib/auth'
+import { useAuth } from '@/lib/auth-client'
 import { categoryRepo } from '@/lib/repositories'
 import { AddCategoryForm } from '@/components/inventory/AddCategoryForm'
 import { CategoryRow } from '@/components/inventory/CategoryRow'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { Category } from '@/types/database'
 
-export const metadata: Metadata = {
-  title: 'จัดการหมวดหมู่ | SEA-POS',
-}
+export default function CategoriesPage() {
+  const { user } = useAuth()
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
 
-export default async function CategoriesPage() {
-  await requirePageRole(['admin', 'manager'])
-  const categories = await categoryRepo.list()
+  useEffect(() => {
+    categoryRepo.list()
+      .then((d) => { setCategories(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (!user || loading) return null
 
   return (
     <div className="flex flex-col gap-6 max-w-lg">

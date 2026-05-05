@@ -1,37 +1,39 @@
-import type { Metadata } from 'next'
-import { Suspense } from 'react'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
-import { requirePageRole } from '@/lib/auth'
-import { supplierRepo } from '@/lib/repositories'
-import { parsePageParams } from '@/lib/pagination'
+import { useAuth } from '@/lib/auth-client'
+import { listSuppliersPaginated, type SupplierPageData } from '@/lib/actions/suppliers'
 import { SupplierTable } from '@/components/purchasing/SupplierTable'
 import { Pagination } from '@/components/ui/pagination'
 import { TableSkeleton } from '@/components/loading/TableSkeleton'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { UserRole } from '@/types/database'
 
-export const metadata: Metadata = {
-  title: 'ผู้จำหน่าย | SEA-POS',
-}
+export default function SuppliersPage() {
+  const { user } = useAuth()
+  const searchParams = useSearchParams()
 
-const ALLOWED: UserRole[] = ['admin', 'manager', 'purchasing']
-type Search = { page?: string; pageSize?: string }
+  const page     = searchParams.get('page')     ?? undefined
+  const pageSize = searchParams.get('pageSize') ?? undefined
+  const sp = { page, pageSize }
 
-export default async function SuppliersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Search>
-}) {
-  const { me } = await requirePageRole(ALLOWED)
-  const sp = await searchParams
+  const [data, setData] = useState<SupplierPageData | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    listSuppliersPaginated({ page, pageSize }).then(setData)
+  }, [user, page, pageSize])
+
+  if (!user) return null  // AuthGuard handles redirect
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <Link
-          href="/purchasing"
+          href="/purchasing/"
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -39,32 +41,21 @@ export default async function SuppliersPage({
         <h1 className="text-[26px] font-bold tracking-tight">ผู้จำหน่าย</h1>
       </div>
 
-      <Suspense
-        key={`${sp.page ?? 1}-${sp.pageSize ?? 20}`}
-        fallback={<TableSkeleton columns={5} rows={6} withToolbar />}
-      >
-        <SuppliersList sp={sp} role={me.role} />
-      </Suspense>
+      {data ? (
+        <>
+          <SupplierTable suppliers={data.rows} role={user.role} />
+          <Pagination
+            basePath="/purchasing/suppliers/"
+            searchParams={sp}
+            page={data.page}
+            pageSize={data.pageSize}
+            totalCount={data.totalCount}
+            totalPages={data.totalPages}
+          />
+        </>
+      ) : (
+        <TableSkeleton columns={5} rows={6} withToolbar />
+      )}
     </div>
-  )
-}
-
-async function SuppliersList({ sp, role }: { sp: Search; role: UserRole }) {
-  await requirePageRole(ALLOWED)
-  const p = parsePageParams(sp)
-  const result = await supplierRepo.listPaginated(p)
-
-  return (
-    <>
-      <SupplierTable suppliers={result.rows} role={role} />
-      <Pagination
-        basePath="/purchasing/suppliers"
-        searchParams={sp}
-        page={result.page}
-        pageSize={result.pageSize}
-        totalCount={result.totalCount}
-        totalPages={result.totalPages}
-      />
-    </>
   )
 }

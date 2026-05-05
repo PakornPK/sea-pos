@@ -1,11 +1,46 @@
-'use server'
+import { stockTransferRepo, branchRepo, productRepo, type StockTransferListRow } from '@/lib/repositories'
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination'
+import type { Branch, ProductWithStock } from '@/types/database'
 
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { requireActionRole } from '@/lib/auth'
-import { stockTransferRepo } from '@/lib/repositories'
+export type { StockTransferListRow as TransferListRow }
 
-export type StockTransferState = { error?: string; success?: boolean } | undefined
+export async function listTransfers(opts?: { branchId?: string | null }): Promise<{
+  rows: StockTransferListRow[]
+  activeBranchName: string | null
+}> {
+  const rows = await stockTransferRepo.list({ branchId: opts?.branchId })
+  return { rows, activeBranchName: null }
+}
+
+import type { StockTransferDetail } from '@/lib/repositories/contracts/stockTransfer'
+export type { StockTransferDetail as TransferDetail }
+
+export async function getTransferDetail(id: string): Promise<StockTransferDetail | null> {
+  return stockTransferRepo.getById(id)
+}
+
+export type TransferFormData = {
+  fromBranch: Branch | null
+  toBranchCandidates: Branch[]
+  productsAtSource: ProductWithStock[]
+}
+
+export async function getTransferFormData(activeBranchId: string | null): Promise<TransferFormData> {
+  const [allBranches, productsPage, fromBranch] = await Promise.all([
+    branchRepo.list(),
+    activeBranchId
+      ? productRepo.listInStockForBranchPaginated(
+          { page: 1, pageSize: 500 },
+          { branchId: activeBranchId },
+        )
+      : Promise.resolve({ rows: [] as ProductWithStock[], totalCount: 0, page: 1, pageSize: DEFAULT_PAGE_SIZE, totalPages: 1 }),
+    activeBranchId ? branchRepo.getById(activeBranchId) : Promise.resolve(null),
+  ])
+  const toBranchCandidates = allBranches.filter((b) => b.id !== activeBranchId)
+  return { fromBranch, toBranchCandidates, productsAtSource: productsPage.rows }
+}
+
+export type StockTransferState = { error?: string; success?: boolean; redirectTo?: string } | undefined
 
 const MANAGE_ROLES = ['admin', 'manager'] as const
 
@@ -34,26 +69,27 @@ export async function createStockTransfer(
   _prev: StockTransferState,
   formData: FormData,
 ): Promise<StockTransferState> {
-  let newId: string | null = null
   try {
-    const { me } = await requireActionRole([...MANAGE_ROLES])
-    if (!me.activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
+    const activeBranchId = (formData.get('activeBranchId') as string) || null
+    const userId         = (formData.get('userId')         as string) || ''
+
+    if (!activeBranchId) return { error: 'ไม่พบสาขาที่ใช้งาน' }
 
     const toBranchId = String(formData.get('to_branch_id') ?? '')
     const notes      = String(formData.get('notes') ?? '').trim() || null
     const lines      = parseLines(formData.get('lines'))
 
     if (!toBranchId) return { error: 'กรุณาเลือกสาขาปลายทาง' }
-    if (toBranchId === me.activeBranchId) {
+    if (toBranchId === activeBranchId) {
       return { error: 'สาขาปลายทางต้องเป็นคนละสาขากับสาขาต้นทาง' }
     }
     if (lines.length === 0) return { error: 'กรุณาเพิ่มรายการสินค้า' }
 
     const res = await stockTransferRepo.create({
-      from_branch_id: me.activeBranchId,
+      from_branch_id: activeBranchId,
       to_branch_id:   toBranchId,
       notes,
-      user_id:        me.id,
+      user_id:        userId,
       items:          lines.map((l) => ({
         product_id:    l.productId,
         quantity_sent: l.quantitySent,
@@ -64,27 +100,22 @@ export async function createStockTransfer(
     // Immediately debit source stock + mark in_transit. If this fails
     // (e.g. insufficient stock), we delete the header so we don't leave
     // a zombie draft behind.
-    const sendErr = await stockTransferRepo.send(res.id, me.id)
+    const sendErr = await stockTransferRepo.send(res.id, userId)
     if (sendErr) {
-      await stockTransferRepo.cancel(res.id, me.id).catch(() => {})
+      await stockTransferRepo.cancel(res.id, userId).catch(() => {})
       return { error: `สร้างรายการโอนไม่สำเร็จ: ${sendErr}` }
     }
 
-    newId = res.id
-    revalidatePath('/inventory')
-    revalidatePath('/inventory/transfers')
-    revalidatePath('/reports')
-    revalidatePath('/dashboard')
+    return { redirectTo: `/inventory/transfers/detail/?id=${res.id}` }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
-  if (newId) redirect(`/inventory/transfers/${newId}`)
-  return { error: 'เกิดข้อผิดพลาด' }
 }
 
 /**
  * Receive a transfer. FormData encoding:
  *   id                              — transfer id
+ *   userId                          — acting user id
  *   recv__{itemId}                  — quantity received for that item
  *   note__{itemId}                  — optional discrepancy note
  *
@@ -96,7 +127,7 @@ export async function receiveStockTransfer(
   formData: FormData,
 ): Promise<StockTransferState> {
   try {
-    const { me } = await requireActionRole([...MANAGE_ROLES])
+    const userId = (formData.get('userId') as string) || ''
 
     const id = String(formData.get('id') ?? '')
     if (!id) return { error: 'ไม่พบรายการโอน' }
@@ -105,43 +136,34 @@ export async function receiveStockTransfer(
     for (const [key, val] of formData.entries()) {
       if (!key.startsWith('recv__')) continue
       const itemId = key.slice('recv__'.length)
-      const qty = Number(val)
-      if (!Number.isFinite(qty) || qty < 0) {
+      const qtyVal = Number(val)
+      if (!Number.isFinite(qtyVal) || qtyVal < 0) {
         return { error: 'จำนวนที่รับต้องเป็นตัวเลขและไม่น้อยกว่า 0' }
       }
       const noteRaw = formData.get(`note__${itemId}`)
       const note = noteRaw == null ? null : String(noteRaw).trim() || null
-      overrides.push({ itemId, quantityReceived: qty, receiveNote: note })
+      overrides.push({ itemId, quantityReceived: qtyVal, receiveNote: note })
     }
 
     const err = await stockTransferRepo.receive(
       id,
-      me.id,
+      userId,
       overrides.length > 0 ? overrides : undefined,
     )
     if (err) return { error: err }
 
-    revalidatePath('/inventory')
-    revalidatePath('/inventory/transfers')
-    revalidatePath(`/inventory/transfers/${id}`)
-    revalidatePath('/reports')
-    revalidatePath('/dashboard')
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' }
   }
 }
 
-export async function cancelStockTransfer(id: string): Promise<void> {
-  const { me } = await requireActionRole([...MANAGE_ROLES])
+export async function cancelStockTransfer(id: string, userId = ''): Promise<void> {
   if (!id) throw new Error('ไม่พบรายการโอน')
 
-  const err = await stockTransferRepo.cancel(id, me.id)
+  const err = await stockTransferRepo.cancel(id, userId)
   if (err) throw new Error(err)
-
-  revalidatePath('/inventory')
-  revalidatePath('/inventory/transfers')
-  revalidatePath(`/inventory/transfers/${id}`)
-  revalidatePath('/reports')
-  revalidatePath('/dashboard')
 }
+
+// Re-export for documentation purposes
+export { MANAGE_ROLES }

@@ -10,48 +10,45 @@
  */
 
 import type { Repositories } from '@/lib/repositories/contracts'
-import { supabaseCompanyRepo }       from './companies'
-import { supabasePlanRepo }          from './plans'
-import { supabaseStorageRepo }       from './storage'
-import { supabaseBranchRepo }        from './branches'
-import { supabaseProductRepo }       from './products'
-import { supabaseProductStockRepo }  from './productStock'
-import { supabaseCategoryRepo }      from './categories'
-import { supabaseCustomerRepo }      from './customers'
-import { supabaseSupplierRepo }      from './suppliers'
-import { supabaseSaleRepo }          from './sales'
-import { supabasePurchaseOrderRepo } from './purchaseOrders'
-import { supabaseStockLogRepo }      from './stockLogs'
-import { supabaseStockTransferRepo } from './stockTransfers'
-import { supabaseUserRepo }          from './users'
-import { supabaseAuthRepo }          from './auth'
-import { supabaseAnalyticsRepo }     from './analytics'
-import { supabaseHeldSaleRepo }      from './heldSales'
-import { supabaseBillingRepo }       from './billing'
-import { supabaseLoyaltyRepo }       from './loyalty'
-import { supabaseOptionRepo }        from './options'
-import { supabaseProductCostItemRepo } from './productCostItems'
+import { fetchStorageRepo }           from '@/lib/repositories/fetch/storage'
+// All repos: fetch implementations (raw REST to Rust backend)
+import { fetchAnalyticsRepo }        from '@/lib/repositories/fetch/analytics'
+import { fetchCompanyRepo }          from '@/lib/repositories/fetch/companies'
+import { fetchPlanRepo }             from '@/lib/repositories/fetch/plans'
+import { fetchBranchRepo }           from '@/lib/repositories/fetch/branches'
+import { fetchProductRepo }          from '@/lib/repositories/fetch/products'
+import { fetchProductStockRepo }     from '@/lib/repositories/fetch/productStock'
+import { fetchCategoryRepo }         from '@/lib/repositories/fetch/categories'
+import { fetchSupplierRepo }         from '@/lib/repositories/fetch/suppliers'
+import { fetchSaleRepo }             from '@/lib/repositories/fetch/sales'
+import { fetchPurchaseOrderRepo }    from '@/lib/repositories/fetch/purchaseOrders'
+import { fetchStockLogRepo }         from '@/lib/repositories/fetch/stockLogs'
+import { fetchStockTransferRepo }    from '@/lib/repositories/fetch/stockTransfers'
+import { fetchUserRepo }             from '@/lib/repositories/fetch/users'
+import { fetchHeldSaleRepo }         from '@/lib/repositories/fetch/heldSales'
+import { fetchBillingRepo }          from '@/lib/repositories/fetch/billing'
+import { fetchLoyaltyRepo }          from '@/lib/repositories/fetch/loyalty'
+import { fetchOptionRepo }           from '@/lib/repositories/fetch/options'
+import { fetchProductCostItemRepo }  from '@/lib/repositories/fetch/productCostItems'
 
 export const supabaseRepos: Repositories = {
-  company:       supabaseCompanyRepo,
-  plan:          supabasePlanRepo,
-  storage:       supabaseStorageRepo,
-  branch:        supabaseBranchRepo,
-  product:       supabaseProductRepo,
-  productStock:  supabaseProductStockRepo,
-  category:      supabaseCategoryRepo,
-  customer:      supabaseCustomerRepo,
-  supplier:      supabaseSupplierRepo,
-  sale:          supabaseSaleRepo,
-  purchaseOrder: supabasePurchaseOrderRepo,
-  stockLog:      supabaseStockLogRepo,
-  stockTransfer: supabaseStockTransferRepo,
-  user:          supabaseUserRepo,
-  auth:          supabaseAuthRepo,
-  analytics:     supabaseAnalyticsRepo,
-  heldSale:      supabaseHeldSaleRepo,
-  billing:       supabaseBillingRepo,
-  loyalty:          supabaseLoyaltyRepo,
-  option:           supabaseOptionRepo,
-  productCostItem:  supabaseProductCostItemRepo,
+  company:         fetchCompanyRepo,
+  plan:            fetchPlanRepo,
+  storage:         fetchStorageRepo,
+  branch:          fetchBranchRepo,
+  product:         fetchProductRepo,
+  productStock:    fetchProductStockRepo,
+  category:        fetchCategoryRepo,
+  supplier:        fetchSupplierRepo,
+  sale:            fetchSaleRepo,
+  purchaseOrder:   fetchPurchaseOrderRepo,
+  stockLog:        fetchStockLogRepo,
+  stockTransfer:   fetchStockTransferRepo,
+  user:            fetchUserRepo,
+  analytics:       fetchAnalyticsRepo,
+  heldSale:        fetchHeldSaleRepo,
+  billing:         fetchBillingRepo,
+  loyalty:         fetchLoyaltyRepo,
+  option:          fetchOptionRepo,
+  productCostItem: fetchProductCostItemRepo,
 }
